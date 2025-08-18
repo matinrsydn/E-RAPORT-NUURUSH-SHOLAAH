@@ -1,0 +1,14 @@
+# Node modules
+node_modules/
+e-raport-api/node_modules/
+e-raport-client/node_modules/
+
+# Env files
+.env
+
+# Build outputs
+build/
+dist/
+
+# Uploads
+uploads/
