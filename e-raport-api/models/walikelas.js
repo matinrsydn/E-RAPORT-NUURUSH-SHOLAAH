@@ -1,10 +1,14 @@
+'use strict';
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-    const WaliKelas = sequelize.define('WaliKelas', {
-        nama: DataTypes.STRING,
-        nip: DataTypes.STRING
-    });
-    WaliKelas.associate = models => {
-        WaliKelas.hasMany(models.Siswa, { foreignKey: 'waliKelasId' });
-    };
-    return WaliKelas;
+  class WaliKelas extends Model {
+    static associate(models) {
+      WaliKelas.hasMany(models.Siswa, { foreignKey: 'waliKelasId' });
+    }
+  }
+  WaliKelas.init({
+    nama: DataTypes.STRING,
+    nip: DataTypes.STRING
+  }, { sequelize, modelName: 'WaliKelas' });
+  return WaliKelas;
 };

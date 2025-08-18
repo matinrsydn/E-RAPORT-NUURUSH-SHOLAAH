@@ -1,21 +1,20 @@
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
+      Siswa.belongsTo(models.WaliKelas, { foreignKey: 'waliKelasId', as: 'wali_kelas' });
+      Siswa.belongsTo(models.KepalaSekolah, { foreignKey: 'kepalaSekolahId', as: 'kepala_sekolah' });
+      Siswa.hasOne(models.OrangTua, { foreignKey: 'siswaId', as: 'orang_tua' });
+      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswaId', as: 'nilai_ujian' });
+      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswaId', as: 'nilai_hafalan' });
+      Siswa.hasMany(models.Sikap, { foreignKey: 'siswaId', as: 'sikap' });
+      Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswaId', as: 'kehadiran' });
     }
   }
   Siswa.init({
     nama: DataTypes.STRING,
-    nis: DataTypes.STRING,
+    nis: { type: DataTypes.STRING, unique: true },
     nisn: DataTypes.STRING,
     tempat_lahir: DataTypes.STRING,
     tanggal_lahir: DataTypes.DATE,
@@ -27,9 +26,6 @@ module.exports = (sequelize, DataTypes) => {
     kelas: DataTypes.STRING,
     waliKelasId: DataTypes.INTEGER,
     kepalaSekolahId: DataTypes.INTEGER
-  }, {
-    sequelize,
-    modelName: 'Siswa',
-  });
+  }, { sequelize, modelName: 'Siswa' });
   return Siswa;
 };
