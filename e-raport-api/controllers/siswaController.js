@@ -1,10 +1,12 @@
-const Siswa = db.Siswa;
-const OrangTua = db.OrangTua;
+const db_s = require('../models');
+const Siswa = db_s.Siswa;
+const OrangTua = db_s.OrangTua;
 
 exports.getAllSiswa = async (req, res) => res.json(await Siswa.findAll({ include: ['wali_kelas', 'kepala_sekolah', 'orang_tua'] }));
+exports.getSiswaById = async (req, res) => res.json(await Siswa.findByPk(req.params.id, { include: ['orang_tua'] }));
 exports.createSiswa = async (req, res) => {
     const { orang_tua, ...siswaData } = req.body;
-    const t = await db.sequelize.transaction();
+    const t = await db_s.sequelize.transaction();
     try {
         const newSiswa = await Siswa.create(siswaData, { transaction: t });
         if (orang_tua) {
@@ -19,7 +21,7 @@ exports.createSiswa = async (req, res) => {
 };
 exports.updateSiswa = async (req, res) => {
     const { orang_tua, ...siswaData } = req.body;
-    const t = await db.sequelize.transaction();
+    const t = await db_s.sequelize.transaction();
     try {
         await Siswa.update(siswaData, { where: { id: req.params.id }, transaction: t });
         if (orang_tua) {
@@ -33,7 +35,14 @@ exports.updateSiswa = async (req, res) => {
     }
 };
 exports.deleteSiswa = async (req, res) => {
-    await Siswa.destroy({ where: { id: req.params.id } });
-    // OrangTua akan terhapus secara cascade jika diatur di database
-    res.json({ message: 'Delete successful' });
+    const t = await db_s.sequelize.transaction();
+    try {
+        await OrangTua.destroy({ where: { siswaId: req.params.id }, transaction: t });
+        await Siswa.destroy({ where: { id: req.params.id }, transaction: t });
+        await t.commit();
+        res.json({ message: 'Delete successful' });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ message: 'Gagal menghapus siswa', error: error.message });
+    }
 };

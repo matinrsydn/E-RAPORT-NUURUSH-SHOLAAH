@@ -1,4 +1,5 @@
-const MataPelajaran = db.MataPelajaran;
+const db_mp = require('../models');
+const MataPelajaran = db_mp.MataPelajaran;
 
 exports.getAllMapel = async (req, res) => res.json(await MataPelajaran.findAll());
 exports.createMapel = async (req, res) => res.status(201).json(await MataPelajaran.create(req.body));

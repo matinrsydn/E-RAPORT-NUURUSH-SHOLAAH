@@ -1,6 +1,10 @@
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const DocxMerger = require('docx-merger');
+const db_t = require('../models');
+const multer = require("multer");
+const fs = require("fs");
+
 
 const templateStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -50,16 +54,16 @@ exports.generateRaport = async (req, res) => {
     const { siswaId, semester, tahun_ajaran } = req.params;
 
     try {
-        const siswa = await db.Siswa.findOne({
+        const siswa = await db_t.Siswa.findOne({
             where: { id: siswaId },
             include: [
-                { model: db.WaliKelas, as: 'wali_kelas' },
-                { model: db.KepalaSekolah, as: 'kepala_sekolah' },
-                { model: db.OrangTua, as: 'orang_tua' },
-                { model: db.NilaiUjian, as: 'nilai_ujian', where: { semester, tahun_ajaran }, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
-                { model: db.NilaiHafalan, as: 'nilai_hafalan', where: { semester, tahun_ajaran }, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
-                { model: db.Sikap, as: 'sikap', where: { semester, tahun_ajaran }, required: false },
-                { model: db.Kehadiran, as: 'kehadiran', where: { semester, tahun_ajaran }, required: false },
+                { model: db_t.WaliKelas, as: 'wali_kelas' },
+                { model: db_t.KepalaSekolah, as: 'kepala_sekolah' },
+                { model: db_t.OrangTua, as: 'orang_tua' },
+                { model: db_t.NilaiUjian, as: 'nilai_ujian', where: { semester, tahun_ajaran }, required: false, include: { model: db_t.MataPelajaran, as: 'mapel' } },
+                { model: db_t.NilaiHafalan, as: 'nilai_hafalan', where: { semester, tahun_ajaran }, required: false, include: { model: db_t.MataPelajaran, as: 'mapel' } },
+                { model: db_t.Sikap, as: 'sikap', where: { semester, tahun_ajaran }, required: false },
+                { model: db_t.Kehadiran, as: 'kehadiran', where: { semester, tahun_ajaran }, required: false },
             ]
         });
 

@@ -1,47 +1,63 @@
-const ManajemenTemplatePageComponent = () => {
+import React, { useState } from 'react';
+import { Card, Form, Button, Alert } from 'react-bootstrap';
+import axios from 'axios';
+
+const ManajemenTemplatePage = () => {
     const [identitasFile, setIdentitasFile] = useState(null);
     const [nilaiFile, setNilaiFile] = useState(null);
     const [sikapFile, setSikapFile] = useState(null);
     const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setMessage('');
+        setError('');
         const formData = new FormData();
         if (identitasFile) formData.append('identitas', identitasFile);
         if (nilaiFile) formData.append('nilai', nilaiFile);
         if (sikapFile) formData.append('sikap', sikapFile);
+
+        if (formData.entries().next().done) {
+            setError('Pilih setidaknya satu file template untuk diunggah.');
+            return;
+        }
 
         try {
             const res = await axios.post('/template/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setMessage(res.data.message);
-        } catch (error) {
-            setMessage('Gagal mengunggah template.');
+        } catch (err) {
+            setError('Gagal mengunggah template.');
         }
     };
 
     return (
-        <div>
-            <h2 className="text-2xl font-bold mb-4">Manajemen Template Raport (.docx)</h2>
-            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
-                <div>
-                    <label className="block font-medium">Template Identitas Siswa</label>
-                    <input type="file" onChange={(e) => setIdentitasFile(e.target.files[0])} accept=".docx" className="w-full p-2 border rounded" />
-                </div>
-                <div>
-                    <label className="block font-medium">Template Nilai Raport</label>
-                    <input type="file" onChange={(e) => setNilaiFile(e.target.files[0])} accept=".docx" className="w-full p-2 border rounded" />
-                </div>
-                <div>
-                    <label className="block font-medium">Template Nilai Sikap</label>
-                    <input type="file" onChange={(e) => setSikapFile(e.target.files[0])} accept=".docx" className="w-full p-2 border rounded" />
-                </div>
-                <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                    Unggah Template
-                </button>
-                {message && <p className="mt-4 text-green-600">{message}</p>}
-            </form>
-        </div>
+        <Card>
+            <Card.Header as="h4">Manajemen Template Raport (.docx)</Card.Header>
+            <Card.Body>
+                <Form onSubmit={handleSubmit} className="space-y-4">
+                    <Form.Group>
+                        <Form.Label>Template Identitas Siswa</Form.Label>
+                        <Form.Control type="file" onChange={(e) => setIdentitasFile(e.target.files[0])} accept=".docx" />
+                    </Form.Group>
+                    <Form.Group>
+                        <Form.Label>Template Nilai Raport</Form.Label>
+                        <Form.Control type="file" onChange={(e) => setNilaiFile(e.target.files[0])} accept=".docx" />
+                    </Form.Group>
+                    <Form.Group>
+                        <Form.Label>Template Nilai Sikap</Form.Label>
+                        <Form.Control type="file" onChange={(e) => setSikapFile(e.target.files[0])} accept=".docx" />
+                    </Form.Group>
+                    <Button type="submit" className="mt-3">
+                        Unggah Template
+                    </Button>
+                    {message && <Alert variant="success" className="mt-3">{message}</Alert>}
+                    {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
+                </Form>
+            </Card.Body>
+        </Card>
     );
 };
+export default ManajemenTemplatePage;

@@ -1,1 +1,1 @@
-exports.placeholder = (req, res) => res.status(404).send('Not implemented');
+exports.placeholderSikap = (req, res) => res.status(404).send('Not implemented. Manage through /api/excel');

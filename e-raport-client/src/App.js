@@ -1,38 +1,39 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
 import Sidebar from './components/Sidebar';
+import Dashboard from './pages/Dashboard';
 import ManajemenSiswaPage from './pages/ManajemenSiswaPage';
 import WaliKelasPage from './pages/ManajemenAkademik/WaliKelasPage';
 import MataPelajaranPage from './pages/ManajemenAkademik/MataPelajaranPage';
+import KepalaSekolahPage from './pages/ManajemenAkademik/KepalaSekolahPage';
 import UploadExcelPage from './pages/UploadExcelPage';
 import ManajemenTemplatePage from './pages/ManajemenTemplatePage';
 import GenerateRaportPage from './pages/GenerateRaportPage';
-import KepalaSekolahPage from './pages/ManajemenAkademik/KepalaSekolahPage';
 
 // Set base URL untuk semua request axios
 axios.defaults.baseURL = 'http://localhost:5000/api';
 
 function App() {
-  const [activeMenu, setActiveMenu] = useState('Upload Nilai Excel');
-
-  const renderContent = () => {
-    switch (activeMenu) {
-      case 'Manajemen Siswa': return <ManajemenSiswaPage />;
-      case 'Wali Kelas': return <WaliKelasPage />;
-      case 'Mata Pelajaran': return <MataPelajaranPage />;
-      case 'Kepala Sekolah': return <KepalaSekolahPage />;
-      case 'Manajemen Template': return <ManajemenTemplatePage />;
-      case 'Upload Nilai Excel': return <UploadExcelPage />;
-      case 'Cetak Raport': return <GenerateRaportPage />;
-      default: return <UploadExcelPage />;
-    }
-  };
-
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <Sidebar activeMenu={activeMenu} setActiveMenu={setActiveMenu} />
-      <main className="flex-1 p-8 overflow-y-auto">{renderContent()}</main>
-    </div>
+    <Router>
+      <div className="app-container">
+        <Sidebar />
+        <main className="main-content p-4">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/manajemen-siswa" element={<ManajemenSiswaPage />} />
+            <Route path="/wali-kelas" element={<WaliKelasPage />} />
+            <Route path="/mata-pelajaran" element={<MataPelajaranPage />} />
+            <Route path="/kepala-sekolah" element={<KepalaSekolahPage />} />
+            <Route path="/manajemen-template" element={<ManajemenTemplatePage />} />
+            <Route path="/upload-excel" element={<UploadExcelPage />} />
+            <Route path="/cetak-raport" element={<GenerateRaportPage />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
   );
 }
 export default App;

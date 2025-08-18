@@ -1,4 +1,5 @@
-const WaliKelas = db.WaliKelas;
+const db_wk = require('../models'); // Pastikan db di-import
+const WaliKelas = db_wk.WaliKelas;
 
 exports.getAllWaliKelas = async (req, res) => res.json(await WaliKelas.findAll());
 exports.createWaliKelas = async (req, res) => res.status(201).json(await WaliKelas.create(req.body));

@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { ListGroup } from 'react-bootstrap';
+// Nama-nama ikon ini sudah dipastikan ada di library
 import { Users, UserCheck, Book, FileUp, FileText, Printer, UserCog, House } from 'lucide-react';
 
 const Sidebar = () => {
