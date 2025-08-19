@@ -2,28 +2,22 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Modal, Button, Form, Table, Alert } from 'react-bootstrap';
 
-const MataPelajaranPage = () => {
-    const [mataPelajaran, setMataPelajaran] = useState([]);
+const ManajemenIndikatorSikapPage = () => {
+    const [indikator, setIndikator] = useState([]);
     const [show, setShow] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState(null);
     
-    const initialState = { nama_mapel: '', kitab: '' };
+    const initialState = { jenis_sikap: 'spiritual', indikator: '' };
     const [currentData, setCurrentData] = useState(initialState);
 
-    const API_URL = 'http://localhost:5000/api/mata-pelajaran';
-
     useEffect(() => {
-        fetchMataPelajaran();
+        fetchIndikator();
     }, []);
 
-    const fetchMataPelajaran = async () => {
-        try {
-            const res = await axios.get(API_URL);
-            setMataPelajaran(res.data);
-        } catch (err) {
-            console.error("Gagal mengambil data mata pelajaran:", err);
-        }
+    const fetchIndikator = async () => {
+        const res = await axios.get('http://localhost:5000/api/indikator-sikap');
+        setIndikator(res.data);
     };
 
     const handleClose = () => {
@@ -48,11 +42,11 @@ const MataPelajaranPage = () => {
         setError(null);
         try {
             if (isEditing) {
-                await axios.put(`${API_URL}/${currentData.id}`, currentData);
+                await axios.put(`http://localhost:5000/api/indikator-sikap/${currentData.id}`, currentData);
             } else {
-                await axios.post(API_URL, currentData);
+                await axios.post('http://localhost:5000/api/indikator-sikap', currentData);
             }
-            fetchMataPelajaran();
+            fetchIndikator();
             handleClose();
         } catch (err) {
             setError("Gagal menyimpan data. Pastikan semua field terisi.");
@@ -60,40 +54,36 @@ const MataPelajaranPage = () => {
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm('Apakah Anda yakin ingin menghapus mata pelajaran ini?')) {
-            try {
-                await axios.delete(`${API_URL}/${id}`);
-                fetchMataPelajaran();
-            } catch (err) {
-                console.error("Gagal menghapus data:", err);
-            }
+        if (window.confirm('Apakah Anda yakin ingin menghapus indikator ini?')) {
+            await axios.delete(`http://localhost:5000/api/indikator-sikap/${id}`);
+            fetchIndikator();
         }
     };
 
     return (
         <div className="container mt-4">
-            <h2>Manajemen Mata Pelajaran</h2>
+            <h2>Manajemen Indikator Sikap</h2>
             <Button variant="primary" className="mb-3" onClick={() => handleShow(null)}>
-                Tambah Mata Pelajaran
+                Tambah Indikator
             </Button>
             <Table striped bordered hover responsive>
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Nama Mata Pelajaran</th>
-                        <th>Kitab</th>
+                        <th>Jenis Sikap</th>
+                        <th>Indikator</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {mataPelajaran.map((mapel, index) => (
-                        <tr key={mapel.id}>
+                    {indikator.map((item, index) => (
+                        <tr key={item.id}>
                             <td>{index + 1}</td>
-                            <td>{mapel.nama_mapel}</td>
-                            <td>{mapel.kitab}</td>
+                            <td className="text-capitalize">{item.jenis_sikap}</td>
+                            <td>{item.indikator}</td>
                             <td>
-                                <Button variant="info" size="sm" className="me-1" onClick={() => handleShow(mapel)}>Edit</Button>
-                                <Button variant="danger" size="sm" onClick={() => handleDelete(mapel.id)}>Hapus</Button>
+                                <Button variant="info" size="sm" className="me-1" onClick={() => handleShow(item)}>Edit</Button>
+                                <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>Hapus</Button>
                             </td>
                         </tr>
                     ))}
@@ -102,18 +92,21 @@ const MataPelajaranPage = () => {
 
             <Modal show={show} onHide={handleClose}>
                 <Modal.Header closeButton>
-                    <Modal.Title>{isEditing ? 'Edit Mata Pelajaran' : 'Tambah Mata Pelajaran'}</Modal.Title>
+                    <Modal.Title>{isEditing ? 'Edit Indikator' : 'Tambah Indikator'}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     {error && <Alert variant="danger">{error}</Alert>}
                     <Form>
                         <Form.Group className="mb-3">
-                            <Form.Label>Nama Mata Pelajaran</Form.Label>
-                            <Form.Control type="text" name="nama_mapel" value={currentData.nama_mapel} onChange={handleChange} />
+                            <Form.Label>Jenis Sikap</Form.Label>
+                            <Form.Select name="jenis_sikap" value={currentData.jenis_sikap} onChange={handleChange}>
+                                <option value="spiritual">Spiritual</option>
+                                <option value="sosial">Sosial</option>
+                            </Form.Select>
                         </Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label>Kitab</Form.Label>
-                            <Form.Control type="text" name="kitab" value={currentData.kitab} onChange={handleChange} />
+                            <Form.Label>Indikator</Form.Label>
+                            <Form.Control as="textarea" rows={3} name="indikator" value={currentData.indikator} onChange={handleChange} />
                         </Form.Group>
                     </Form>
                 </Modal.Body>
@@ -126,4 +119,4 @@ const MataPelajaranPage = () => {
     );
 };
 
-export default MataPelajaranPage;
+export default ManajemenIndikatorSikapPage;

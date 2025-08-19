@@ -1,37 +1,42 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const cors = require('cors');
-const path = require('path');
-const db = require('./models');
-// Impor controller yang dibutuhkan
-const templateController = require('./controllers/templateController');
 
 const app = express();
+const port = process.env.PORT || 5000;
+
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-app.use('/templates', express.static(path.join(__dirname, 'uploads/templates')));
-
-// --- RUTE DIPINDAHKAN KE SINI UNTUK TES ---
-// Rute untuk mengunduh file identitas per siswa
-app.get('/api/templates/generate-identitas/:siswaId', templateController.generateIdentitas);
-
-
-// Memuat rute-rute lainnya
-app.use('/api/kepala-pesantren', require('./routes/kepalaPesantrenRoutes'));
-app.use('/api/walikelas', require('./routes/waliKelasRoutes'));
-app.use('/api/matapelajaran', require('./routes/mataPelajaranRoutes'));
-app.use('/api/siswa', require('./routes/siswaRoutes'));
-app.use('/api/nilai', require('./routes/nilaiRoutes'));
-app.use('/api/sikap', require('./routes/sikapRoutes'));
-app.use('/api/kehadiran', require('./routes/kehadiranRoutes'));
-// Gunakan sisa rute dari templateRoutes, tapi yang bermasalah sudah kita pindahkan
-app.use('/api/templates', require('./routes/templateRoutes')); 
-app.use('/api/excel', require('./routes/excelRoutes'));
+// Import semua routes
+const siswaRoutes = require('./routes/siswaRoutes');
+const waliKelasRoutes = require('./routes/waliKelasRoutes'); // Pastikan ini di-import
+const kepalaPesantrenRoutes = require('./routes/kepalaPesantrenRoutes');
+const mataPelajaranRoutes = require('./routes/mataPelajaranRoutes');
+const nilaiRoutes = require('./routes/nilaiRoutes');
+const sikapRoutes = require('./routes/sikapRoutes');
+const kehadiranRoutes = require('./routes/kehadiranRoutes');
+const templateRoutes = require('./routes/templateRoutes');
+const excelRoutes = require('./routes/excelRoutes');
+const kelasRoutes = require('./routes/kelasRoutes');
+const indikatorSikapRoutes = require('./routes/indikatorSikapRoutes');
 
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
-    console.log(`Server is running on port ${PORT}.`);
-    await db.sequelize.sync();
+// Gunakan semua routes dengan prefix yang benar
+app.use('/api/siswa', siswaRoutes);
+app.use('/api/wali-kelas', waliKelasRoutes); // Pastikan rute ini menggunakan tanda hubung
+app.use('/api/kepala-pesantren', kepalaPesantrenRoutes);
+app.use('/api/mata-pelajaran', mataPelajaranRoutes);
+app.use('/api/nilai', nilaiRoutes);
+app.use('/api/sikap', sikapRoutes);
+app.use('/api/kehadiran', kehadiranRoutes);
+app.use('/api/template', templateRoutes);
+app.use('/api/excel', excelRoutes);
+app.use('/api/kelas', kelasRoutes);
+app.use('/api/indikator-sikap', indikatorSikapRoutes);
+
+
+app.listen(port, () => {
+  console.log(`Server is running on port: ${port}`);
 });

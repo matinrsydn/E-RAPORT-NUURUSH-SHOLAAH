@@ -7,6 +7,9 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id', as: 'wali_kelas' });
       // PERUBAHAN: Mengganti relasi ke KepalaPesantren
+      Siswa.belongsTo(models.Kelas, { foreignKey: 'kelas_id' });
+      Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id' });
+      Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id' });
       Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id', as: 'kepala_pesantren' });
       Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswaId', as: 'nilai_ujian', onDelete: 'CASCADE' });
       Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswaId', as: 'nilai_hafalan', onDelete: 'CASCADE' });
@@ -23,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
     agama: DataTypes.STRING,
     alamat: DataTypes.TEXT,
     kelas: DataTypes.STRING,
+    kelas_id: DataTypes.INTEGER,
     wali_kelas_id: DataTypes.INTEGER,
     // PERUBAHAN: Mengganti nama kolom foreign key
     kepala_pesantren_id: DataTypes.INTEGER,

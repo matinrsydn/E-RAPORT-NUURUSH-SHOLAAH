@@ -1,51 +1,52 @@
-const db = require('../models');
-const Siswa = db.Siswa;
+const { Siswa, WaliKelas, KepalaPesantren, Kelas } = require('../models'); // Pastikan 'Kelas' di-import
 
-// GET all siswas
+// Mendapatkan semua siswa beserta relasinya
 exports.getAllSiswa = async (req, res) => {
-  try {
-    const siswa = await db.Siswa.findAll({
-      include: [
-        { model: db.WaliKelas, as: 'wali_kelas' },
-        // PERBAIKAN: Sesuaikan dengan model dan alias yang baru
-        { model: db.KepalaPesantren, as: 'kepala_pesantren' }
-      ]
-    });
-    res.json(siswa);
-  } catch (error) {
-    console.error("Error fetching siswa:", error); // Tambahkan log untuk debugging
-    res.status(500).send(error.message);
-  }
+    try {
+        const siswas = await Siswa.findAll({
+            include: [
+                { model: Kelas, attributes: ['nama_kelas'] }, // Sertakan model Kelas
+                { model: WaliKelas, attributes: ['nama'] },   // Sertakan model WaliKelas
+                { model: KepalaPesantren, attributes: ['nama'] }
+            ],
+            order: [['nama', 'ASC']]
+        });
+        res.json(siswas);
+    } catch (error) {
+        res.status(500).json({ message: "Gagal mengambil data siswa", error: error.message });
+    }
 };
 
-// GET siswa by ID
+// Mendapatkan siswa tunggal berdasarkan ID
 exports.getSiswaById = async (req, res) => {
     try {
         const siswa = await Siswa.findByPk(req.params.id, {
-            include: ['wali_kelas', 'kepala_sekolah'] // <-- INI PENYEBABNYA
+            include: [
+                { model: Kelas, attributes: ['nama_kelas'] },
+                { model: WaliKelas, attributes: ['nama'] },
+                { model: KepalaPesantren, attributes: ['nama'] }
+            ]
         });
-        if (siswa) {
-            res.json(siswa);
-        } else {
-            res.status(404).json({ message: 'Siswa not found' });
+        if (!siswa) {
+            return res.status(404).json({ message: "Siswa tidak ditemukan" });
         }
+        res.json(siswa);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Gagal mengambil data siswa", error: error.message });
     }
 };
 
-// CREATE a new siswa
+// Membuat siswa baru
 exports.createSiswa = async (req, res) => {
     try {
-        // Semua data sekarang ada di req.body
-        const siswa = await Siswa.create(req.body);
-        res.status(201).json(siswa);
+        const newSiswa = await Siswa.create(req.body);
+        res.status(201).json(newSiswa);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        res.status(400).json({ message: "Gagal membuat siswa", error: error.message });
     }
 };
 
-// UPDATE a siswa
+// Memperbarui data siswa
 exports.updateSiswa = async (req, res) => {
     try {
         const [updated] = await Siswa.update(req.body, {
@@ -55,14 +56,14 @@ exports.updateSiswa = async (req, res) => {
             const updatedSiswa = await Siswa.findByPk(req.params.id);
             res.status(200).json(updatedSiswa);
         } else {
-            res.status(404).json({ message: 'Siswa not found' });
+            res.status(404).json({ message: "Siswa tidak ditemukan" });
         }
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        res.status(400).json({ message: "Gagal memperbarui siswa", error: error.message });
     }
 };
 
-// DELETE a siswa
+// Menghapus siswa
 exports.deleteSiswa = async (req, res) => {
     try {
         const deleted = await Siswa.destroy({
@@ -71,9 +72,9 @@ exports.deleteSiswa = async (req, res) => {
         if (deleted) {
             res.status(204).send();
         } else {
-            res.status(404).json({ message: 'Siswa not found' });
+            res.status(404).json({ message: "Siswa tidak ditemukan" });
         }
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Gagal menghapus siswa", error: error.message });
     }
 };

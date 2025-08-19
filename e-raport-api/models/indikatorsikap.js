@@ -1,27 +1,24 @@
-// e-raport-api/models/walikelas.js
-
 'use strict';
 const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class WaliKelas extends Model {
+  class IndikatorSikap extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      WaliKelas.hasOne(models.Kelas, { foreignKey: 'wali_kelas_id' });
       // define association here
     }
   }
-  WaliKelas.init({
-    nama: DataTypes.STRING,
-    nip: DataTypes.STRING
+  IndikatorSikap.init({
+    jenis_sikap: DataTypes.ENUM('spiritual', 'sosial'),
+    indikator: DataTypes.STRING
   }, {
     sequelize,
-    modelName: 'WaliKelas',
+    modelName: 'IndikatorSikap',
   });
-  return WaliKelas;
+  return IndikatorSikap;
 };

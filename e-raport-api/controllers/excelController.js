@@ -1,166 +1,115 @@
 const ExcelJS = require('exceljs');
-const db = require('../models');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { Siswa, MataPelajaran, IndikatorSikap, Kelas, WaliKelas } = require('../models');
 
-// Konfigurasi Multer untuk menyimpan file sementara
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = 'uploads/excel/';
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+// Fungsi untuk mengunduh template Excel dinamis
+exports.downloadTemplate = async (req, res) => {
+    try {
+        const { kelas_id, wali_kelas_id } = req.query;
+
+        let whereClause = {};
+        if (kelas_id) {
+            whereClause.kelas_id = kelas_id;
+        } else if (wali_kelas_id) {
+            const kelas = await Kelas.findOne({ where: { wali_kelas_id } });
+            if (kelas) {
+                whereClause.kelas_id = kelas.id;
+            } else {
+                return res.status(404).json({ message: "Tidak ada kelas yang diasosiasikan dengan wali kelas ini." });
+            }
+        } else {
+            return res.status(400).json({ message: "Silakan pilih filter berdasarkan kelas atau wali kelas." });
         }
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname)); // Nama file unik
+
+        const students = await Siswa.findAll({ where: whereClause, order: [['nama', 'ASC']] });
+        if (students.length === 0) {
+            return res.status(404).json({ message: "Tidak ada siswa yang ditemukan untuk filter yang dipilih." });
+        }
+
+        // Mengambil data master untuk membuat kolom dinamis
+        const subjects = await MataPelajaran.findAll({ order: [['id', 'ASC']] });
+        const spiritualIndicators = await IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' }, order: [['id', 'ASC']] });
+        const socialIndicators = await IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' }, order: [['id', 'ASC']] });
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'E-Raport System';
+        workbook.created = new Date();
+
+        // ========== Sheet 1: Nilai Raport ==========
+        const nilaiSheet = workbook.addWorksheet('Nilai Raport');
+        
+        // --- Header Dasar ---
+        let nilaiColumns = [
+            { header: 'NIS', key: 'nis', width: 15 },
+            { header: 'Nama Siswa', key: 'nama', width: 30 },
+        ];
+
+        // --- Kolom Dinamis untuk Nilai Ujian ---
+        subjects.forEach(subject => {
+            nilaiColumns.push({ header: `${subject.nama_mapel} - Kitab`, key: `mapel_kitab_${subject.id}`, width: 20 });
+            nilaiColumns.push({ header: `${subject.nama_mapel} - Pengetahuan`, key: `mapel_p_${subject.id}`, width: 25 });
+            nilaiColumns.push({ header: `${subject.nama_mapel} - Keterampilan`, key: `mapel_k_${subject.id}`, width: 25 });
+        });
+        
+        // --- Kolom Dinamis untuk Nilai Hafalan ---
+        subjects.forEach(subject => {
+            nilaiColumns.push({ header: `${subject.nama_mapel} - Hafalan`, key: `hafalan_${subject.id}`, width: 25 });
+        });
+
+        // --- Kolom untuk Ketidakhadiran ---
+        nilaiColumns.push({ header: 'Sakit', key: 'sakit', width: 10 });
+        nilaiColumns.push({ header: 'Izin', key: 'izin', width: 10 });
+        nilaiColumns.push({ header: 'Tanpa Keterangan', key: 'alpha', width: 20 });
+
+        nilaiSheet.columns = nilaiColumns;
+
+        // Menambahkan baris siswa
+        students.forEach(student => {
+            nilaiSheet.addRow({ nis: student.nis, nama: student.nama });
+        });
+
+
+        // ========== Sheet 2: Nilai Sikap ==========
+        const sikapSheet = workbook.addWorksheet('Nilai Sikap');
+        const sikapColumns = [
+            { header: 'NIS', key: 'nis', width: 15 },
+            { header: 'Nama Siswa', key: 'nama', width: 30 },
+        ];
+
+        // --- Kolom Dinamis untuk Sikap Spiritual ---
+        spiritualIndicators.forEach(indicator => {
+            sikapColumns.push({ header: `Spiritual: ${indicator.indikator}`, key: `spirit_nilai_${indicator.id}`, width: 30 });
+            sikapColumns.push({ header: `Deskripsi Spiritual: ${indicator.indikator}`, key: `spirit_desk_${indicator.id}`, width: 40 });
+        });
+
+        // --- Kolom Dinamis untuk Sikap Sosial ---
+        socialIndicators.forEach(indicator => {
+            sikapColumns.push({ header: `Sosial: ${indicator.indikator}`, key: `sosial_nilai_${indicator.id}`, width: 30 });
+            sikapColumns.push({ header: `Deskripsi Sosial: ${indicator.indikator}`, key: `sosial_desk_${indicator.id}`, width: 40 });
+        });
+        
+        sikapSheet.columns = sikapColumns;
+
+        // Menambahkan baris siswa
+        students.forEach(student => {
+            sikapSheet.addRow({ nis: student.nis, nama: student.nama });
+        });
+
+
+        // ========== Kirim File ke Client ==========
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=' + 'Template-Input-Nilai.xlsx');
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (error) {
+        console.error("Error generating Excel template:", error);
+        res.status(500).json({ message: "Gagal men-generate template Excel.", error: error.message });
     }
-});
-const upload = multer({ storage: storage });
+};
 
-exports.uploadNilai = [
-    upload.single('excel-file'),
-    async (req, res) => {
-        if (!req.file) {
-            return res.status(400).send('Tidak ada file yang diunggah.');
-        }
-
-        const filePath = req.file.path;
-        const { semester, tahun_ajaran } = req.body;
-        let transaction; // Deklarasikan transaksi di luar blok try
-
-        try {
-            // Mulai transaksi database
-            transaction = await db.sequelize.transaction();
-
-            const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.readFile(filePath);
-
-            // Proses Sheet: Nilai Ujian
-            const nilaiUjianSheet = workbook.getWorksheet('Nilai Ujian');
-            if (nilaiUjianSheet) {
-                for (let i = 2; i <= nilaiUjianSheet.rowCount; i++) {
-                    const row = nilaiUjianSheet.getRow(i);
-                    const nis = row.getCell('A').value;
-                    const nama_mapel = row.getCell('B').value;
-                    const pengetahuan_angka = row.getCell('C').value;
-                    const keterampilan_angka = row.getCell('D').value;
-
-                    if (nis && nama_mapel) {
-                        const siswa = await db.Siswa.findOne({ where: { nis } });
-                        const mapel = await db.MataPelajaran.findOne({ where: { nama_mapel } });
-
-                        if (siswa && mapel) {
-                            await db.NilaiUjian.create({
-                                siswaId: siswa.id,
-                                mapelId: mapel.id,
-                                semester,
-                                tahun_ajaran,
-                                pengetahuan_angka,
-                                keterampilan_angka
-                            }, { transaction });
-                        }
-                    }
-                }
-            }
-
-            // Proses Sheet: Nilai Hafalan
-            const nilaiHafalanSheet = workbook.getWorksheet('Nilai Hafalan');
-            if (nilaiHafalanSheet) {
-                 for (let i = 2; i <= nilaiHafalanSheet.rowCount; i++) {
-                    const row = nilaiHafalanSheet.getRow(i);
-                    const nis = row.getCell('A').value;
-                    const nama_mapel = row.getCell('B').value;
-                    const nilai_angka = row.getCell('C').value;
-
-                     if (nis && nama_mapel) {
-                        const siswa = await db.Siswa.findOne({ where: { nis } });
-                        const mapel = await db.MataPelajaran.findOne({ where: { nama_mapel } });
-
-                        if (siswa && mapel) {
-                            await db.NilaiHafalan.create({
-                                siswaId: siswa.id,
-                                mapelId: mapel.id,
-                                semester,
-                                tahun_ajaran,
-                                nilai_angka
-                            }, { transaction });
-                        }
-                    }
-                }
-            }
-
-            // Proses Sheet: Sikap
-            const sikapSheet = workbook.getWorksheet('Sikap');
-            if (sikapSheet) {
-                for (let i = 2; i <= sikapSheet.rowCount; i++) {
-                    const row = sikapSheet.getRow(i);
-                    const nis = row.getCell('A').value;
-                    const jenis_sikap = row.getCell('B').value;
-                    const indikator = row.getCell('C').value;
-                    const angka = row.getCell('D').value;
-                    const deskripsi = row.getCell('E').value;
-
-                    if (nis && jenis_sikap && indikator) {
-                       const siswa = await db.Siswa.findOne({ where: { nis } });
-                       if (siswa) {
-                           await db.Sikap.create({
-                               siswaId: siswa.id,
-                               semester,
-                               tahun_ajaran,
-                               jenis_sikap,
-                               indikator,
-                               angka,
-                               deskripsi
-                           }, { transaction });
-                       }
-                    }
-                }
-            }
-
-            // Proses Sheet: Kehadiran
-            const kehadiranSheet = workbook.getWorksheet('Kehadiran');
-            if (kehadiranSheet) {
-                for (let i = 2; i <= kehadiranSheet.rowCount; i++) {
-                    const row = kehadiranSheet.getRow(i);
-                    const nis = row.getCell('A').value;
-                    const kegiatan = row.getCell('B').value;
-                    const izin = row.getCell('C').value || 0;
-                    const sakit = row.getCell('D').value || 0;
-                    const absen = row.getCell('E').value || 0;
-
-                    if (nis && kegiatan) {
-                        const siswa = await db.Siswa.findOne({ where: { nis } });
-                        if (siswa) {
-                            await db.Kehadiran.create({
-                                siswaId: siswa.id,
-                                semester,
-                                tahun_ajaran,
-                                kegiatan,
-                                izin,
-                                sakit,
-                                absen
-                            }, { transaction });
-                        }
-                    }
-                }
-            }
-
-            // Commit transaksi jika semua proses berhasil
-            await transaction.commit();
-            res.status(200).json({ message: 'Data berhasil diimpor dari Excel.' });
-
-        } catch (error) {
-            // Rollback transaksi jika terjadi error
-            if (transaction) await transaction.rollback();
-            console.error('Error importing Excel:', error);
-            res.status(500).json({ message: 'Terjadi kesalahan saat mengimpor data.', error: error.message });
-        } finally {
-            // Selalu hapus file sementara setelah selesai
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        }
-    }
-];
+// Fungsi untuk mengunggah dan memproses Excel (nama disesuaikan)
+exports.uploadExcel = async (req, res) => {
+    // Logika untuk memproses file Excel yang diunggah akan ditempatkan di sini.
+    // Ini akan membaca nilai dari kolom-kolom dinamis, menghitung predikat, jumlah, rata-rata, dll.
+    res.status(501).send({ message: 'Fungsi upload belum diimplementasikan.' });
+};

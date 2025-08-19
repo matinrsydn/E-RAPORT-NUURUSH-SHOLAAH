@@ -1,5 +1,12 @@
-const express_ex = require('express');
-const router_ex = express_ex.Router();
-const controller_ex = require('../controllers/excelController');
-router_ex.post('/upload-nilai', controller_ex.uploadNilai);
-module.exports = router_ex;
+const express = require('express');
+const router = express.Router();
+const excelController = require('../controllers/excelController');
+const upload = require('../middleware/upload'); // Sekarang file ini sudah ada
+
+// Rute untuk mengunggah file Excel, menggunakan middleware 'upload'
+router.post('/upload', upload.single('file'), excelController.uploadExcel);
+
+// Rute untuk mengunduh template dinamis, TIDAK menggunakan middleware 'upload'
+router.get('/download-template', excelController.downloadTemplate);
+
+module.exports = router;
