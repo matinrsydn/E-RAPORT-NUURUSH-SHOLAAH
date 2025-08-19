@@ -1,20 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const templateController = require('../controllers/templateController');
+const upload = require('../middleware/upload');
 
-// DEBUGGING: Baris ini akan muncul di terminal jika file ini berhasil dimuat
-console.log('✅ File templateRoutes.js berhasil dimuat oleh server.');
+// Rute untuk mengunggah file template baru
+// Ini akan menangani permintaan POST ke /api/templates/upload
+router.post('/upload', upload.single('template'), templateController.uploadTemplate);
 
-// Rute untuk mengunggah template Word
-router.post('/upload', templateController.uploadTemplates);
+// Rute untuk mendapatkan daftar template yang ada
+router.get('/', templateController.getTemplates);
 
-// Rute untuk membuat raport Word lengkap
-router.get('/generate/:siswaId/:semester/:tahun_ajaran', templateController.generateRaport);
+// Rute untuk menghapus template
+router.delete('/:fileName', templateController.deleteTemplate);
 
-// Rute untuk mengunduh template Excel
-router.get('/download-excel', templateController.generateExcelTemplate);
-
-// Rute untuk mengunduh file identitas per siswa
-router.get('/generate-identitas/:siswaId', templateController.generateIdentitas);
+// (Opsional) Rute untuk men-generate raport berdasarkan template
+// router.get('/generate-identitas/:siswaId', templateController.generateIdentitas);
 
 module.exports = router;
