@@ -2,7 +2,8 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('WaliKelas', {
+    // PERBAIKAN: Mengubah nama tabel menjadi plural 'WaliKelases'
+    await queryInterface.createTable('WaliKelases', {
       id: {
         allowNull: false,
         autoIncrement: true,
@@ -26,6 +27,7 @@ module.exports = {
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('WaliKelas');
+    // PERBAIKAN: Mengubah nama tabel menjadi plural 'WaliKelases'
+    await queryInterface.dropTable('WaliKelases');
   }
 };

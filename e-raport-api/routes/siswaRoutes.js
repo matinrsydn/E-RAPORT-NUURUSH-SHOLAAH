@@ -1,8 +1,14 @@
-const express_s = require('express');
-const router_s = express_s.Router();
-const controller_s = require('../controllers/siswaController');
-router_s.get('/', controller_s.getAllSiswa);
-router_s.post('/', controller_s.createSiswa);
-router_s.put('/:id', controller_s.updateSiswa);
-router_s.delete('/:id', controller_s.deleteSiswa);
-module.exports = router_s;
+const express = require('express');
+const router = express.Router();
+const siswaController = require('../controllers/siswaController');
+
+router.get('/', siswaController.getAllSiswa);
+router.post('/', siswaController.createSiswa);
+
+// RUTE BARU: untuk mengambil data siswa berdasarkan ID
+router.get('/:id', siswaController.getSiswaById);
+
+router.put('/:id', siswaController.updateSiswa);
+router.delete('/:id', siswaController.deleteSiswa);
+
+module.exports = router;

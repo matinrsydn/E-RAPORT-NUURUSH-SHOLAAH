@@ -1,45 +1,22 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { ListGroup } from 'react-bootstrap';
-// Nama-nama ikon ini sudah dipastikan ada di library
-import { Users, UserCheck, Book, FileUp, FileText, Printer, UserCog, House } from 'lucide-react';
+import { Card, Alert } from 'react-bootstrap';
+import { GraduationCap } from 'lucide-react';
 
-const Sidebar = () => {
-    return (
-        <aside className="bg-light" style={{ width: '280px', minHeight: '100vh', boxShadow: '2px 0 5px rgba(0,0,0,0.1)' }}>
-            <div className="p-4 border-bottom">
-                <h2 className="h4 text-primary text-center">e-Raport</h2>
-            </div>
-            <ListGroup variant="flush" className="p-2">
-                <h3 className="px-3 py-2 mt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Menu Utama</h3>
-                <ListGroup.Item action as={NavLink} to="/" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <House size={18} /> Dashboard
-                </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/manajemen-siswa" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <Users size={18} /> Manajemen Siswa
-                </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/upload-excel" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <FileUp size={18} /> Upload Nilai Excel
-                </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/cetak-raport" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <Printer size={18} /> Cetak Raport
-                </ListGroup.Item>
+const Dashboard = () => (
+    <Card>
+        <Card.Header as="h4">Selamat Datang di Aplikasi E-Raport</Card.Header>
+        <Card.Body>
+            <Card.Title>Sistem Manajemen Raport Digital</Card.Title>
+            <Card.Text>
+                Gunakan menu navigasi di sebelah kiri untuk mengelola data akademik, siswa, dan nilai.
+                Aplikasi ini dirancang untuk mempermudah proses pengisian dan rekapitulasi nilai raport secara digital.
+            </Card.Text>
+            <Alert variant="info" className="d-flex align-items-center">
+                <GraduationCap size={20} className="me-2"/>
+                <strong>Tips:</strong> Mulailah dengan melengkapi data master pada menu "Master Data" sebelum mengelola data siswa dan nilai.
+            </Alert>
+        </Card.Body>
+    </Card>
+);
 
-                <h3 className="px-3 py-2 mt-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Master Data</h3>
-                <ListGroup.Item action as={NavLink} to="/wali-kelas" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <UserCheck size={18} /> Wali Kelas
-                </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/mata-pelajaran" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <Book size={18} /> Mata Pelajaran
-                </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/kepala-sekolah" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <UserCog size={18} /> Kepala Sekolah
-                </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/manajemen-template" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <FileText size={18} /> Manajemen Template
-                </ListGroup.Item>
-            </ListGroup>
-        </aside>
-    );
-};
-export default Sidebar;
+export default Dashboard;

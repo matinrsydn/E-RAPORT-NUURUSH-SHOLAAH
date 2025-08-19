@@ -1,95 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import React, { useState } from 'react';
 import axios from 'axios';
 
 const UploadExcelPage = () => {
-    const [siswaList, setSiswaList] = useState([]);
-    const [selectedSiswa, setSelectedSiswa] = useState('');
-    const [semester, setSemester] = useState('1 (Ganjil)');
-    const [tahunAjaran, setTahunAjaran] = useState('2024/2025');
     const [file, setFile] = useState(null);
     const [message, setMessage] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [semester, setSemester] = useState('Ganjil');
+    const [tahunAjaran, setTahunAjaran] = useState('2023/2024');
 
-    useEffect(() => {
-        axios.get('/siswa').then(res => {
-            setSiswaList(res.data);
-        }).catch(err => {
-            setError("Gagal memuat daftar siswa. Pastikan backend berjalan.");
-        });
-    }, []);
+    const onFileChange = (e) => {
+        setFile(e.target.files[0]);
+    };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!file || !selectedSiswa) {
-            setError('Siswa dan file Excel harus dipilih.');
+    const onUpload = async () => {
+        if (!file) {
+            setMessage('Pilih file terlebih dahulu.');
             return;
         }
-        setIsLoading(true);
-        setMessage('');
-        setError('');
+
         const formData = new FormData();
-        formData.append('fileNilai', file);
-        formData.append('siswaId', selectedSiswa);
+        formData.append('excel-file', file);
         formData.append('semester', semester);
         formData.append('tahun_ajaran', tahunAjaran);
+
         try {
-            const res = await axios.post('/excel/upload-nilai', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            // PERBAIKAN: URL diubah ke '/api/excel/upload-nilai' agar sesuai dengan backend
+            const res = await axios.post('http://localhost:5000/api/excel/upload-nilai', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
             });
             setMessage(res.data.message);
         } catch (err) {
-            setError(err.response?.data?.message || 'Terjadi kesalahan saat mengunggah.');
-        } finally {
-            setIsLoading(false);
+            setMessage('Gagal mengunggah file. ' + (err.response?.data?.message || err.message));
         }
     };
 
     return (
-        <Card>
-            <Card.Header as="h4">Upload Nilai Raport via Excel</Card.Header>
-            <Card.Body>
-                <Alert variant="info">
-                    <Alert.Heading>Petunjuk</Alert.Heading>
-                    <ol className="list-decimal list-inside mb-0">
-                        <li>Unduh template Excel yang telah disediakan.</li>
-                        <li>Isi data nilai, sikap, dan kehadiran pada sheet yang sesuai.</li>
-                        <li>Pilih siswa, tahun ajaran, dan semester di bawah ini.</li>
-                        <li>Unggah file Excel yang sudah diisi.</li>
-                    </ol>
-                    <hr />
-                    <a href="http://localhost:5000/templates/Template_Nilai_Raport.xlsx" download className="btn btn-success btn-sm">
-                        Unduh Template Excel
+        <div className="container mt-4">
+            <h2>Unggah Data Nilai dari Excel</h2>
+            <hr />
+
+            <div className="card">
+                <div className="card-header">
+                    Unduh Template dan Unggah File
+                </div>
+                <div className="card-body">
+                    <p>
+                        Silakan unduh template Excel di bawah ini, isi sesuai format, lalu unggah kembali melalui form ini.
+                    </p>
+                    {/* Tombol ini sekarang mengarah ke rute backend yang benar untuk download Excel */}
+                    <a href="http://localhost:5000/api/templates/download-excel" className="btn btn-success btn-sm mb-3">
+                        <i className="bi bi-file-earmark-excel"></i> Unduh Template Excel
                     </a>
-                </Alert>
-                <Form onSubmit={handleSubmit} className="mt-4">
-                    <Form.Group className="mb-3">
-                        <Form.Label>1. Pilih Siswa</Form.Label>
-                        <Form.Select value={selectedSiswa} onChange={e => setSelectedSiswa(e.target.value)} required>
-                            <option value="">-- Pilih Siswa --</option>
-                            {siswaList.map(s => <option key={s.id} value={s.id}>{s.nama} ({s.nis})</option>)}
-                        </Form.Select>
-                    </Form.Group>
-                    <Form.Group className="mb-3">
-                        <Form.Label>2. Konfirmasi Tahun Ajaran & Semester</Form.Label>
-                        <div className="d-flex gap-3">
-                            <Form.Control type="text" value={tahunAjaran} onChange={e => setTahunAjaran(e.target.value)} />
-                            <Form.Control type="text" value={semester} onChange={e => setSemester(e.target.value)} />
+
+                    <div className="row">
+                        <div className="col-md-6">
+                            <div className="form-group mb-3">
+                                <label htmlFor="semester">Semester</label>
+                                <select id="semester" className="form-control" value={semester} onChange={(e) => setSemester(e.target.value)}>
+                                    <option value="Ganjil">Ganjil</option>
+                                    <option value="Genap">Genap</option>
+                                </select>
+                            </div>
                         </div>
-                    </Form.Group>
-                    <Form.Group className="mb-3">
-                        <Form.Label>3. Unggah File Excel</Form.Label>
-                        <Form.Control type="file" onChange={(e) => setFile(e.target.files[0])} accept=".xlsx" required />
-                    </Form.Group>
-                    <Button type="submit" disabled={isLoading}>
-                        {isLoading ? <><Spinner as="span" animation="border" size="sm"/> Mengunggah...</> : 'Unggah dan Proses Nilai'}
-                    </Button>
-                    {message && <Alert variant="success" className="mt-3">{message}</Alert>}
-                    {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
-                </Form>
-            </Card.Body>
-        </Card>
+                        <div className="col-md-6">
+                            <div className="form-group mb-3">
+                                <label htmlFor="tahunAjaran">Tahun Ajaran</label>
+                                <input type="text" id="tahunAjaran" className="form-control" value={tahunAjaran} onChange={(e) => setTahunAjaran(e.target.value)} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="form-group mb-3">
+                        <label htmlFor="file-upload">Pilih File Excel</label>
+                        <input type="file" className="form-control" id="file-upload" onChange={onFileChange} accept=".xlsx, .xls" />
+                    </div>
+
+                    <button className="btn btn-primary" onClick={onUpload}>
+                        <i className="bi bi-upload"></i> Unggah Sekarang
+                    </button>
+
+                    {message && <div className="alert alert-info mt-3">{message}</div>}
+                </div>
+            </div>
+        </div>
     );
 };
+
 export default UploadExcelPage;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Form, Button, Alert } from 'react-bootstrap';
 import axios from 'axios';
+import { Button, Form, Card, Alert } from 'react-bootstrap';
 
 const ManajemenTemplatePage = () => {
     const [identitasFile, setIdentitasFile] = useState(null);
@@ -9,55 +9,72 @@ const ManajemenTemplatePage = () => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleFileChange = (e, setFile) => {
+        setFile(e.target.files[0]);
+    };
+
+    const handleUpload = async () => {
         setMessage('');
         setError('');
+
+        if (!identitasFile && !nilaiFile && !sikapFile) {
+            setError('Silakan pilih setidaknya satu file untuk diunggah.');
+            return;
+        }
+
         const formData = new FormData();
         if (identitasFile) formData.append('identitas', identitasFile);
         if (nilaiFile) formData.append('nilai', nilaiFile);
         if (sikapFile) formData.append('sikap', sikapFile);
 
-        if (formData.entries().next().done) {
-            setError('Pilih setidaknya satu file template untuk diunggah.');
-            return;
-        }
-
         try {
-            const res = await axios.post('/template/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            // PERBAIKAN: URL diubah dari '/api/template' menjadi '/api/templates'
+            const res = await axios.post('http://localhost:5000/api/templates/upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
             });
             setMessage(res.data.message);
         } catch (err) {
-            setError('Gagal mengunggah template.');
+            setError('Gagal mengunggah file. ' + (err.response?.data?.message || err.message));
         }
     };
 
     return (
-        <Card>
-            <Card.Header as="h4">Manajemen Template Raport (.docx)</Card.Header>
-            <Card.Body>
-                <Form onSubmit={handleSubmit} className="space-y-4">
-                    <Form.Group>
-                        <Form.Label>Template Identitas Siswa</Form.Label>
-                        <Form.Control type="file" onChange={(e) => setIdentitasFile(e.target.files[0])} accept=".docx" />
-                    </Form.Group>
-                    <Form.Group>
-                        <Form.Label>Template Nilai Raport</Form.Label>
-                        <Form.Control type="file" onChange={(e) => setNilaiFile(e.target.files[0])} accept=".docx" />
-                    </Form.Group>
-                    <Form.Group>
-                        <Form.Label>Template Nilai Sikap</Form.Label>
-                        <Form.Control type="file" onChange={(e) => setSikapFile(e.target.files[0])} accept=".docx" />
-                    </Form.Group>
-                    <Button type="submit" className="mt-3">
-                        Unggah Template
-                    </Button>
-                    {message && <Alert variant="success" className="mt-3">{message}</Alert>}
-                    {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
-                </Form>
-            </Card.Body>
-        </Card>
+        <div className="container mt-4">
+            <h2>Manajemen Template Raport</h2>
+            <p>Unggah file template raport dalam format .docx. Pastikan placeholder di dalam template sesuai dengan dokumentasi.</p>
+            
+            {message && <Alert variant="success">{message}</Alert>}
+            {error && <Alert variant="danger">{error}</Alert>}
+
+            <Card>
+                <Card.Header>Unggah Template</Card.Header>
+                <Card.Body>
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Template Identitas Siswa (identitas.docx)</Form.Label>
+                            <Form.Control type="file" onChange={(e) => handleFileChange(e, setIdentitasFile)} accept=".docx" />
+                        </Form.Group>
+
+                        <Form.Group className="mb-3">
+                            <Form.Label>Template Nilai (nilai.docx)</Form.Label>
+                            <Form.Control type="file" onChange={(e) => handleFileChange(e, setNilaiFile)} accept=".docx" />
+                        </Form.Group>
+
+                        <Form.Group className="mb-3">
+                            <Form.Label>Template Sikap (sikap.docx)</Form.Label>
+                            <Form.Control type="file" onChange={(e) => handleFileChange(e, setSikapFile)} accept=".docx" />
+                        </Form.Group>
+
+                        <Button variant="primary" onClick={handleUpload}>
+                            <i className="bi bi-upload"></i> Unggah Template
+                        </Button>
+                    </Form>
+                </Card.Body>
+            </Card>
+        </div>
     );
 };
+
 export default ManajemenTemplatePage;

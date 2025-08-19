@@ -1,5 +1,4 @@
 'use strict';
-/** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable('Siswas', {
@@ -13,10 +12,8 @@ module.exports = {
         type: Sequelize.STRING
       },
       nis: {
-        type: Sequelize.STRING
-      },
-      nisn: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING,
+        unique: true
       },
       tempat_lahir: {
         type: Sequelize.STRING
@@ -31,22 +28,56 @@ module.exports = {
         type: Sequelize.STRING
       },
       alamat: {
-        type: Sequelize.STRING
-      },
-      kota_asal: {
-        type: Sequelize.STRING
-      },
-      kamar: {
-        type: Sequelize.STRING
+        type: Sequelize.TEXT
       },
       kelas: {
         type: Sequelize.STRING
       },
-      waliKelasId: {
-        type: Sequelize.INTEGER
+      wali_kelas_id: {
+        type: Sequelize.INTEGER,
+        references: {
+          // PERBAIKAN: Nama tabel diubah menjadi plural 'WaliKelases'
+          model: 'WaliKelases',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
       },
-      kepalaSekolahId: {
-        type: Sequelize.INTEGER
+      kepala_sekolah_id: {
+        type: Sequelize.INTEGER,
+        references: {
+          model: 'KepalaSekolahs',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+      },
+      nama_ayah: {
+        type: Sequelize.STRING
+      },
+      pekerjaan_ayah: {
+        type: Sequelize.STRING
+      },
+      alamat_ayah: {
+        type: Sequelize.TEXT
+      },
+      nama_ibu: {
+        type: Sequelize.STRING
+      },
+      pekerjaan_ibu: {
+        type: Sequelize.STRING
+      },
+      alamat_ibu: {
+        type: Sequelize.TEXT
+      },
+      nama_wali: {
+        type: Sequelize.STRING
+      },
+      pekerjaan_wali: {
+        type: Sequelize.STRING
+      },
+      alamat_wali: {
+        type: Sequelize.TEXT
       },
       createdAt: {
         allowNull: false,

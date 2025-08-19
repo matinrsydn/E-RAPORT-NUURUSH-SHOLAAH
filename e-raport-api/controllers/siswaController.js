@@ -1,48 +1,74 @@
-const db_s = require('../models');
-const Siswa = db_s.Siswa;
-const OrangTua = db_s.OrangTua;
+const db = require('../models');
+const Siswa = db.Siswa;
 
-exports.getAllSiswa = async (req, res) => res.json(await Siswa.findAll({ include: ['wali_kelas', 'kepala_sekolah', 'orang_tua'] }));
-exports.getSiswaById = async (req, res) => res.json(await Siswa.findByPk(req.params.id, { include: ['orang_tua'] }));
+// GET all siswas
+exports.getAllSiswa = async (req, res) => {
+    try {
+        const siswas = await Siswa.findAll({
+            include: ['wali_kelas', 'kepala_sekolah'] // Hapus 'orang_tua' dari sini
+        });
+        res.json(siswas);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// GET siswa by ID
+exports.getSiswaById = async (req, res) => {
+    try {
+        const siswa = await Siswa.findByPk(req.params.id, {
+            include: ['wali_kelas', 'kepala_sekolah'] // Hapus 'orang_tua' dari sini
+        });
+        if (siswa) {
+            res.json(siswa);
+        } else {
+            res.status(404).json({ message: 'Siswa not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// CREATE a new siswa
 exports.createSiswa = async (req, res) => {
-    const { orang_tua, ...siswaData } = req.body;
-    const t = await db_s.sequelize.transaction();
     try {
-        const newSiswa = await Siswa.create(siswaData, { transaction: t });
-        if (orang_tua) {
-            await OrangTua.create({ ...orang_tua, siswaId: newSiswa.id }, { transaction: t });
-        }
-        await t.commit();
-        res.status(201).json(newSiswa);
+        // Semua data sekarang ada di req.body
+        const siswa = await Siswa.create(req.body);
+        res.status(201).json(siswa);
     } catch (error) {
-        await t.rollback();
-        res.status(500).json({ message: 'Gagal membuat siswa', error: error.message });
+        res.status(400).json({ message: error.message });
     }
 };
+
+// UPDATE a siswa
 exports.updateSiswa = async (req, res) => {
-    const { orang_tua, ...siswaData } = req.body;
-    const t = await db_s.sequelize.transaction();
     try {
-        await Siswa.update(siswaData, { where: { id: req.params.id }, transaction: t });
-        if (orang_tua) {
-            await OrangTua.update(orang_tua, { where: { siswaId: req.params.id }, transaction: t });
+        const [updated] = await Siswa.update(req.body, {
+            where: { id: req.params.id }
+        });
+        if (updated) {
+            const updatedSiswa = await Siswa.findByPk(req.params.id);
+            res.status(200).json(updatedSiswa);
+        } else {
+            res.status(404).json({ message: 'Siswa not found' });
         }
-        await t.commit();
-        res.json({ message: 'Update successful' });
     } catch (error) {
-        await t.rollback();
-        res.status(500).json({ message: 'Gagal update siswa', error: error.message });
+        res.status(400).json({ message: error.message });
     }
 };
+
+// DELETE a siswa
 exports.deleteSiswa = async (req, res) => {
-    const t = await db_s.sequelize.transaction();
     try {
-        await OrangTua.destroy({ where: { siswaId: req.params.id }, transaction: t });
-        await Siswa.destroy({ where: { id: req.params.id }, transaction: t });
-        await t.commit();
-        res.json({ message: 'Delete successful' });
+        const deleted = await Siswa.destroy({
+            where: { id: req.params.id }
+        });
+        if (deleted) {
+            res.status(204).send();
+        } else {
+            res.status(404).json({ message: 'Siswa not found' });
+        }
     } catch (error) {
-        await t.rollback();
-        res.status(500).json({ message: 'Gagal menghapus siswa', error: error.message });
+        res.status(500).json({ message: error.message });
     }
 };

@@ -1,31 +1,42 @@
 'use strict';
-const { Model } = require('sequelize');
+const {
+  Model
+} = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
-      Siswa.belongsTo(models.WaliKelas, { foreignKey: 'waliKelasId', as: 'wali_kelas' });
-      Siswa.belongsTo(models.KepalaSekolah, { foreignKey: 'kepalaSekolahId', as: 'kepala_sekolah' });
-      Siswa.hasOne(models.OrangTua, { foreignKey: 'siswaId', as: 'orang_tua' });
-      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswaId', as: 'nilai_ujian' });
-      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswaId', as: 'nilai_hafalan' });
-      Siswa.hasMany(models.Sikap, { foreignKey: 'siswaId', as: 'sikap' });
-      Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswaId', as: 'kehadiran' });
+      Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id', as: 'wali_kelas' });
+      Siswa.belongsTo(models.KepalaSekolah, { foreignKey: 'kepala_sekolah_id', as: 'kepala_sekolah' });
+      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswaId', as: 'nilai_ujian', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswaId', as: 'nilai_hafalan', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.Sikap, { foreignKey: 'siswaId', as: 'sikap', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswaId', as: 'kehadiran', onDelete: 'CASCADE' });
     }
   }
   Siswa.init({
     nama: DataTypes.STRING,
-    nis: { type: DataTypes.STRING, unique: true },
-    nisn: DataTypes.STRING,
+    nis: DataTypes.STRING,
     tempat_lahir: DataTypes.STRING,
     tanggal_lahir: DataTypes.DATE,
     jenis_kelamin: DataTypes.STRING,
     agama: DataTypes.STRING,
-    alamat: DataTypes.STRING,
-    kota_asal: DataTypes.STRING,
-    kamar: DataTypes.STRING,
+    alamat: DataTypes.TEXT,
     kelas: DataTypes.STRING,
-    waliKelasId: DataTypes.INTEGER,
-    kepalaSekolahId: DataTypes.INTEGER
-  }, { sequelize, modelName: 'Siswa' });
+    wali_kelas_id: DataTypes.INTEGER,
+    kepala_sekolah_id: DataTypes.INTEGER,
+    nama_ayah: DataTypes.STRING,
+    pekerjaan_ayah: DataTypes.STRING,
+    alamat_ayah: DataTypes.TEXT,
+    nama_ibu: DataTypes.STRING,
+    pekerjaan_ibu: DataTypes.STRING,
+    alamat_ibu: DataTypes.TEXT,
+    nama_wali: DataTypes.STRING,
+    pekerjaan_wali: DataTypes.STRING,
+    alamat_wali: DataTypes.TEXT
+  }, {
+    sequelize,
+    modelName: 'Siswa',
+    tableName: 'Siswas' // PERBAIKAN: Tambahkan ini
+  });
   return Siswa;
 };
