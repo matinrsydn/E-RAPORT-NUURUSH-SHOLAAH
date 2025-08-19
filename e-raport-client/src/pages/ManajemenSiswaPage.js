@@ -5,13 +5,13 @@ import { Modal, Button, Form, Table, FormControl, InputGroup, Row, Col, Alert } 
 const ManajemenSiswaPage = () => {
     const [siswas, setSiswas] = useState([]);
     const [waliKelasList, setWaliKelasList] = useState([]);
-    const [kepalaSekolahList, setKepalaSekolahList] = useState([]);
+    const [kepalaPesantren, setKepalaPesantren] = useState([]);
     const [show, setShow] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState(null);
     
     const initialState = {
-        nama: '', nis: '', tempat_lahir: '', tanggal_lahir: '', jenis_kelamin: 'Laki-laki', agama: 'Islam', alamat: '', kelas: '', wali_kelas_id: '', kepala_sekolah_id: '',
+        nama: '', nis: '', tempat_lahir: '', tanggal_lahir: '', jenis_kelamin: 'Laki-laki', agama: 'Islam', alamat: '', kelas: '', wali_kelas_id: '', kepala_pesantren_id: '',
         nama_ayah: '', pekerjaan_ayah: '', alamat_ayah: '',
         nama_ibu: '', pekerjaan_ibu: '', alamat_ibu: '',
         nama_wali: '', pekerjaan_wali: '', alamat_wali: '',
@@ -22,7 +22,7 @@ const ManajemenSiswaPage = () => {
     useEffect(() => {
         fetchSiswas();
         fetchWaliKelas();
-        fetchKepalaSekolah();
+        fetchKepalaPesantren();
     }, []);
 
     const fetchSiswas = async () => {
@@ -43,13 +43,14 @@ const ManajemenSiswaPage = () => {
         }
     };
 
-    const fetchKepalaSekolah = async () => {
-        try {
-            const res = await axios.get('http://localhost:5000/api/kepalasekolah');
-            setKepalaSekolahList(res.data);
-        } catch (error) {
-            console.error("Gagal mengambil data kepala sekolah:", error);
-        }
+    const fetchKepalaPesantren = async () => { // Ganti nama fungsi
+    try {
+        // PERBAIKAN: Ganti endpoint API
+        const response = await axios.get('http://localhost:5000/api/kepala-pesantren');
+        setKepalaPesantren(response.data); // Sesuaikan dengan nama state baru
+    } catch (error) {
+        console.error('Gagal mengambil data kepala pesantren:', error);
+    }
     };
 
     const handleClose = () => {
@@ -76,7 +77,7 @@ const ManajemenSiswaPage = () => {
             const allData = {
                 ...currentSiswa,
                 wali_kelas_id: currentSiswa.wali_kelas_id || null,
-                kepala_sekolah_id: currentSiswa.kepala_sekolah_id || null,
+                kepala_pesantren_id: currentSiswa.kepala_pesantren_id || null,
             };
 
             if (isEditing) {
@@ -249,12 +250,21 @@ const ManajemenSiswaPage = () => {
                                 </Form.Group>
                             </Col>
                             <Col md={4}>
-                                <Form.Group className="mb-3">
-                                    <Form.Label>Kepala Sekolah</Form.Label>
-                                    <Form.Select name="kepala_sekolah_id" value={currentSiswa.kepala_sekolah_id || ''} onChange={handleChange}>
-                                        <option value="">Pilih Kepala Sekolah</option>
-                                        {kepalaSekolahList.map(ks => <option key={ks.id} value={ks.id}>{ks.nama}</option>)}
-                                    </Form.Select>
+                                <Form.Group controlId="formKepalaPesantren">
+                                    <Form.Label>Kepala Pesantren</Form.Label> 
+                                    <Form.Control
+                                        as="select"
+                                        name="kepala_pesantren_id" 
+                                        value={currentSiswa.kepala_pesantren_id || ''} 
+                                        onChange={handleChange}
+                                    >
+                                        <option value="">Pilih Kepala Pesantren</option> 
+                                        {kepalaPesantren.map((kp) => (
+                                            <option key={kp.id} value={kp.id}>
+                                                {kp.nama}
+                                            </option>
+                                        ))}
+                                    </Form.Control>
                                 </Form.Group>
                             </Col>
                         </Row>

@@ -31,8 +31,8 @@ const Sidebar = () => {
                 <ListGroup.Item action as={NavLink} to="/mata-pelajaran" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Book size={18} /> Mata Pelajaran
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/kepala-sekolah" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <UserCog size={18} /> Kepala Sekolah
+                <ListGroup.Item action as={NavLink} to="/kepala-pesantren" className="d-flex align-items-center gap-3 rounded mb-1">
+                    <UserCog size={18} /> Kepala Pesantren
                 </ListGroup.Item>
                 <ListGroup.Item action as={NavLink} to="/manajemen-template" className="d-flex align-items-center gap-3 rounded mb-1">
                     <FileText size={18} /> Manajemen Template

@@ -18,7 +18,7 @@ app.get('/api/templates/generate-identitas/:siswaId', templateController.generat
 
 
 // Memuat rute-rute lainnya
-app.use('/api/kepalasekolah', require('./routes/kepalaSekolahRoutes'));
+app.use('/api/kepala-pesantren', require('./routes/kepalaPesantrenRoutes'));
 app.use('/api/walikelas', require('./routes/waliKelasRoutes'));
 app.use('/api/matapelajaran', require('./routes/mataPelajaranRoutes'));
 app.use('/api/siswa', require('./routes/siswaRoutes'));

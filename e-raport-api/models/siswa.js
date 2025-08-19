@@ -6,7 +6,8 @@ module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
       Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id', as: 'wali_kelas' });
-      Siswa.belongsTo(models.KepalaSekolah, { foreignKey: 'kepala_sekolah_id', as: 'kepala_sekolah' });
+      // PERUBAHAN: Mengganti relasi ke KepalaPesantren
+      Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id', as: 'kepala_pesantren' });
       Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswaId', as: 'nilai_ujian', onDelete: 'CASCADE' });
       Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswaId', as: 'nilai_hafalan', onDelete: 'CASCADE' });
       Siswa.hasMany(models.Sikap, { foreignKey: 'siswaId', as: 'sikap', onDelete: 'CASCADE' });
@@ -23,7 +24,8 @@ module.exports = (sequelize, DataTypes) => {
     alamat: DataTypes.TEXT,
     kelas: DataTypes.STRING,
     wali_kelas_id: DataTypes.INTEGER,
-    kepala_sekolah_id: DataTypes.INTEGER,
+    // PERUBAHAN: Mengganti nama kolom foreign key
+    kepala_pesantren_id: DataTypes.INTEGER,
     nama_ayah: DataTypes.STRING,
     pekerjaan_ayah: DataTypes.STRING,
     alamat_ayah: DataTypes.TEXT,
@@ -36,7 +38,6 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'Siswa',
-    tableName: 'Siswas' // PERBAIKAN: Tambahkan ini
   });
   return Siswa;
 };

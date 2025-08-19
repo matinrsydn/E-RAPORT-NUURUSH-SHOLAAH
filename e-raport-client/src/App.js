@@ -7,7 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ManajemenSiswaPage from './pages/ManajemenSiswaPage';
 import WaliKelasPage from './pages/ManajemenAkademik/WaliKelasPage';
 import MataPelajaranPage from './pages/ManajemenAkademik/MataPelajaranPage';
-import KepalaSekolahPage from './pages/ManajemenAkademik/KepalaSekolahPage';
+import KepalaPesantrenPage from './pages/ManajemenAkademik/KepalaPesantrenPage';
 import UploadExcelPage from './pages/UploadExcelPage';
 import ManajemenTemplatePage from './pages/ManajemenTemplatePage';
 import GenerateRaportPage from './pages/GenerateRaportPage';
@@ -26,7 +26,7 @@ function App() {
             <Route path="/manajemen-siswa" element={<ManajemenSiswaPage />} />
             <Route path="/wali-kelas" element={<WaliKelasPage />} />
             <Route path="/mata-pelajaran" element={<MataPelajaranPage />} />
-            <Route path="/kepala-sekolah" element={<KepalaSekolahPage />} />
+            <Route path="/kepala-pesantren" element={<KepalaPesantrenPage />} />
             <Route path="/manajemen-template" element={<ManajemenTemplatePage />} />
             <Route path="/upload-excel" element={<UploadExcelPage />} />
             <Route path="/cetak-raport" element={<GenerateRaportPage />} />

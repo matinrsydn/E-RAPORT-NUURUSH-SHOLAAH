@@ -104,21 +104,30 @@ exports.generateExcelTemplate = async (req, res) => {
 exports.generateIdentitas = async (req, res) => {
     try {
         const { siswaId } = req.params;
-        const siswa = await db.Siswa.findByPk(siswaId, { include: ['kepala_sekolah'] });
+        // PERBAIKAN: Menggunakan model dan alias yang benar ('kepala_pesantren')
+        const siswa = await db.Siswa.findByPk(siswaId, { 
+            include: [
+                { model: db.WaliKelas, as: 'wali_kelas' },
+                { model: db.KepalaPesantren, as: 'kepala_pesantren' }
+            ] 
+        });
         if (!siswa) return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
 
+        // PERBAIKAN: Mengambil data dari relasi 'kepala_pesantren'
         const templateData = {
             nama: siswa.nama || '', no_induk: siswa.nis || '', ttl: `${siswa.tempat_lahir || ''}, ${formatTanggal(siswa.tanggal_lahir)}`,
             jk: siswa.jenis_kelamin || '', agama: siswa.agama || '', alamat: siswa.alamat || '',
             nama_ayah: siswa.nama_ayah || '', kerja_ayah: siswa.pekerjaan_ayah || '', alamat_ayah: siswa.alamat_ayah || '',
             nama_ibu: siswa.nama_ibu || '', kerja_ibu: siswa.pekerjaan_ibu || '', alamat_ibu: siswa.alamat_ibu || '',
             nama_wali: siswa.nama_wali || '', kerja_wali: siswa.pekerjaan_wali || '', alamat_wali: siswa.alamat_wali || '',
-            kepsek: siswa.kepala_sekolah ? siswa.kepala_sekolah.nama : '_________________',
-            nip_kepsek: siswa.kepala_sekolah ? siswa.kepala_sekolah.nip : '_________________',
+            // Menggunakan 'kepsek' dan 'nip_kepsek' sebagai placeholder di template, tapi sumber datanya dari 'kepala_pesantren'
+            kepsek: siswa.kepala_pesantren ? siswa.kepala_pesantren.nama : '_________________',
+            nip_kepsek: siswa.kepala_pesantren ? siswa.kepala_pesantren.nip : '_________________',
             tgl_raport: formatTanggal(new Date())
         };
 
-        const templatePath = path.join(__dirname, '../../uploads/templates/identitas.docx');
+        // PERBAIKAN: Path yang benar dari 'controllers' ke 'uploads' adalah naik satu level ('../')
+        const templatePath = path.join(__dirname, '../uploads/templates/identitas.docx');
         if (!fs.existsSync(templatePath)) return res.status(404).json({ message: "Template 'identitas.docx' tidak ditemukan." });
         
         const content = fs.readFileSync(templatePath, 'binary');
@@ -143,7 +152,7 @@ exports.generateRaport = async (req, res) => {
             where: { id: siswaId },
             include: [
                 { model: db.WaliKelas, as: 'wali_kelas' },
-                { model: db.KepalaSekolah, as: 'kepala_sekolah' },
+                { model: db.KepalaPesantren, as: 'kepala_pesantren' },
                 { model: db.NilaiUjian, as: 'nilai_ujian', where: { semester, tahun_ajaran }, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
                 { model: db.NilaiHafalan, as: 'nilai_hafalan', where: { semester, tahun_ajaran }, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
                 { model: db.Sikap, as: 'sikap', where: { semester, tahun_ajaran }, required: false },
@@ -153,7 +162,8 @@ exports.generateRaport = async (req, res) => {
 
         if (!siswa) return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
 
-        const { wali_kelas = {}, kepala_sekolah = {} } = siswa;
+        // PERBAIKAN: Destructuring dari 'kepala_pesantren' bukan 'kepala_sekolah'
+        const { wali_kelas = {}, kepala_pesantren = {} } = siswa;
         const nilai_ujian = siswa.nilai_ujian || [];
         const jumlahMapel = nilai_ujian.length || 1;
         const jumlahPengetahuan = nilai_ujian.reduce((sum, m) => sum + m.pengetahuan_angka, 0);
@@ -171,7 +181,8 @@ exports.generateRaport = async (req, res) => {
             nama: siswa.nama, no_induk: siswa.nis, ttl: `${siswa.tempat_lahir}, ${formatTanggal(siswa.tanggal_lahir)}`, jk: siswa.jenis_kelamin, agama: siswa.agama, alamat: siswa.alamat,
             nama_ayah: siswa.nama_ayah, kerja_ayah: siswa.pekerjaan_ayah, alamat_ayah: siswa.alamat_ayah, nama_ibu: siswa.nama_ibu, kerja_ibu: siswa.pekerjaan_ibu, alamat_ibu: siswa.alamat_ibu,
             nama_wali: siswa.nama_wali, kerja_wali: siswa.pekerjaan_wali, alamat_wali: siswa.alamat_wali, kelas: siswa.kelas, semester, thn_ajaran: tahun_ajaran,
-            wali_kelas: wali_kelas.nama || '', kepsek: kepala_sekolah.nama || '', tgl_raport: formatTanggal(new Date()),
+            // PERBAIKAN: Mengambil nama dari variabel 'kepala_pesantren'
+            wali_kelas: wali_kelas.nama || '', kepsek: kepala_pesantren.nama || '', tgl_raport: formatTanggal(new Date()),
             mapel: nilai_ujian.map((m, i) => ({ no: i + 1, nama_mapel: m.mapel.nama_mapel, kitab: m.mapel.kitab, p_angka: m.pengetahuan_angka, p_predikat: nilaiKePredikat(m.pengetahuan_angka), k_angka: m.keterampilan_angka, k_predikat: nilaiKePredikat(m.keterampilan_angka) })),
             jml_p: jumlahPengetahuan, jml_k: jumlahKeterampilan, rata_p: rataRataPengetahuan, pred_p: nilaiKePredikat(rataRataPengetahuan), rata_k: rataRataKeterampilan, pred_k: nilaiKePredikat(rataRataKeterampilan),
             rata_akhir: rataRataUjian, pred_akhir: nilaiKePredikat(rataRataUjian),
@@ -185,10 +196,11 @@ exports.generateRaport = async (req, res) => {
             deskripsi_spiritual: sikap_spiritual[0]?.deskripsi || '', deskripsi_sosial: sikap_sosial[0]?.deskripsi || '',
         };
 
+        // PERBAIKAN: Path yang benar dari 'controllers' ke 'uploads' adalah naik satu level ('../')
         const templatePaths = {
-            identitas: path.join(__dirname, '../../uploads/templates/identitas.docx'),
-            nilai: path.join(__dirname, '../../uploads/templates/nilai.docx'),
-            sikap: path.join(__dirname, '../../uploads/templates/sikap.docx'),
+            identitas: path.join(__dirname, '../uploads/templates/identitas.docx'),
+            nilai: path.join(__dirname, '../uploads/templates/nilai.docx'),
+            sikap: path.join(__dirname, '../uploads/templates/sikap.docx'),
         };
 
         const generatedPages = [];

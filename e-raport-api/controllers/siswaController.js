@@ -3,21 +3,26 @@ const Siswa = db.Siswa;
 
 // GET all siswas
 exports.getAllSiswa = async (req, res) => {
-    try {
-        const siswas = await Siswa.findAll({
-            include: ['wali_kelas', 'kepala_sekolah'] // Hapus 'orang_tua' dari sini
-        });
-        res.json(siswas);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const siswa = await db.Siswa.findAll({
+      include: [
+        { model: db.WaliKelas, as: 'wali_kelas' },
+        // PERBAIKAN: Sesuaikan dengan model dan alias yang baru
+        { model: db.KepalaPesantren, as: 'kepala_pesantren' }
+      ]
+    });
+    res.json(siswa);
+  } catch (error) {
+    console.error("Error fetching siswa:", error); // Tambahkan log untuk debugging
+    res.status(500).send(error.message);
+  }
 };
 
 // GET siswa by ID
 exports.getSiswaById = async (req, res) => {
     try {
         const siswa = await Siswa.findByPk(req.params.id, {
-            include: ['wali_kelas', 'kepala_sekolah'] // Hapus 'orang_tua' dari sini
+            include: ['wali_kelas', 'kepala_sekolah'] // <-- INI PENYEBABNYA
         });
         if (siswa) {
             res.json(siswa);

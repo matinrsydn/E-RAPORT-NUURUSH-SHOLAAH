@@ -1,11 +1,11 @@
-// e-raport-api/models/walikelas.js
+// e-raport-api/models/kepalapesantren.js
 
 'use strict';
 const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class WaliKelas extends Model {
+  class KepalaPesantren extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
@@ -15,12 +15,12 @@ module.exports = (sequelize, DataTypes) => {
       // define association here
     }
   }
-  WaliKelas.init({
+  KepalaPesantren.init({
     nama: DataTypes.STRING,
     nip: DataTypes.STRING
   }, {
     sequelize,
-    modelName: 'WaliKelas',
+    modelName: 'KepalaPesantren', // Pastikan modelName sudah diubah
   });
-  return WaliKelas;
+  return KepalaPesantren;
 };

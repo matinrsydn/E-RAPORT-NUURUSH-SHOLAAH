@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Modal, Form, Spinner, Alert } from 'react-bootstrap';
 import axios from 'axios';
 
-const KepalaSekolahPage = () => {
+const KepalaPesantrenPage = () => {
     // Logika CRUD serupa dengan WaliKelasPage
     const [listData, setListData] = useState([]);
     const [formData, setFormData] = useState({ nama: '', nip: '' });
@@ -14,7 +14,7 @@ const KepalaSekolahPage = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const res = await axios.get('/kepalasekolah');
+            const res = await axios.get('http://localhost:5000/api/kepala-pesantren');
             setListData(res.data);
         } catch (err) {
             setError('Gagal memuat data.');
@@ -50,9 +50,9 @@ const KepalaSekolahPage = () => {
         e.preventDefault();
         try {
             if (isEditing) {
-                await axios.put(`/kepalasekolah/${isEditing}`, formData);
+                await axios.put(`http://localhost:5000/api/kepala-pesantren/${isEditing}`, formData);
             } else {
-                await axios.post('/kepalasekolah', formData);
+                await axios.post('http://localhost:5000/api/kepala-pesantren', formData);
             }
             fetchData();
             handleClose();
@@ -64,7 +64,7 @@ const KepalaSekolahPage = () => {
     const handleDelete = async (id) => {
         if (window.confirm('Yakin ingin menghapus data ini?')) {
             try {
-                await axios.delete(`/kepalasekolah/${id}`);
+                await axios.delete(`http://localhost:5000/api/kepala-pesantren/${id}`);
                 fetchData();
             } catch (err) {
                 setError('Gagal menghapus data.');
@@ -74,9 +74,9 @@ const KepalaSekolahPage = () => {
 
     return (
         <Card>
-            <Card.Header as="h4">Manajemen Kepala Sekolah</Card.Header>
+            <Card.Header as="h4">Manajemen Kepala Pesantren</Card.Header>
             <Card.Body>
-                <Button onClick={() => handleShow()} className="mb-3">Tambah Kepala Sekolah</Button>
+                <Button onClick={() => handleShow()} className="mb-3">Tambah Kepala Pesantren</Button>
                 {error && <Alert variant="danger">{error}</Alert>}
                 {loading ? <div className="text-center"><Spinner animation="border" /></div> : (
                     <Table striped bordered hover responsive>
@@ -97,7 +97,7 @@ const KepalaSekolahPage = () => {
             </Card.Body>
 
             <Modal show={showModal} onHide={handleClose}>
-                <Modal.Header closeButton><Modal.Title>{isEditing ? 'Edit' : 'Tambah'} Kepala Sekolah</Modal.Title></Modal.Header>
+                <Modal.Header closeButton><Modal.Title>{isEditing ? 'Edit' : 'Tambah'} Kepala Pesantren</Modal.Title></Modal.Header>
                 <Form onSubmit={handleSubmit}>
                     <Modal.Body>
                         <Form.Group className="mb-3"><Form.Label>Nama</Form.Label><Form.Control name="nama" value={formData.nama} onChange={handleChange} required /></Form.Group>
@@ -112,4 +112,4 @@ const KepalaSekolahPage = () => {
         </Card>
     );
 };
-export default KepalaSekolahPage;
+export default KepalaPesantrenPage;
