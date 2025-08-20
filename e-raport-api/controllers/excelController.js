@@ -4,15 +4,20 @@ const path = require('path');
 const fs = require('fs');
 
 // Download template Excel LENGKAP dengan multiple sheets
+// Perbaikan pada excelController.js - fungsi downloadCompleteTemplate
+
 exports.downloadCompleteTemplate = async (req, res) => {
   try {
     const { kelas_id, tahun_ajaran, semester } = req.query;
 
+    // Validasi parameter
     if (!kelas_id || !tahun_ajaran || !semester) {
       return res.status(400).json({ 
         message: 'Parameter kelas_id, tahun_ajaran, dan semester harus diisi.' 
       });
     }
+
+    console.log('Parameters received:', { kelas_id, tahun_ajaran, semester }); // Debug log
 
     // Ambil data siswa berdasarkan kelas
     const siswaList = await db.Siswa.findAll({
@@ -29,21 +34,26 @@ exports.downloadCompleteTemplate = async (req, res) => {
       });
     }
 
+    console.log(`Found ${siswaList.length} students`); // Debug log
+
     // Ambil semua mata pelajaran
     const mataPelajaranList = await db.MataPelajaran.findAll({
       order: [['nama_mapel', 'ASC']]
     });
 
+    console.log(`Found ${mataPelajaranList.length} subjects`); // Debug log
+
     // Ambil mata pelajaran untuk hafalan (yang mengandung 'Qur' atau semua jika tidak ada)
     let mataPelajaranHafalan = await db.MataPelajaran.findAll({
-      where: {
+    where: {
         nama_mapel: {
-          [db.Sequelize.Op.iLike]: '%Qur%'
+        [db.Sequelize.Op.like]: '%Qur%'  // ← GANTI iLike menjadi like
         }
-      },
-      order: [['nama_mapel', 'ASC']]
+    },
+    order: [['nama_mapel', 'ASC']]
     });
 
+    // Jika tidak ada mata pelajaran Qur'an, gunakan semua mata pelajaran
     if (mataPelajaranHafalan.length === 0) {
       mataPelajaranHafalan = mataPelajaranList;
     }
@@ -86,8 +96,13 @@ exports.downloadCompleteTemplate = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const namaKelas = siswaList[0].Kelas?.nama_kelas || 'Unknown';
 
+    console.log('Creating workbook with multiple sheets...'); // Debug log
+
     // ========== SHEET 1: NILAI UJIAN ==========
+    console.log('Creating sheet: Template Nilai Ujian');
     const worksheetNilai = workbook.addWorksheet('Template Nilai Ujian');
+    
+    // Set columns dengan benar
     worksheetNilai.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
       { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
@@ -124,7 +139,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     }
 
     // ========== SHEET 2: NILAI HAFALAN ==========
+    console.log('Creating sheet: Template Hafalan');
     const worksheetHafalan = workbook.addWorksheet('Template Hafalan');
+    
     worksheetHafalan.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
       { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
@@ -159,7 +176,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     }
 
     // ========== SHEET 3: KEHADIRAN ==========
+    console.log('Creating sheet: Template Kehadiran');
     const worksheetKehadiran = workbook.addWorksheet('Template Kehadiran');
+    
     worksheetKehadiran.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
       { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
@@ -196,7 +215,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     }
 
     // ========== SHEET 4: SIKAP ==========
+    console.log('Creating sheet: Template Sikap');
     const worksheetSikap = workbook.addWorksheet('Template Sikap');
+    
     worksheetSikap.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
       { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
@@ -248,7 +269,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     }
 
     // ========== SHEET 5: PANDUAN PENGISIAN ==========
+    console.log('Creating sheet: Panduan Pengisian');
     const worksheetPanduan = workbook.addWorksheet('Panduan Pengisian');
+    
     worksheetPanduan.columns = [
       { header: 'Sheet', key: 'sheet', width: 20 },
       { header: 'Deskripsi', key: 'deskripsi', width: 60 },
@@ -299,6 +322,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     // Set nama file
     const fileName = `Template_Lengkap_${namaKelas}_${semester}_${tahun_ajaran.replace('/', '-')}.xlsx`;
 
+    console.log(`Generated workbook with ${workbook.worksheets.length} sheets`); // Debug log
+    console.log('Sheet names:', workbook.worksheets.map(ws => ws.name)); // Debug log
+
     // Set response headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -306,6 +332,8 @@ exports.downloadCompleteTemplate = async (req, res) => {
     // Kirim file
     await workbook.xlsx.write(res);
     res.end();
+
+    console.log('Excel file sent successfully'); // Debug log
 
   } catch (error) {
     console.error('Error generating complete template:', error);
