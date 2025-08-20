@@ -1,3 +1,4 @@
+// e-raport-api/models/siswa.js
 'use strict';
 const {
   Model
@@ -5,31 +6,57 @@ const {
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
-      Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id', as: 'wali_kelas' });
-      // PERUBAHAN: Mengganti relasi ke KepalaPesantren
-      Siswa.belongsTo(models.Kelas, { foreignKey: 'kelas_id' });
+      Siswa.belongsTo(models.Kelas, { foreignKey: 'kelas_id', as: 'kelas' });
       Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id' });
-      Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id' });
-      Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id', as: 'kepala_pesantren' });
-      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'nilai_ujian' });
-      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswa_id', as: 'nilai_hafalan' });
-      Siswa.hasMany(models.Sikap, { foreignKey: 'siswaId', as: 'sikap', onDelete: 'CASCADE' });
-      Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswaId', as: 'kehadiran', onDelete: 'CASCADE' });
+
+      Siswa.hasMany(models.NilaiUjian, {
+        foreignKey: 'siswa_id',
+        as: 'NilaiUjians'
+      });
+      Siswa.hasMany(models.NilaiHafalan, {
+        foreignKey: 'siswa_id',
+        as: 'NilaiHafalans'
+      });
+      Siswa.hasMany(models.Sikap, {
+        foreignKey: 'siswa_id',
+        as: 'Sikaps',
+        onDelete: 'CASCADE'
+      });
+      Siswa.hasMany(models.Kehadiran, {
+        foreignKey: 'siswa_id',
+        as: 'Kehadirans',
+        onDelete: 'CASCADE'
+      });
     }
   }
   Siswa.init({
     nama: DataTypes.STRING,
-    nis: DataTypes.STRING,
+    nis: {
+      type: DataTypes.STRING,
+      unique: true,
+      allowNull: false
+    },
     tempat_lahir: DataTypes.STRING,
     tanggal_lahir: DataTypes.DATE,
     jenis_kelamin: DataTypes.STRING,
     agama: DataTypes.STRING,
     alamat: DataTypes.TEXT,
-    kelas: DataTypes.STRING,
-    kelas_id: DataTypes.INTEGER,
-    wali_kelas_id: DataTypes.INTEGER,
-    // PERUBAHAN: Mengganti nama kolom foreign key
-    kepala_pesantren_id: DataTypes.INTEGER,
+    kelas_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'Kelas',
+        key: 'id'
+      }
+    },
+    wali_kelas_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'WaliKelas',
+        key: 'id'
+      }
+    },
+    kamar: DataTypes.STRING,
+    kota_asal: DataTypes.STRING,
     nama_ayah: DataTypes.STRING,
     pekerjaan_ayah: DataTypes.STRING,
     alamat_ayah: DataTypes.TEXT,

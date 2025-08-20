@@ -1,19 +1,15 @@
 // e-raport-api/models/walikelas.js
 
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class WaliKelas extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      WaliKelas.hasOne(models.Kelas, { foreignKey: 'wali_kelas_id' });
-      // define association here
+      // PERBAIKAN: Tambahkan alias 'as' di sini agar relasi sinkron
+      WaliKelas.hasOne(models.Kelas, {
+        foreignKey: 'wali_kelas_id',
+        as: 'kelas' // <-- Tambahkan baris ini
+      });
     }
   }
   WaliKelas.init({

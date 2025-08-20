@@ -3,10 +3,15 @@
     module.exports = (sequelize, DataTypes) => {
       class Kelas extends Model {
         static associate(models) {
-          // Kelas memiliki banyak Siswa
-          Kelas.hasMany(models.Siswa, { foreignKey: 'kelas_id' });
-          // Kelas dimiliki oleh satu WaliKelas
-          Kelas.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id' });
+          Kelas.hasMany(models.Siswa, {
+            foreignKey: 'kelas_id',
+            as: 'siswa'
+          });
+          // PERBAIKAN: Tambahkan alias 'as' di sini
+          Kelas.belongsTo(models.WaliKelas, {
+            foreignKey: 'wali_kelas_id',
+            as: 'walikelas' // Tambahkan baris ini
+          });
         }
       }
       Kelas.init({

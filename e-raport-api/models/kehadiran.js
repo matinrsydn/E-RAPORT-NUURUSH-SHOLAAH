@@ -1,13 +1,14 @@
+// e-raport-api/models/kehadiran.js
 'use strict';
 const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Kehadiran extends Model {
     static associate(models) {
-      Kehadiran.belongsTo(models.Siswa, { foreignKey: 'siswaId' });
+      Kehadiran.belongsTo(models.Siswa, { foreignKey: 'siswa_id' });
     }
   }
   Kehadiran.init({
-    siswaId: DataTypes.INTEGER,
+    siswa_id: DataTypes.INTEGER, // Diubah dari siswaId
     kegiatan: DataTypes.STRING,
     izin: DataTypes.INTEGER,
     sakit: DataTypes.INTEGER,

@@ -1,14 +1,15 @@
+// e-raport-api/models/sikap.js
 'use strict';
 const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Sikap extends Model {
     static associate(models) {
-      Sikap.belongsTo(models.Siswa, { foreignKey: 'siswaId' });
+      Sikap.belongsTo(models.Siswa, { foreignKey: 'siswa_id' });
     }
   }
   Sikap.init({
-    siswaId: DataTypes.INTEGER,
-    jenis_sikap: DataTypes.STRING, // 'Spiritual' atau 'Sosial'
+    siswa_id: DataTypes.INTEGER, // Diubah dari siswaId
+    jenis_sikap: DataTypes.STRING,
     indikator: DataTypes.STRING,
     angka: DataTypes.FLOAT,
     deskripsi: DataTypes.TEXT,

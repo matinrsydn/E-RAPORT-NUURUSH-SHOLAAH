@@ -1,17 +1,28 @@
-const { Kelas, WaliKelas, Siswa } = require('../models');
+const db = require('../models');
 
 // Mendapatkan semua data kelas
 exports.getAllKelas = async (req, res) => {
   try {
-    const kelas = await Kelas.findAll({
+    const kelas = await db.Kelas.findAll({
       include: [
-        { model: WaliKelas, attributes: ['nama'] }, // Sertakan nama wali kelas
-        { model: Siswa, attributes: ['id', 'nama'] } // Sertakan data siswa di kelas tsb
-      ]
+        {
+          model: db.WaliKelas,
+          as: 'walikelas', // Alias untuk WaliKelas
+          attributes: ['nama']
+        },
+        {
+          model: db.Siswa,
+          as: 'siswa', // Alias untuk Siswa
+          attributes: ['id', 'nama']
+        }
+      ],
+      order: [['nama_kelas', 'ASC']]
     });
     res.json(kelas);
   } catch (error) {
-    res.status(500).json({ message: 'Error saat mengambil data kelas', error: error.message });
+    // Ini akan menampilkan error detail di terminal Anda
+    console.error('SERVER ERROR - GET /api/kelas:', error);
+    res.status(500).json({ message: 'Gagal mengambil data kelas.', error: error.message });
   }
 };
 

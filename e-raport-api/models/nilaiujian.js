@@ -1,30 +1,70 @@
+// e-raport-api/models/nilaiujian.js
 'use strict';
 const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class NilaiUjian extends Model {
     static associate(models) {
-      // Perbaiki nama foreign key untuk konsistensi
-      NilaiUjian.belongsTo(models.Siswa, { 
-        foreignKey: 'siswa_id', // Gunakan siswa_id bukan siswaId
-        as: 'siswa' 
+      NilaiUjian.belongsTo(models.Siswa, {
+        foreignKey: 'siswa_id',
+        as: 'siswa'
       });
-      NilaiUjian.belongsTo(models.MataPelajaran, { 
-        foreignKey: 'mapel_id', // Gunakan mapel_id bukan mataPelajaranId
-        as: 'mapel' 
+      NilaiUjian.belongsTo(models.MataPelajaran, {
+        foreignKey: 'mapel_id',
+        as: 'mapel'
       });
     }
   }
   NilaiUjian.init({
-    siswa_id: DataTypes.INTEGER, // Ubah dari siswaId ke siswa_id
-    mapel_id: DataTypes.INTEGER, // Ubah dari mataPelajaranId ke mapel_id
-    pengetahuan_angka: DataTypes.INTEGER,
-    keterampilan_angka: DataTypes.INTEGER,
-    semester: DataTypes.STRING,
-    tahun_ajaran: DataTypes.STRING
-  }, { 
-    sequelize, 
+    siswa_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'Siswas',
+        key: 'id'
+      }
+    },
+    mapel_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'MataPelajarans',
+        key: 'id'
+      }
+    },
+    pengetahuan_angka: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: {
+        min: 0,
+        max: 100
+      }
+    },
+    keterampilan_angka: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: {
+        min: 0,
+        max: 100
+      }
+    },
+    semester: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    tahun_ajaran: {
+      type: DataTypes.STRING,
+      allowNull: false
+    }
+  }, {
+    sequelize,
     modelName: 'NilaiUjian',
-    tableName: 'NilaiUjians' // Pastikan nama tabel konsisten
+    tableName: 'NilaiUjians',
+    indexes: [
+      {
+        unique: true,
+        fields: ['siswa_id', 'mapel_id', 'semester', 'tahun_ajaran']
+      }
+    ]
   });
   return NilaiUjian;
 };
