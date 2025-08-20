@@ -16,7 +16,9 @@ const templateStorage = multer.diskStorage({
         cb(null, dir);
     },
     filename: (req, file, cb) => {
-        cb(null, file.fieldname + '.docx');
+        // Menggunakan nama file sesuai dengan jenisnya untuk kemudahan identifikasi
+        const standardizedName = `${file.fieldname.toLowerCase()}.docx`;
+        cb(null, standardizedName);
     }
 });
 
@@ -26,7 +28,34 @@ const uploadMiddleware = multer({ storage: templateStorage }).fields([
     { name: 'sikap', maxCount: 1 }
 ]);
 
-// --- Controller Functions (Tidak berubah) ---
+
+// --- Helper Functions (Tidak berubah) ---
+const formatTanggal = (tanggal) => {
+    if (!tanggal) return '-';
+    const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const date = new Date(tanggal);
+    return `${date.getDate()} ${bulan[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+const nilaiKePredikat = (angka) => {
+    if (angka === null || angka === undefined || isNaN(angka)) return '-';
+    if (angka >= 93) return 'Istimewa';
+    if (angka >= 85) return 'Baik Sekali';
+    if (angka >= 75) return 'Baik';
+    return 'Cukup';
+};
+
+const nilaiSikapKePredikat = (angka) => {
+    if (angka === null || angka === undefined || isNaN(angka)) return '-';
+    if (angka > 8.0) return 'Baik Sekali';
+    if (angka > 7.0) return 'Baik';
+    if (angka > 6.0) return 'Cukup';
+    return 'Kurang';
+};
+
+
+// --- Controller Functions (Diperbarui dan Disempurnakan) ---
+
 exports.uploadTemplate = (req, res) => {
     uploadMiddleware(req, res, (err) => {
         if (err) {
@@ -38,16 +67,29 @@ exports.uploadTemplate = (req, res) => {
 
 exports.getTemplates = (req, res) => {
     const templateDir = path.join(__dirname, '../uploads/templates/');
+    if (!fs.existsSync(templateDir)) {
+        return res.status(200).json([]);
+    }
     fs.readdir(templateDir, (err, files) => {
         if (err) {
-            return res.status(err.code === 'ENOENT' ? 200 : 500).json(err.code === 'ENOENT' ? [] : { message: "Gagal membaca template." });
+            return res.status(500).json({ message: "Gagal membaca direktori template." });
         }
         const templateInfo = files
-            .filter(file => path.extname(file) === '.docx')
-            .map(file => ({ fileName: file, url: `${req.protocol}://${req.get('host')}/uploads/templates/${file}` }));
+            .filter(file => path.extname(file).toLowerCase() === '.docx')
+            .map(file => {
+                const filePath = path.join(templateDir, file);
+                const stats = fs.statSync(filePath);
+                return {
+                    fileName: file,
+                    url: `${req.protocol}://${req.get('host')}/uploads/templates/${file}`,
+                    size: stats.size,
+                    lastModified: stats.mtime,
+                };
+            });
         res.status(200).json(templateInfo);
     });
 };
+
 
 exports.deleteTemplate = (req, res) => {
     const { fileName } = req.params;
@@ -60,115 +102,113 @@ exports.deleteTemplate = (req, res) => {
     });
 };
 
-
-// --- Helper Functions (Tidak berubah) ---
-const formatTanggal = (tanggal) => {
-    if (!tanggal) return '-';
-    const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    const date = new Date(tanggal);
-    return `${date.getDate()} ${bulan[date.getMonth()]} ${date.getFullYear()}`;
-};
-
-const nilaiKePredikat = (angka) => {
-    if (angka === null || angka === undefined) return '-';
-    if (angka >= 93) return 'Istimewa';
-    if (angka >= 85) return 'Baik Sekali';
-    if (angka >= 75) return 'Baik';
-    return 'Cukup';
-};
-
-const nilaiSikapKePredikat = (angka) => {
-    if (angka === null || angka === undefined) return '-';
-    if (angka > 8.0) return 'Baik Sekali';
-    if (angka > 7.0) return 'Baik';
-    if (angka > 6.0) return 'Cukup';
-    return 'Kurang';
-};
-
-
 // --- FUNGSI UTAMA YANG DIPERBARUI ---
-// 4. Generate Raport Lengkap (Logika Baru)
 exports.generateRaport = async (req, res) => {
     const { siswaId, semester, tahun_ajaran } = req.params;
     try {
-        // 1. Ambil data siswa dan relasinya dari database
+        // 1. Ambil semua data siswa dan relasinya secara lengkap
         const siswa = await db.Siswa.findOne({
             where: { id: siswaId },
             include: [
-                { model: db.WaliKelas, as: 'wali_kelas' },
-                { model: db.KepalaPesantren, as: 'kepala_pesantren' },
-                { model: db.Kelas, as: 'kelas_info' }, // Asumsi relasi ke tabel Kelas ada
-                { model: db.NilaiUjian, as: 'nilai_ujian', where: { semester, tahun_ajaran }, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
-                { model: db.NilaiHafalan, as: 'nilai_hafalan', where: { semester, tahun_ajaran }, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
-                { model: db.Sikap, as: 'sikap', where: { semester, tahun_ajaran }, required: false },
-                { model: db.Kehadiran, as: 'kehadiran', where: { semester, tahun_ajaran }, required: false },
+                { model: db.Kelas, include: [{ model: db.WaliKelas }] },
+                // Asumsi ada relasi ke Kepala Pesantren, jika tidak ada, perlu ditambahkan di model Siswa
+                // { model: db.KepalaPesantren, as: 'kepala_pesantren' },
+                {
+                    model: db.NilaiUjian,
+                    where: { semester, tahun_ajaran },
+                    required: false,
+                    include: { model: db.MataPelajaran, as: 'mapel' }
+                },
+                {
+                    model: db.NilaiHafalan,
+                    where: { semester, tahun_ajaran },
+                    required: false,
+                    include: { model: db.MataPelajaran, as: 'mapel' }
+                },
+                {
+                    model: db.Sikap,
+                    where: { semester, tahun_ajaran },
+                    required: false
+                },
+                {
+                    model: db.Kehadiran,
+                    where: { semester, tahun_ajaran },
+                    required: false
+                },
             ]
         });
 
-        if (!siswa) return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
-
-        // 2. Proses dan hitung semua nilai (mengikuti logika app.js)
-        const { wali_kelas = {}, kepala_pesantren = {}, kelas_info = {} } = siswa;
+        if (!siswa) {
+            return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
+        }
         
-        // Nilai Ujian
-        const nilai_ujian = siswa.nilai_ujian || [];
-        const jumlahMapel = nilai_ujian.length > 0 ? nilai_ujian.length : 1;
-        const jumlahPengetahuan = nilai_ujian.reduce((sum, m) => sum + (m.pengetahuan_angka || 0), 0);
+        // Dapatkan data kepala sekolah/pesantren (ambil yang pertama jika ada banyak)
+        const kepalaPesantren = await db.KepalaPesantren.findOne();
+
+        // 2. Proses dan hitung semua nilai (sesuai logika app.js)
+        const nilaiUjian = siswa.NilaiUjians || [];
+        const jumlahMapel = nilaiUjian.length > 0 ? nilaiUjian.length : 1;
+
+        const jumlahPengetahuan = nilaiUjian.reduce((sum, m) => sum + (m.pengetahuan_angka || 0), 0);
         const rataRataPengetahuan = (jumlahPengetahuan / jumlahMapel).toFixed(1);
-        const jumlahKeterampilan = nilai_ujian.reduce((sum, m) => sum + (m.keterampilan_angka || 0), 0);
+
+        const jumlahKeterampilan = nilaiUjian.reduce((sum, m) => sum + (m.keterampilan_angka || 0), 0);
         const rataRataKeterampilan = (jumlahKeterampilan / jumlahMapel).toFixed(1);
+
         const rataRataUjian = ((jumlahPengetahuan + jumlahKeterampilan) / (jumlahMapel * 2) || 0).toFixed(1);
         
-        // NOTE: Peringkat dan total_siswa perlu logika tambahan
-        // Untuk sekarang kita gunakan placeholder statis
+        // NOTE: Peringkat dan total_siswa memerlukan query tambahan yang lebih kompleks.
+        // Untuk sekarang kita gunakan placeholder.
         const peringkatData = { peringkat: 'N/A', total_siswa: 'N/A' };
 
-        // Nilai Sikap
-        const sikap = siswa.sikap || [];
-        const sikap_spiritual_indicators = sikap.filter(s => s.jenis_sikap === 'Spiritual');
-        const sikap_sosial_indicators = sikap.filter(s => s.jenis_sikap === 'Sosial');
-        
-        const rataSikapSpiritual = (sikap_spiritual_indicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikap_spiritual_indicators.length || 1)).toFixed(1);
-        const rataSikapSosial = (sikap_sosial_indicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikap_sosial_indicators.length || 1)).toFixed(1);
+        // Proses Nilai Sikap
+        const semuaSikap = siswa.Sikaps || [];
+        const sikapSpiritualIndicators = semuaSikap.filter(s => s.jenis_sikap === 'spiritual');
+        const sikapSosialIndicators = semuaSikap.filter(s => s.jenis_sikap === 'sosial');
 
-        // Ambil deskripsi dari entri pertama (jika ada)
-        const deskripsiSpiritual = sikap_spiritual_indicators.length > 0 ? sikap_spiritual_indicators[0].deskripsi : 'Siswa menunjukkan perkembangan sikap spiritual yang baik.';
-        const deskripsiSosial = sikap_sosial_indicators.length > 0 ? sikap_sosial_indicators[0].deskripsi : 'Siswa menunjukkan perkembangan sikap sosial yang baik.';
+        const rataSikapSpiritual = (sikapSpiritualIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSpiritualIndicators.length || 1)).toFixed(1);
+        const rataSikapSosial = (sikapSosialIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSosialIndicators.length || 1)).toFixed(1);
 
-        // 3. Susun object `templateData` sesuai struktur di app.js dan placeholder di DOCX
+        const nilaiAkhirSikap = ((parseFloat(rataSikapSpiritual) + parseFloat(rataSikapSosial)) / 2).toFixed(1);
+
+        // Mengambil deskripsi. Diasumsikan deskripsi sama untuk satu jenis sikap per siswa.
+        const deskripsiSpiritual = sikapSpiritualIndicators.length > 0 ? sikapSpiritualIndicators[0].deskripsi : 'Siswa menunjukkan perkembangan sikap spiritual yang baik.';
+        const deskripsiSosial = sikapSosialIndicators.length > 0 ? sikapSosialIndicators[0].deskripsi : 'Siswa menunjukkan perkembangan sikap sosial yang baik.';
+
+        // 3. Susun `templateData` dengan lengkap
         const templateData = {
             // Identitas
-            nama: siswa.nama,
-            no_induk: siswa.nis,
+            nama: siswa.nama || '-',
+            no_induk: siswa.nis || '-',
             ttl: `${siswa.tempat_lahir || ''}, ${formatTanggal(siswa.tanggal_lahir)}`,
-            jk: siswa.jenis_kelamin,
-            agama: siswa.agama,
-            alamat: siswa.alamat,
-            nama_ayah: siswa.nama_ayah,
-            kerja_ayah: siswa.pekerjaan_ayah,
-            alamat_ayah: siswa.alamat_ayah,
-            nama_ibu: siswa.nama_ibu,
-            kerja_ibu: siswa.pekerjaan_ibu,
-            alamat_ibu: siswa.alamat_ibu,
-            nama_wali: siswa.nama_wali,
-            kerja_wali: siswa.pekerjaan_wali,
-            alamat_wali: siswa.alamat_wali,
+            jk: siswa.jenis_kelamin || '-',
+            agama: siswa.agama || '-',
+            alamat: siswa.alamat || '-',
+            nama_ayah: siswa.nama_ayah || '-',
+            kerja_ayah: siswa.pekerjaan_ayah || '-',
+            alamat_ayah: siswa.alamat_ayah || '-',
+            nama_ibu: siswa.nama_ibu || '-',
+            kerja_ibu: siswa.pekerjaan_ibu || '-',
+            alamat_ibu: siswa.alamat_ibu || '-',
+            nama_wali: siswa.nama_wali || '-',
+            kerja_wali: siswa.pekerjaan_wali || '-',
+            alamat_wali: siswa.alamat_wali || '-',
             
             // Akademik
-            kelas: kelas_info.nama_kelas || siswa.kelas, // Ambil dari relasi jika ada
-            semester,
-            thn_ajaran: tahun_ajaran.replace('-', '/'),
-            wali_kelas: wali_kelas.nama || '-',
-            kepsek: kepala_pesantren.nama || '-',
+            kelas: siswa.Kela?.nama_kelas || '-',
+            semester: semester || '-',
+            thn_ajaran: tahun_ajaran.replace('-', '/') || '-',
+            wali_kelas: siswa.Kela?.WaliKela?.nama || '-',
+            kepsek: kepalaPesantren?.nama || '-',
             tgl_raport: formatTanggal(new Date()),
             kamar: siswa.kamar || '-',
             kota_asal: siswa.kota_asal || '-',
 
             // Nilai Ujian
-            mapel: nilai_ujian.map((m, i) => ({
+            mapel: nilaiUjian.map((m, i) => ({
                 no: i + 1,
-                nama_mapel: m.mapel.nama_mapel,
-                kitab: m.mapel.kitab,
+                nama_mapel: m.mapel?.nama_mapel || 'N/A',
+                kitab: m.mapel?.kitab || '-',
                 p_angka: m.pengetahuan_angka,
                 p_predikat: nilaiKePredikat(m.pengetahuan_angka),
                 k_angka: m.keterampilan_angka,
@@ -186,52 +226,75 @@ exports.generateRaport = async (req, res) => {
             total_siswa: peringkatData.total_siswa,
 
             // Hafalan & Kehadiran
-            hafalan: (siswa.nilai_hafalan || []).map((h, i) => ({ no: i + 1, nama: h.mapel.nama_mapel, kitab: h.mapel.kitab, nilai_angka: h.nilai_angka, predikat: nilaiKePredikat(h.nilai_angka) })),
-            kehadiran: (siswa.kehadiran || []).map((k, i) => ({ no: i + 1, kegiatan: k.kegiatan, izin: k.izin || 0, sakit: k.sakit || 0, absen: k.absen || 0, total: (k.izin || 0) + (k.sakit || 0) + (k.absen || 0) })),
+            hafalan: (siswa.NilaiHafalans || []).map((h, i) => ({
+                no: i + 1,
+                nama: h.mapel?.nama_mapel || 'N/A',
+                kitab: h.mapel?.kitab || '-',
+                nilai_angka: h.nilai_angka,
+                predikat: nilaiKePredikat(h.nilai_angka)
+            })),
+            kehadiran: (siswa.Kehadirans || []).map((k, i) => ({
+                no: i + 1,
+                kegiatan: k.kegiatan,
+                izin: k.izin || 0,
+                sakit: k.sakit || 0,
+                absen: k.absen || 0,
+                total: (k.izin || 0) + (k.sakit || 0) + (k.absen || 0)
+            })),
             
             // Sikap
-            sikap_s: sikap_spiritual_indicators.map((s, i) => ({ no: i + 1, indikator: s.indikator, angka: s.angka, predikat: nilaiSikapKePredikat(s.angka) })),
-            sikap_o: sikap_sosial_indicators.map((s, i) => ({ no: i + 1, indikator: s.indikator, angka: s.angka, predikat: nilaiSikapKePredikat(s.angka) })),
+            sikap_s: sikapSpiritualIndicators.map((s, i) => ({ no: i + 1, indikator: s.indikator, angka: s.angka, predikat: nilaiSikapKePredikat(s.angka) })),
+            sikap_o: sikapSosialIndicators.map((s, i) => ({ no: i + 1, indikator: s.indikator, angka: s.angka, predikat: nilaiSikapKePredikat(s.angka) })),
             rata_ss: rataSikapSpiritual,
             pred_ss: nilaiSikapKePredikat(rataSikapSpiritual),
             rata_so: rataSikapSosial,
             pred_so: nilaiSikapKePredikat(rataSikapSosial),
-            nilai_akhir_sikap: ((parseFloat(rataSikapSpiritual) + parseFloat(rataSikapSosial)) / 2).toFixed(1),
-            pred_akhir_sikap: nilaiSikapKePredikat(((parseFloat(rataSikapSpiritual) + parseFloat(rataSikapSosial)) / 2)),
+            nilai_akhir_sikap: nilaiAkhirSikap,
+            pred_akhir_sikap: nilaiSikapKePredikat(nilaiAkhirSikap),
             deskripsi_spiritual: deskripsiSpiritual, 
             deskripsi_sosial: deskripsiSosial,
         };
 
-        // 4. Generate dan gabungkan file DOCX (tidak berubah)
+        // 4. Generate dan gabungkan file DOCX
         const templatePaths = {
-            // Tambahkan template identitas jika ada
-            // identitas: path.join(__dirname, '../uploads/templates/identitas.docx'),
+            identitas: path.join(__dirname, '../uploads/templates/identitas.docx'),
             nilai: path.join(__dirname, '../uploads/templates/nilai.docx'),
             sikap: path.join(__dirname, '../uploads/templates/sikap.docx'),
         };
 
         const generatedPages = [];
-        for (const key in templatePaths) {
-            if (fs.existsSync(templatePaths[key])) {
-                const content = fs.readFileSync(templatePaths[key], 'binary');
-                const zip = new PizZip(content);
-                const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
-                doc.render(templateData);
-                generatedPages.push(doc.getZip().generate({ type: 'nodebuffer' }));
+        const templateKeys = ['identitas', 'nilai', 'sikap'];
+
+        for (const key of templateKeys) {
+            const templatePath = templatePaths[key];
+            if (fs.existsSync(templatePath)) {
+                try {
+                    const content = fs.readFileSync(templatePath, 'binary');
+                    const zip = new PizZip(content);
+                    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
+                    doc.render(templateData);
+                    generatedPages.push(doc.getZip().generate({ type: 'nodebuffer' }));
+                } catch (error) {
+                    console.error(`Error memproses template ${key}:`, error);
+                    return res.status(500).json({ message: `Gagal memproses template ${key}.docx.`, error: error.message });
+                }
             }
         }
 
-        if (generatedPages.length === 0) return res.status(400).json({ message: 'Tidak ada template (nilai.docx/sikap.docx) yang ditemukan di server.' });
+        if (generatedPages.length === 0) {
+            return res.status(404).json({ message: 'Tidak ada file template (.docx) yang ditemukan di server.' });
+        }
 
         const merger = new DocxMerger({}, generatedPages);
         merger.save('nodebuffer', (mergedBuffer) => {
-            res.setHeader('Content-Disposition', `attachment; filename=Raport_${siswa.nama.replace(/\s+/g, '_')}.docx`);
+            const namaFile = `Raport_${siswa.nama.replace(/\s+/g, '_')}_${(siswa.Kela?.nama_kelas || 'kelas').replace(/\s+/g, '')}.docx`;
+            res.setHeader('Content-Disposition', `attachment; filename=${namaFile}`);
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
             res.send(mergedBuffer);
         });
 
     } catch (error) {
         console.error("Gagal membuat raport:", error);
-        res.status(500).json({ message: 'Gagal membuat raport.', error: error.message });
+        res.status(500).json({ message: 'Terjadi kesalahan internal saat membuat raport.', error: error.message });
     }
 };
