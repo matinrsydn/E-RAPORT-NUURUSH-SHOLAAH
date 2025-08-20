@@ -11,8 +11,8 @@ module.exports = (sequelize, DataTypes) => {
       Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id' });
       Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id' });
       Siswa.belongsTo(models.KepalaPesantren, { foreignKey: 'kepala_pesantren_id', as: 'kepala_pesantren' });
-      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswaId', as: 'nilai_ujian', onDelete: 'CASCADE' });
-      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswaId', as: 'nilai_hafalan', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'nilai_ujian' });
+      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswa_id', as: 'nilai_hafalan' });
       Siswa.hasMany(models.Sikap, { foreignKey: 'siswaId', as: 'sikap', onDelete: 'CASCADE' });
       Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswaId', as: 'kehadiran', onDelete: 'CASCADE' });
     }
