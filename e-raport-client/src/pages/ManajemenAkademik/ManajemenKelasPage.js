@@ -112,7 +112,7 @@ const ManajemenKelasPage = () => {
                         <tr key={k.id}>
                             <td className="py-2 px-4 border-b text-center">{k.nama_kelas}</td>
                             <td className="py-2 px-4 border-b text-center">{k.kapasitas}</td>
-                            <td className="py-2 px-4 border-b text-center">{k.WaliKela?.nama || 'N/A'}</td>
+                            <td className="py-2 px-4 border-b text-center">{k.walikelas?.nama || 'N/A'}</td>
                             <td className="py-2 px-4 border-b text-center">
                                 <button onClick={() => handleEdit(k)} className="bg-yellow-500 text-white px-2 py-1 rounded mr-2 hover:bg-yellow-600">Edit</button>
                                 <button onClick={() => handleDelete(k.id)} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Hapus</button>

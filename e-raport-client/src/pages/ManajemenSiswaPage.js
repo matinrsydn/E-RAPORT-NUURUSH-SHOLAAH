@@ -148,12 +148,12 @@ const ManajemenSiswaPage = () => {
                 <tbody>
                     {filteredSiswas.map((siswa, index) => (
                         <tr key={siswa.id}>
-                            <td>{index + 1}</td>
-                            <td>{siswa.nis}</td>
-                            <td>{siswa.nama}</td>
-                            <td>{siswa.Kela?.nama_kelas || 'N/A'}</td>
-                            <td>{siswa.WaliKela?.nama || 'N/A'}</td>
-                            <td>
+                                <td>{index + 1}</td>
+                                <td>{siswa.nis}</td>
+                                <td>{siswa.nama}</td>
+                                <td>{siswa.kelas?.nama_kelas || 'N/A'}</td>
+                                <td>{siswa.walikelas?.nama || 'N/A'}</td>
+                                <td>
                                 <Button variant="success" size="sm" className="me-1" onClick={() => handleDownloadIdentitas(siswa)}>
                                     <i className="bi bi-printer"></i> Cetak Identitas
                                 </Button>

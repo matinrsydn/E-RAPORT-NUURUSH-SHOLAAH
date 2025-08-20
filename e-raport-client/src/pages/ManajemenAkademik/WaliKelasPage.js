@@ -82,6 +82,7 @@ const WaliKelasPage = () => {
                     <tr>
                         <th>#</th>
                         <th>Nama Wali Kelas</th>
+                        <th>Kelas yang Diajar</th> {/* Tambah kolom baru */}
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -90,6 +91,8 @@ const WaliKelasPage = () => {
                         <tr key={wk.id}>
                             <td>{index + 1}</td>
                             <td>{wk.nama}</td>
+                            {/* Tampilkan nama kelas, jika ada */}
+                            <td>{wk.kelas ? wk.kelas.nama_kelas : 'N/A'}</td>
                             <td>
                                 <Button variant="info" size="sm" className="me-1" onClick={() => handleShow(wk)}>Edit</Button>
                                 <Button variant="danger" size="sm" onClick={() => handleDelete(wk.id)}>Hapus</Button>

@@ -1,14 +1,21 @@
 // e-raport-api/models/siswa.js
+
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
-      Siswa.belongsTo(models.Kelas, { foreignKey: 'kelas_id', as: 'kelas' });
-      Siswa.belongsTo(models.WaliKelas, { foreignKey: 'wali_kelas_id' });
+      Siswa.belongsTo(models.Kelas, {
+        foreignKey: 'kelas_id',
+        as: 'kelas'
+      });
+      // PERBAIKAIAN: Ganti 'WaliKela' menjadi 'walikelas'
+      Siswa.belongsTo(models.WaliKelas, {
+        foreignKey: 'wali_kelas_id',
+        as: 'walikelas' // <-- Perbaiki di baris ini
+      });
 
+      // ... relasi lainnya biarkan saja
       Siswa.hasMany(models.NilaiUjian, {
         foreignKey: 'siswa_id',
         as: 'NilaiUjians'
@@ -29,6 +36,7 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
   }
+  // ... sisa file biarkan saja
   Siswa.init({
     nama: DataTypes.STRING,
     nis: {
