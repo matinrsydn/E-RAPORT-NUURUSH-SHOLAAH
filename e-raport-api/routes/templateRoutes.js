@@ -2,26 +2,16 @@ const express = require('express');
 const router = express.Router();
 const templateController = require('../controllers/templateController');
 
-// Rute ini akan menangani permintaan POST ke /api/templates/upload
-// Perhatikan bahwa kita tidak perlu lagi memanggil middleware upload di sini
-// karena sudah ditangani di dalam controller.
+// Route untuk mengunggah multiple template (nilai.docx, sikap.docx)
 router.post('/upload', templateController.uploadTemplate);
 
-// Rute untuk mendapatkan daftar template yang ada
-// Akan menangani GET /api/templates/
+// Route untuk mendapatkan daftar template yang sudah diunggah
 router.get('/', templateController.getTemplates);
 
-// Rute untuk menghapus template
-// Akan menangani DELETE /api/templates/:fileName
+// Route untuk menghapus sebuah template berdasarkan nama filenya
 router.delete('/:fileName', templateController.deleteTemplate);
 
-// Rute untuk men-generate raport berdasarkan template
-// Akan menangani GET /api/templates/generate-raport/:siswaId/:semester/:tahun_ajaran
-router.get('/generate-raport/:siswaId/:semester/:tahun_ajaran', templateController.generateRaport);
-
-// Rute untuk men-generate identitas siswa
-// Akan menangani GET /api/templates/generate-identitas/:siswaId
-router.get('/generate-identitas/:siswaId', templateController.generateIdentitas);
-
+// Route utama untuk men-generate dan mengunduh file raport DOCX yang sudah digabung
+router.get('/generate/:siswaId/:semester/:tahun_ajaran', templateController.generateRaport);
 
 module.exports = router;

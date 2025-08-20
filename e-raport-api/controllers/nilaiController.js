@@ -5,7 +5,6 @@ const MataPelajaran = db.MataPelajaran;
 const { Op } = require("sequelize");
 
 // --- FUNGSI UNTUK MENYIMPAN BANYAK NILAI SEKALIGUS (BULK) ---
-// Digunakan oleh halaman Input Nilai Manual untuk menyimpan semua perubahan dalam satu kali klik.
 exports.bulkUpdateOrInsertNilai = async (req, res) => {
     const nilaiBatch = req.body;
     const transaction = await db.sequelize.transaction();
@@ -19,8 +18,8 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
             // Hanya proses jika ada nilai yang diinput (tidak kosong)
             if (nilai.pengetahuan_angka !== null || nilai.keterampilan_angka !== null) {
                 await NilaiUjian.upsert({
-                    siswa_id: nilai.siswa_id,
-                    mapel_id: nilai.mapel_id,
+                    siswa_id: nilai.siswa_id, // Gunakan siswa_id
+                    mapel_id: nilai.mapel_id, // Gunakan mapel_id
                     semester: nilai.semester,
                     tahun_ajaran: nilai.tahun_ajaran,
                     pengetahuan_angka: nilai.pengetahuan_angka,
@@ -41,9 +40,7 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
     }
 };
 
-
 // --- FUNGSI UNTUK MENGAMBIL SISWA DAN NILAI BERDASARKAN FILTER ---
-// Digunakan oleh halaman Input Nilai Manual untuk menampilkan tabel siswa setelah filter dipilih.
 exports.getSiswaWithNilaiByFilter = async (req, res) => {
     const { kelas_id, mapel_id, semester, tahun_ajaran } = req.query;
 
@@ -58,11 +55,11 @@ exports.getSiswaWithNilaiByFilter = async (req, res) => {
                 model: NilaiUjian,
                 as: 'nilai_ujian',
                 where: {
-                    mapel_id: mapel_id,
+                    mapel_id: mapel_id, // Gunakan mapel_id
                     semester: semester,
                     tahun_ajaran: tahun_ajaran
                 },
-                required: false // LEFT JOIN, agar siswa tetap tampil meskipun belum ada nilai
+                required: false // LEFT JOIN
             }],
             order: [['nama', 'ASC']]
         });
@@ -90,7 +87,7 @@ exports.createNilai = async (req, res) => {
     }
 };
 
-// 2. Mengambil semua data nilai (termasuk nama siswa dan mapel)
+// 2. Mengambil semua data nilai
 exports.getAllNilai = async (req, res) => {
     try {
         const allNilai = await NilaiUjian.findAll({

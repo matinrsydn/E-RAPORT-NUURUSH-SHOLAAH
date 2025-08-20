@@ -19,7 +19,8 @@
     "mysql2": "^3.14.3",
     "pizzip": "^3.2.0",
     "read-excel-file": "^5.8.8",
-    "sequelize": "^6.37.7"
+    "sequelize": "^6.37.7",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
