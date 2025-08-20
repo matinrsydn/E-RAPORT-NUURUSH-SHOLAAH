@@ -1,78 +1,84 @@
+const db = require('../models');
 const ExcelJS = require('exceljs');
-const { Siswa, MataPelajaran, IndikatorSikap, Kelas } = require('../models');
+const path = require('path');
+const fs = require('fs');
 
-exports.downloadTemplate = async (req, res) => {
-    try {
-        const { kelas_id, wali_kelas_id } = req.query;
-
-        let whereClause = {};
-        if (kelas_id) {
-            whereClause.kelas_id = kelas_id;
-        } else if (wali_kelas_id) {
-            const kelas = await Kelas.findOne({ where: { wali_kelas_id } });
-            if (kelas) whereClause.kelas_id = kelas.id;
-            else return res.status(404).json({ message: "Tidak ada kelas untuk wali kelas ini." });
-        } else {
-            return res.status(400).json({ message: "Filter kelas atau wali kelas diperlukan." });
-        }
-
-        const students = await Siswa.findAll({ where: whereClause, order: [['nama', 'ASC']] });
-        if (students.length === 0) {
-            return res.status(404).json({ message: "Tidak ada siswa di filter yang dipilih." });
-        }
-
-        const subjects = await MataPelajaran.findAll({ order: [['id', 'ASC']] });
-        const spiritualIndicators = await IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' }, order: [['id', 'ASC']] });
-        const socialIndicators = await IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' }, order: [['id', 'ASC']] });
-
-        const workbook = new ExcelJS.Workbook();
-        
-        // Sheet 1: Nilai Raport
-        const nilaiSheet = workbook.addWorksheet('Nilai Raport');
-        let nilaiColumns = [
-            { header: 'NIS', key: 'nis', width: 15 },
-            { header: 'Nama Siswa', key: 'nama', width: 30 },
-        ];
-        subjects.forEach(s => {
-            nilaiColumns.push({ header: `${s.nama_mapel} - Kitab`, key: `mapel_kitab_${s.id}`, width: 20 });
-            nilaiColumns.push({ header: `${s.nama_mapel} - Pengetahuan`, key: `mapel_p_${s.id}`, width: 25 });
-            nilaiColumns.push({ header: `${s.nama_mapel} - Keterampilan`, key: `mapel_k_${s.id}`, width: 25 });
-        });
-        subjects.forEach(s => {
-            nilaiColumns.push({ header: `${s.nama_mapel} - Hafalan`, key: `hafalan_${s.id}`, width: 25 });
-        });
-        nilaiColumns.push({ header: 'Sakit', key: 'sakit', width: 10 });
-        nilaiColumns.push({ header: 'Izin', key: 'izin', width: 10 });
-        nilaiColumns.push({ header: 'Tanpa Keterangan', key: 'alpha', width: 20 });
-        nilaiSheet.columns = nilaiColumns;
-        students.forEach(student => nilaiSheet.addRow({ nis: student.nis, nama: student.nama }));
-
-        // Sheet 2: Nilai Sikap
-        const sikapSheet = workbook.addWorksheet('Nilai Sikap');
-        let sikapColumns = [
-            { header: 'NIS', key: 'nis', width: 15 },
-            { header: 'Nama Siswa', key: 'nama', width: 30 },
-        ];
-        spiritualIndicators.forEach(i => {
-            sikapColumns.push({ header: `Spiritual: ${i.indikator}`, key: `spirit_nilai_${i.id}`, width: 30 });
-            sikapColumns.push({ header: `Deskripsi Spiritual: ${i.indikator}`, key: `spirit_desk_${i.id}`, width: 40 });
-        });
-        socialIndicators.forEach(i => {
-            sikapColumns.push({ header: `Sosial: ${i.indikator}`, key: `sosial_nilai_${i.id}`, width: 30 });
-            sikapColumns.push({ header: `Deskripsi Sosial: ${i.indikator}`, key: `sosial_desk_${i.id}`, width: 40 });
-        });
-        sikapSheet.columns = sikapColumns;
-        students.forEach(student => sikapSheet.addRow({ nis: student.nis, nama: student.nama }));
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename=Template-Input-Nilai.xlsx');
-        await workbook.xlsx.write(res);
-        res.end();
-    } catch (error) {
-        res.status(500).json({ message: "Gagal men-generate template Excel.", error: error.message });
+exports.uploadNilai = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Tidak ada file yang diunggah.' });
     }
-};
 
-exports.uploadExcel = async (req, res) => {
-    res.status(501).send({ message: 'Fungsi upload belum diimplementasikan.' });
+    const filePath = path.join(__dirname, '../', req.file.path);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const worksheet = workbook.getWorksheet(1); // Ambil sheet pertama
+
+    const dataToInsert = [];
+    const errors = [];
+    let isFirstRow = true;
+
+    // Asumsi header: nis, kode_mapel, pengetahuan_angka, keterampilan_angka, semester, tahun_ajaran
+    worksheet.eachRow(async (row, rowNumber) => {
+      if (isFirstRow) {
+        isFirstRow = false;
+        return; // Lewati baris header
+      }
+
+      const rowData = {
+        nis: row.values[1],
+        kode_mapel: row.values[2],
+        pengetahuan_angka: parseFloat(row.values[3]),
+        keterampilan_angka: parseFloat(row.values[4]),
+        semester: row.values[5],
+        tahun_ajaran: row.values[6],
+      };
+
+      // Validasi data sederhana
+      if (!rowData.nis || !rowData.kode_mapel) {
+        errors.push(`Data tidak lengkap di baris ${rowNumber}.`);
+        return;
+      }
+      
+      dataToInsert.push(rowData);
+    });
+
+    if (errors.length > 0) {
+      fs.unlinkSync(filePath); // Hapus file jika ada error validasi
+      return res.status(400).json({ message: "Validasi gagal", errors });
+    }
+
+    if (dataToInsert.length === 0) {
+        fs.unlinkSync(filePath);
+        return res.status(400).json({ message: "Tidak ada data yang bisa diimpor dari file Excel." });
+    }
+
+    // Proses dan simpan ke database
+    for (const item of dataToInsert) {
+        const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
+        const mapel = await db.MataPelajaran.findOne({ where: { kode_mapel: item.kode_mapel } });
+
+        if (siswa && mapel) {
+            await db.NilaiUjian.create({
+                siswa_id: siswa.id,
+                mapel_id: mapel.id,
+                pengetahuan_angka: item.pengetahuan_angka,
+                keterampilan_angka: item.keterampilan_angka,
+                semester: item.semester,
+                tahun_ajaran: item.tahun_ajaran,
+            });
+        } else {
+            console.warn(`Data siswa dengan NIS ${item.nis} atau mapel dengan kode ${item.kode_mapel} tidak ditemukan.`);
+        }
+    }
+
+    fs.unlinkSync(filePath); // Hapus file setelah berhasil diproses
+
+    res.status(200).json({ message: `${dataToInsert.length} data nilai berhasil diimpor.` });
+
+  } catch (error) {
+    console.error('Error processing excel file:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan di server saat memproses file.', error: error.message });
+  }
 };

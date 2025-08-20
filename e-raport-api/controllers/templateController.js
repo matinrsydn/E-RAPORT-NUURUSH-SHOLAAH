@@ -5,10 +5,92 @@ const db = require('../models');
 const multer = require("multer");
 const fs = require("fs");
 const path = require('path');
-const ExcelJS = require('exceljs');
 
-// --- Helper Functions ---
+// --- Konfigurasi Multer untuk Upload Template ---
+// Pindahkan konfigurasi multer ke sini agar lebih terorganisir.
+const templateStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, '../uploads/templates/');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        // Simpan file dengan nama fieldnya (identitas.docx, nilai.docx, dll)
+        cb(null, file.fieldname + '.docx');
+    }
+});
 
+const uploadMiddleware = multer({ storage: templateStorage }).fields([
+    { name: 'identitas', maxCount: 1 },
+    { name: 'nilai', maxCount: 1 },
+    { name: 'sikap', maxCount: 1 }
+]);
+
+// --- Controller Functions ---
+
+// 1. Upload Template
+exports.uploadTemplate = (req, res) => {
+    uploadMiddleware(req, res, (err) => {
+        if (err) {
+            console.error("Multer Error:", err);
+            return res.status(500).json({ message: 'Gagal mengunggah file.', error: err.message });
+        }
+        if (!req.files || Object.keys(req.files).length === 0) {
+            return res.status(400).json({ message: 'Tidak ada file yang diunggah.' });
+        }
+        res.status(200).json({ message: 'Template berhasil diunggah.' });
+    });
+};
+
+// 2. Get List of Templates
+exports.getTemplates = (req, res) => {
+    const templateDir = path.join(__dirname, '../uploads/templates/');
+    fs.readdir(templateDir, (err, files) => {
+        if (err) {
+            // Jika direktori tidak ada, kirim array kosong
+            if (err.code === 'ENOENT') {
+                return res.status(200).json([]);
+            }
+            return res.status(500).json({ message: "Tidak bisa membaca daftar template.", error: err.message });
+        }
+        
+        const templateInfo = files
+            .filter(file => path.extname(file) === '.docx')
+            .map(file => {
+                const stats = fs.statSync(path.join(templateDir, file));
+                return {
+                    fileName: file,
+                    url: `${req.protocol}://${req.get('host')}/uploads/templates/${file}`,
+                    size: stats.size,
+                    lastModified: stats.mtime,
+                };
+            });
+            
+        res.status(200).json(templateInfo);
+    });
+};
+
+
+// 3. Delete a Template
+exports.deleteTemplate = (req, res) => {
+    const { fileName } = req.params;
+    const filePath = path.join(__dirname, '../uploads/templates/', fileName);
+
+    fs.unlink(filePath, (err) => {
+        if (err) {
+            if (err.code === 'ENOENT') {
+                return res.status(404).json({ message: 'File template tidak ditemukan.' });
+            }
+            return res.status(500).json({ message: 'Gagal menghapus template.', error: err.message });
+        }
+        res.status(200).json({ message: `Template '${fileName}' berhasil dihapus.` });
+    });
+};
+
+
+// --- Helper Functions untuk Generate Dokumen ---
 const formatTanggal = (tanggal) => {
     if (!tanggal) return '-';
     const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -32,104 +114,33 @@ const nilaiSikapKePredikat = (angka) => {
     return '-';
 };
 
-// --- Multer Configuration for Template Uploads ---
 
-const templateStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = 'uploads/templates/';
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, file.fieldname + '.docx');
-    }
-});
-
-const uploadTemplatesMulter = multer({ storage: templateStorage }).fields([
-    { name: 'identitas', maxCount: 1 },
-    { name: 'nilai', maxCount: 1 },
-    { name: 'sikap', maxCount: 1 }
-]);
-
-// --- Controller Functions ---
-
-exports.uploadTemplates = (req, res) => {
-    uploadTemplatesMulter(req, res, (err) => {
-        if (err) return res.status(500).json({ message: 'Gagal mengunggah file.', error: err });
-        res.status(200).json({ message: 'Template berhasil diunggah.' });
-    });
-};
-
-exports.generateExcelTemplate = async (req, res) => {
-    try {
-        const workbook = new ExcelJS.Workbook();
-        // Sheet Nilai Ujian
-        const nilaiUjianSheet = workbook.addWorksheet('Nilai Ujian');
-        nilaiUjianSheet.columns = [
-            { header: 'NIS', key: 'nis', width: 15 }, { header: 'Nama Mapel', key: 'nama_mapel', width: 30 },
-            { header: 'Pengetahuan Angka', key: 'pengetahuan_angka', width: 20 }, { header: 'Keterampilan Angka', key: 'keterampilan_angka', width: 20 },
-        ];
-        nilaiUjianSheet.addRow({ nis: '12345', nama_mapel: 'Matematika', pengetahuan_angka: 85, keterampilan_angka: 90 });
-        // Sheet Nilai Hafalan
-        const nilaiHafalanSheet = workbook.addWorksheet('Nilai Hafalan');
-        nilaiHafalanSheet.columns = [
-            { header: 'NIS', key: 'nis', width: 15 }, { header: 'Nama Mapel Hafalan', key: 'nama_mapel', width: 30 },
-            { header: 'Nilai Angka', key: 'nilai_angka', width: 15 },
-        ];
-        nilaiHafalanSheet.addRow({ nis: '12345', nama_mapel: 'Juz Amma', nilai_angka: 95 });
-        // Sheet Sikap
-        const sikapSheet = workbook.addWorksheet('Sikap');
-        sikapSheet.columns = [
-            { header: 'NIS', key: 'nis', width: 15 }, { header: 'Jenis Sikap (Spiritual/Sosial)', key: 'jenis_sikap', width: 30 },
-            { header: 'Indikator', key: 'indikator', width: 40 }, { header: 'Angka', key: 'angka', width: 10 }, { header: 'Deskripsi', key: 'deskripsi', width: 50 },
-        ];
-        sikapSheet.addRow({ nis: '12345', jenis_sikap: 'Spiritual', indikator: 'Ketaatan Beribadah', angka: 8.5, deskripsi: 'Siswa menunjukkan ketaatan yang baik.' });
-        // Sheet Kehadiran
-        const kehadiranSheet = workbook.addWorksheet('Kehadiran');
-        kehadiranSheet.columns = [
-            { header: 'NIS', key: 'nis', width: 15 }, { header: 'Kegiatan', key: 'kegiatan', width: 30 },
-            { header: 'Izin', key: 'izin', width: 10 }, { header: 'Sakit', key: 'sakit', width: 10 }, { header: 'Absen', key: 'absen', width: 10 },
-        ];
-        kehadiranSheet.addRow({ nis: '12345', kegiatan: 'Kegiatan Belajar Mengajar', izin: 1, sakit: 2, absen: 0 });
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename=Template_Nilai_Raport.xlsx');
-        await workbook.xlsx.write(res);
-        res.status(200).end();
-    } catch (error) {
-        res.status(500).json({ message: 'Gagal membuat template Excel.', error: error.message });
-    }
-};
-
+// 4. Generate Identitas Siswa
 exports.generateIdentitas = async (req, res) => {
     try {
         const { siswaId } = req.params;
-        // PERBAIKAN: Menggunakan model dan alias yang benar ('kepala_pesantren')
-        const siswa = await db.Siswa.findByPk(siswaId, { 
+        const siswa = await db.Siswa.findByPk(siswaId, {
             include: [
                 { model: db.WaliKelas, as: 'wali_kelas' },
                 { model: db.KepalaPesantren, as: 'kepala_pesantren' }
-            ] 
+            ]
         });
         if (!siswa) return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
 
-        // PERBAIKAN: Mengambil data dari relasi 'kepala_pesantren'
         const templateData = {
             nama: siswa.nama || '', no_induk: siswa.nis || '', ttl: `${siswa.tempat_lahir || ''}, ${formatTanggal(siswa.tanggal_lahir)}`,
             jk: siswa.jenis_kelamin || '', agama: siswa.agama || '', alamat: siswa.alamat || '',
             nama_ayah: siswa.nama_ayah || '', kerja_ayah: siswa.pekerjaan_ayah || '', alamat_ayah: siswa.alamat_ayah || '',
             nama_ibu: siswa.nama_ibu || '', kerja_ibu: siswa.pekerjaan_ibu || '', alamat_ibu: siswa.alamat_ibu || '',
             nama_wali: siswa.nama_wali || '', kerja_wali: siswa.pekerjaan_wali || '', alamat_wali: siswa.alamat_wali || '',
-            // Menggunakan 'kepsek' dan 'nip_kepsek' sebagai placeholder di template, tapi sumber datanya dari 'kepala_pesantren'
             kepsek: siswa.kepala_pesantren ? siswa.kepala_pesantren.nama : '_________________',
             nip_kepsek: siswa.kepala_pesantren ? siswa.kepala_pesantren.nip : '_________________',
             tgl_raport: formatTanggal(new Date())
         };
 
-        // PERBAIKAN: Path yang benar dari 'controllers' ke 'uploads' adalah naik satu level ('../')
         const templatePath = path.join(__dirname, '../uploads/templates/identitas.docx');
         if (!fs.existsSync(templatePath)) return res.status(404).json({ message: "Template 'identitas.docx' tidak ditemukan." });
-        
+
         const content = fs.readFileSync(templatePath, 'binary');
         const zip = new PizZip(content);
         const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
@@ -145,6 +156,7 @@ exports.generateIdentitas = async (req, res) => {
     }
 };
 
+// 5. Generate Raport Lengkap
 exports.generateRaport = async (req, res) => {
     const { siswaId, semester, tahun_ajaran } = req.params;
     try {
@@ -162,7 +174,6 @@ exports.generateRaport = async (req, res) => {
 
         if (!siswa) return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
 
-        // PERBAIKAN: Destructuring dari 'kepala_pesantren' bukan 'kepala_sekolah'
         const { wali_kelas = {}, kepala_pesantren = {} } = siswa;
         const nilai_ujian = siswa.nilai_ujian || [];
         const jumlahMapel = nilai_ujian.length || 1;
@@ -171,7 +182,7 @@ exports.generateRaport = async (req, res) => {
         const jumlahKeterampilan = nilai_ujian.reduce((sum, m) => sum + m.keterampilan_angka, 0);
         const rataRataKeterampilan = (jumlahKeterampilan / jumlahMapel).toFixed(1);
         const rataRataUjian = ((jumlahPengetahuan + jumlahKeterampilan) / (jumlahMapel * 2) || 0).toFixed(1);
-        
+
         const sikap_spiritual = siswa.sikap.filter(s => s.jenis_sikap === 'Spiritual');
         const sikap_sosial = siswa.sikap.filter(s => s.jenis_sikap === 'Sosial');
         const rataSikapSpiritual = (sikap_spiritual.reduce((sum, s) => sum + s.angka, 0) / (sikap_spiritual.length || 1)).toFixed(1);
@@ -181,7 +192,6 @@ exports.generateRaport = async (req, res) => {
             nama: siswa.nama, no_induk: siswa.nis, ttl: `${siswa.tempat_lahir}, ${formatTanggal(siswa.tanggal_lahir)}`, jk: siswa.jenis_kelamin, agama: siswa.agama, alamat: siswa.alamat,
             nama_ayah: siswa.nama_ayah, kerja_ayah: siswa.pekerjaan_ayah, alamat_ayah: siswa.alamat_ayah, nama_ibu: siswa.nama_ibu, kerja_ibu: siswa.pekerjaan_ibu, alamat_ibu: siswa.alamat_ibu,
             nama_wali: siswa.nama_wali, kerja_wali: siswa.pekerjaan_wali, alamat_wali: siswa.alamat_wali, kelas: siswa.kelas, semester, thn_ajaran: tahun_ajaran,
-            // PERBAIKAN: Mengambil nama dari variabel 'kepala_pesantren'
             wali_kelas: wali_kelas.nama || '', kepsek: kepala_pesantren.nama || '', tgl_raport: formatTanggal(new Date()),
             mapel: nilai_ujian.map((m, i) => ({ no: i + 1, nama_mapel: m.mapel.nama_mapel, kitab: m.mapel.kitab, p_angka: m.pengetahuan_angka, p_predikat: nilaiKePredikat(m.pengetahuan_angka), k_angka: m.keterampilan_angka, k_predikat: nilaiKePredikat(m.keterampilan_angka) })),
             jml_p: jumlahPengetahuan, jml_k: jumlahKeterampilan, rata_p: rataRataPengetahuan, pred_p: nilaiKePredikat(rataRataPengetahuan), rata_k: rataRataKeterampilan, pred_k: nilaiKePredikat(rataRataKeterampilan),
@@ -196,7 +206,6 @@ exports.generateRaport = async (req, res) => {
             deskripsi_spiritual: sikap_spiritual[0]?.deskripsi || '', deskripsi_sosial: sikap_sosial[0]?.deskripsi || '',
         };
 
-        // PERBAIKAN: Path yang benar dari 'controllers' ke 'uploads' adalah naik satu level ('../')
         const templatePaths = {
             identitas: path.join(__dirname, '../uploads/templates/identitas.docx'),
             nilai: path.join(__dirname, '../uploads/templates/nilai.docx'),
@@ -214,7 +223,7 @@ exports.generateRaport = async (req, res) => {
             }
         }
 
-        if (generatedPages.length === 0) return res.status(400).json({ message: 'Tidak ada template yang ditemukan.' });
+        if (generatedPages.length === 0) return res.status(400).json({ message: 'Tidak ada template yang ditemukan untuk digabungkan.' });
 
         const merger = new DocxMerger({}, generatedPages);
         merger.save('nodebuffer', (mergedBuffer) => {

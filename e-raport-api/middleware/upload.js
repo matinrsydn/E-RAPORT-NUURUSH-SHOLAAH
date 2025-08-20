@@ -2,34 +2,34 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadDir = 'uploads/';
-// Buat folder 'uploads' jika belum ada
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-}
-
-const storage = multer.diskStorage({
+// Konfigurasi storage untuk file Excel
+const excelStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    const dir = 'uploads/excel/';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
   },
   filename: (req, file, cb) => {
-    // Gunakan nama file asli untuk template agar mudah dikenali
-    cb(null, file.originalname);
-  }
+    // Buat nama file unik dengan timestamp
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  },
 });
 
-const fileFilter = (req, file, cb) => {
-  // Hanya izinkan file .docx
-  if (path.extname(file.originalname).toLowerCase() === '.docx') {
-    return cb(null, true);
+// Filter untuk memastikan hanya file Excel yang diunggah
+const excelFilter = (req, file, cb) => {
+  if (
+    file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || // .xlsx
+    file.mimetype === 'application/vnd.ms-excel' // .xls
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error('Hanya file Excel (.xlsx, .xls) yang diizinkan!'), false);
   }
-  cb(new Error('Hanya file .docx yang diizinkan!'));
 };
 
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10000000 }, // 10MB
-  fileFilter: fileFilter
-});
+const uploadExcel = multer({ storage: excelStorage, fileFilter: excelFilter });
 
-module.exports = upload;
+module.exports = uploadExcel;

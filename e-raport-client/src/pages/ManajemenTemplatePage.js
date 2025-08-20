@@ -1,24 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Button, Form, Card, Alert } from 'react-bootstrap';
 
-const ManajemenTemplatePage = () => {
+const API_URL = 'http://localhost:5000/api/templates';
+
+function ManajemenTemplatePage() {
     const [identitasFile, setIdentitasFile] = useState(null);
     const [nilaiFile, setNilaiFile] = useState(null);
     const [sikapFile, setSikapFile] = useState(null);
+    const [templates, setTemplates] = useState([]);
     const [message, setMessage] = useState('');
-    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const fetchTemplates = useCallback(async () => {
+        try {
+            const response = await axios.get(API_URL);
+            setTemplates(response.data);
+        } catch (error) {
+            console.error('Error fetching templates:', error);
+            setMessage('Gagal memuat daftar template.');
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchTemplates();
+    }, [fetchTemplates]);
 
     const handleFileChange = (e, setFile) => {
         setFile(e.target.files[0]);
     };
 
-    const handleUpload = async () => {
-        setMessage('');
-        setError('');
-
+    const handleSubmit = async (e) => {
+        e.preventDefault();
         if (!identitasFile && !nilaiFile && !sikapFile) {
-            setError('Silakan pilih setidaknya satu file untuk diunggah.');
+            setMessage('Pilih setidaknya satu file template untuk diunggah.');
             return;
         }
 
@@ -27,54 +41,103 @@ const ManajemenTemplatePage = () => {
         if (nilaiFile) formData.append('nilai', nilaiFile);
         if (sikapFile) formData.append('sikap', sikapFile);
 
+        setIsLoading(true);
+        setMessage('');
+
         try {
-            // PERBAIKAN: URL diubah dari '/api/template' menjadi '/api/templates'
-            const res = await axios.post('http://localhost:5000/api/templates/upload', formData, {
+            const response = await axios.post(`${API_URL}/upload`, formData, {
                 headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
+                    'Content-Type': 'multipart/form-data',
+                },
             });
-            setMessage(res.data.message);
-        } catch (err) {
-            setError('Gagal mengunggah file. ' + (err.response?.data?.message || err.message));
+            setMessage(response.data.message);
+            // Reset file inputs
+            setIdentitasFile(null);
+            setNilaiFile(null);
+            setSikapFile(null);
+            document.getElementById('identitas-file-input').value = "";
+            document.getElementById('nilai-file-input').value = "";
+            document.getElementById('sikap-file-input').value = "";
+            // Refresh the list
+            fetchTemplates();
+        } catch (error) {
+            setMessage(error.response?.data?.message || 'Terjadi kesalahan saat mengunggah.');
+            console.error('Upload error:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleDelete = async (fileName) => {
+        if (window.confirm(`Apakah Anda yakin ingin menghapus template ${fileName}?`)) {
+            try {
+                const response = await axios.delete(`${API_URL}/${fileName}`);
+                setMessage(response.data.message);
+                fetchTemplates(); // Refresh list
+            } catch (error) {
+                setMessage(error.response?.data?.message || 'Gagal menghapus template.');
+                console.error('Delete error:', error);
+            }
         }
     };
 
+
     return (
-        <div className="container mt-4">
-            <h2>Manajemen Template Raport</h2>
-            <p>Unggah file template raport dalam format .docx. Pastikan placeholder di dalam template sesuai dengan dokumentasi.</p>
-            
-            {message && <Alert variant="success">{message}</Alert>}
-            {error && <Alert variant="danger">{error}</Alert>}
+        <div className="container mx-auto p-4">
+            <h1 className="text-2xl font-bold mb-4">Manajemen Template Raport</h1>
 
-            <Card>
-                <Card.Header>Unggah Template</Card.Header>
-                <Card.Body>
-                    <Form>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Template Identitas Siswa (identitas.docx)</Form.Label>
-                            <Form.Control type="file" onChange={(e) => handleFileChange(e, setIdentitasFile)} accept=".docx" />
-                        </Form.Group>
+            {message && <p className="mb-4 text-center p-2 bg-gray-200 rounded">{message}</p>}
 
-                        <Form.Group className="mb-3">
-                            <Form.Label>Template Nilai (nilai.docx)</Form.Label>
-                            <Form.Control type="file" onChange={(e) => handleFileChange(e, setNilaiFile)} accept=".docx" />
-                        </Form.Group>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Upload Form Section */}
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-semibold mb-4">Unggah Template Baru</h2>
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-4">
+                            <label htmlFor="identitas-file-input" className="block text-sm font-medium text-gray-700">Template Identitas Siswa (.docx)</label>
+                            <input id="identitas-file-input" type="file" accept=".docx" onChange={(e) => handleFileChange(e, setIdentitasFile)} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                        </div>
+                        <div className="mb-4">
+                            <label htmlFor="nilai-file-input" className="block text-sm font-medium text-gray-700">Template Nilai (.docx)</label>
+                            <input id="nilai-file-input" type="file" accept=".docx" onChange={(e) => handleFileChange(e, setNilaiFile)} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"/>
+                        </div>
+                        <div className="mb-4">
+                            <label htmlFor="sikap-file-input" className="block text-sm font-medium text-gray-700">Template Sikap & Kehadiran (.docx)</label>
+                            <input id="sikap-file-input" type="file" accept=".docx" onChange={(e) => handleFileChange(e, setSikapFile)} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"/>
+                        </div>
+                        <button type="submit" disabled={isLoading} className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-blue-300">
+                            {isLoading ? 'Mengunggah...' : 'Unggah Template'}
+                        </button>
+                    </form>
+                </div>
 
-                        <Form.Group className="mb-3">
-                            <Form.Label>Template Sikap (sikap.docx)</Form.Label>
-                            <Form.Control type="file" onChange={(e) => handleFileChange(e, setSikapFile)} accept=".docx" />
-                        </Form.Group>
-
-                        <Button variant="primary" onClick={handleUpload}>
-                            <i className="bi bi-upload"></i> Unggah Template
-                        </Button>
-                    </Form>
-                </Card.Body>
-            </Card>
+                {/* Existing Templates Section */}
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-semibold mb-4">Template Tersimpan</h2>
+                    {templates.length > 0 ? (
+                        <ul className="space-y-3">
+                            {templates.map((template) => (
+                                <li key={template.fileName} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                                    <div>
+                                        <a href={template.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">{template.fileName}</a>
+                                        <p className="text-xs text-gray-500">
+                                            Ukuran: {Math.round(template.size / 1024)} KB, 
+                                            Diubah: {new Date(template.lastModified).toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <button onClick={() => handleDelete(template.fileName)} className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm">
+                                        Hapus
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-gray-500">Belum ada template yang diunggah.</p>
+                    )}
+                </div>
+            </div>
         </div>
     );
-};
+}
 
 export default ManajemenTemplatePage;
