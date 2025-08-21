@@ -5,30 +5,43 @@ const db = require('../models');
 // Mengambil data raport lengkap untuk satu siswa pada periode tertentu
 exports.getRaportData = async (req, res) => {
     const { siswaId, tahunAjaran, semester } = req.params;
+
+    // --- PERBAIKAN DIMULAI DI SINI ---
+
+    // 1. Format tahun ajaran (sudah benar)
     const tahunAjaranFormatted = `${tahunAjaran}/${parseInt(tahunAjaran) + 1}`;
 
-    console.log(`REQUEST RAPORT DATA: siswaId=${siswaId}, tahunAjaran=${tahunAjaranFormatted}, semester=${semester}`);
+    // 2. Terjemahkan semester dari angka ke teks
+    //    Ini membuat API lebih fleksibel dan tahan kesalahan.
+    let semesterFormatted;
+    if (semester === '1') {
+        semesterFormatted = 'Ganjil';
+    } else if (semester === '2') {
+        semesterFormatted = 'Genap';
+    } else {
+        // Jika format tidak dikenali, kirim error yang jelas
+        return res.status(400).json({
+            message: "Parameter semester tidak valid. Gunakan '1' untuk Ganjil atau '2' untuk Genap."
+        });
+    }
+
+    console.log(`REQUEST RAPORT DATA: siswaId=${siswaId}, tahunAjaran=${tahunAjaranFormatted}, semester=${semesterFormatted}`);
 
     try {
+        // Gunakan variabel yang sudah diformat di semua query
         const [nilaiUjian, nilaiHafalan, semuaKehadiran, sikap] = await Promise.all([
-            // 1. Ambil Nilai Ujian (tidak berubah)
             db.NilaiUjian.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester },
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted },
                 include: [{ model: db.MataPelajaran, as: 'mapel', attributes: ['nama_mapel'] }]
             }),
-            // 2. Ambil Nilai Hafalan (tidak berubah)
             db.NilaiHafalan.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester }
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted }
             }),
-            
-            // ✔️ PERBAIKAN 1: Gunakan findAll untuk mengambil SEMUA data kehadiran
             db.Kehadiran.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester }
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted }
             }),
-
-            // 4. Ambil Sikap (tidak berubah)
             db.Sikap.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester }
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted }
             })
         ]);
         
@@ -71,7 +84,6 @@ exports.getRaportData = async (req, res) => {
         const responseData = {
             nilaiUjian: formattedNilaiUjian,
             nilaiHafalan: formattedNilaiHafalan,
-            // ✔️ PERBAIKAN 3: Gunakan data yang sudah dijumlahkan
             kehadiran: semuaKehadiran.length > 0 ? rekapKehadiran : null,
             sikap: sikap.map(s => ({
                 id: s.id,
