@@ -1,14 +1,19 @@
-// e-raport-api/models/walikelas.js
-
 'use strict';
 const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class WaliKelas extends Model {
     static associate(models) {
-      // PERBAIKAN: Tambahkan alias 'as' di sini agar relasi sinkron
+      // Benar: Satu Wali Kelas bertanggung jawab atas satu Kelas.
       WaliKelas.hasOne(models.Kelas, {
         foreignKey: 'wali_kelas_id',
-        as: 'kelas' // <-- Tambahkan baris ini
+        as: 'kelas' 
+      });
+
+      // --- TAMBAHKAN RELASI INI ---
+      // Satu Wali Kelas memiliki (membawahi) banyak Siswa.
+      WaliKelas.hasMany(models.Siswa, {
+        foreignKey: 'wali_kelas_id',
+        as: 'siswa'
       });
     }
   }

@@ -1,21 +1,24 @@
-// e-raport-api/models/siswa.js
-
 'use strict';
 const { Model } = require('sequelize');
+
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
+      // Relasi ke Kelas
       Siswa.belongsTo(models.Kelas, {
         foreignKey: 'kelas_id',
         as: 'kelas'
       });
-      // PERBAIKAIAN: Ganti 'WaliKela' menjadi 'walikelas'
-      // Siswa.belongsTo(models.WaliKelas, {
-      //   foreignKey: 'wali_kelas_id',
-      //   as: 'walikelas' 
-      // });
 
-      // ... relasi lainnya biarkan saja
+      // --- INI BAGIAN YANG HILANG ---
+      // Tambahkan relasi ke WaliKelas di sini
+      Siswa.belongsTo(models.WaliKelas, {
+        foreignKey: 'wali_kelas_id',
+        as: 'wali_kelas'
+      });
+      // -----------------------------
+
+      // Relasi ke tabel nilai dan lainnya
       Siswa.hasMany(models.NilaiUjian, {
         foreignKey: 'siswa_id',
         as: 'NilaiUjians'
@@ -36,7 +39,6 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
   }
-  // ... sisa file biarkan saja
   Siswa.init({
     nama: DataTypes.STRING,
     nis: {
@@ -52,14 +54,14 @@ module.exports = (sequelize, DataTypes) => {
     kelas_id: {
       type: DataTypes.INTEGER,
       references: {
-        model: 'Kelas',
+        model: 'Kelas', // Nama tabel, bukan model
         key: 'id'
       }
     },
     wali_kelas_id: {
       type: DataTypes.INTEGER,
       references: {
-        model: 'WaliKelas',
+        model: 'WaliKelas', // Nama tabel, bukan model
         key: 'id'
       }
     },

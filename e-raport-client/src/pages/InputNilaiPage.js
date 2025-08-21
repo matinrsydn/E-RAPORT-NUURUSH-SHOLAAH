@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Tabs, Tab, Card, Form, Button, Row, Col, Spinner, Alert, Table } from 'react-bootstrap';
 import fileDownload from 'js-file-download';
-
+import { useNavigate } from 'react-router-dom';
 const InputNilaiPage = () => {
+    const navigate = useNavigate();
+    // State UI
     // State UI
     const [key, setKey] = useState('excel');
     const [loading, setLoading] = useState(false);
@@ -95,17 +97,19 @@ const InputNilaiPage = () => {
 
     const handleUploadFile = async () => {
         if (!file) return setError('Silakan pilih file untuk diunggah.');
-        resetMessages(); setLoading(true);
+        resetMessages(); 
+        setLoading(true);
         const formData = new FormData();
         formData.append('file', file);
         try {
-            // UBAH ENDPOINT UNTUK UPLOAD LENGKAP
-            const response = await axios.post('http://localhost:5000/api/excel/upload-complete-data', formData, { 
+            // Ganti endpoint ke API draft yang baru
+            const response = await axios.post('http://localhost:5000/api/draft/upload', formData, { 
                 headers: { 'Content-Type': 'multipart/form-data' } 
             });
-            setSuccess(response.data.message);
-            setFile(null);
-            document.getElementById('file-upload-input').value = '';
+            
+            // Arahkan ke halaman validasi dengan batchId
+            navigate(`/validasi-raport/${response.data.upload_batch_id}`);
+            
         } catch (err) {
             setError(err.response?.data?.message || 'Gagal mengunggah file.');
         } finally {

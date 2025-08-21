@@ -1,39 +1,44 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './App.css';
 import Sidebar from './components/Sidebar';
-
-// Import semua halaman yang digunakan
 import Dashboard from './pages/Dashboard';
 import ManajemenSiswaPage from './pages/ManajemenSiswaPage';
-import WaliKelasPage from './pages/ManajemenAkademik/WaliKelasPage';
-import MataPelajaranPage from './pages/ManajemenAkademik/MataPelajaranPage';
-import KepalaPesantrenPage from './pages/ManajemenAkademik/KepalaPesantrenPage';
-import ManajemenTemplatePage from './pages/ManajemenTemplatePage';
-import ManajemenKelasPage from './pages/ManajemenKelasPage';
-import IndikatorSikapPage from './pages/IndikatorSikapPage';
+import ManajemenKelasPage from './pages/ManajemenAkademik/ManajemenKelasPage';
+import ManajemenMapelPage from './pages/ManajemenAkademik/MataPelajaranPage';
+import ManajemenWaliKelasPage from './pages/ManajemenAkademik/WaliKelasPage';
 import ManajemenTahunAjaranPage from './pages/ManajemenAkademik/ManajemenTahunAjaranPage';
+import ManajemenIndikatorSikapPage from './pages/ManajemenAkademik/ManajemenIndikatorSikapPage';
+import ManajemenKepalaPesantrenPage from './pages/ManajemenAkademik/KepalaPesantrenPage';
 import InputNilaiPage from './pages/InputNilaiPage';
+import GenerateRaportPage from './pages/GenerateRaportPage';
+import ValidasiRaportPage from './pages/ValidasiRaportPage';
+import DraftRaportPage from './pages/DraftRaportPage';
 
 function App() {
   return (
     <Router>
       <div className="d-flex">
         <Sidebar />
-        <main className="flex-grow-1 p-4">
+        <main className="flex-grow-1 p-4" style={{ backgroundColor: '#f8f9fa' }}>
           <Routes>
-            {/* Rute Utama */}
             <Route path="/" element={<Dashboard />} />
             <Route path="/manajemen-siswa" element={<ManajemenSiswaPage />} />
             <Route path="/input-nilai" element={<InputNilaiPage />} />
+            <Route path="/generate-raport" element={<GenerateRaportPage />} />
+
+            {/* --- SESUAIKAN SEMUA RUTE MASTER DATA DI SINI --- */}
+            <Route path="/manajemen-akademik/tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
+            <Route path="/manajemen-akademik/wali-kelas" element={<ManajemenWaliKelasPage />} />
+            <Route path="/manajemen-akademik/kelas" element={<ManajemenKelasPage />} />
+            <Route path="/manajemen-akademik/mata-pelajaran" element={<ManajemenMapelPage />} />
+            <Route path="/manajemen-akademik/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
+            <Route path="/manajemen-akademik/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
             
-            {/* Rute Master Data */}
-            <Route path="/tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
-            <Route path="/wali-kelas" element={<WaliKelasPage />} />
-            <Route path="/manajemen-kelas" element={<ManajemenKelasPage />} />
-            <Route path="/mata-pelajaran" element={<MataPelajaranPage />} />
-            <Route path="/indikator-sikap" element={<IndikatorSikapPage />} />
-            <Route path="/kepala-pesantren" element={<KepalaPesantrenPage />} />
-            <Route path="/manajemen-template" element={<ManajemenTemplatePage />} />
+            {/* Rute untuk validasi dan draft raport (ini sudah benar) */}
+            <Route path="/validasi-raport/:batchId" element={<ValidasiRaportPage />} />
+            <Route path="/draft-raport/:nis/:semester/:tahun_ajaran" element={<DraftRaportPage />} />
           </Routes>
         </main>
       </div>

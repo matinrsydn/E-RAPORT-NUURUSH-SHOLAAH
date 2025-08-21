@@ -36,6 +36,7 @@ const kelasRoutes = require('./routes/kelasRoutes');
 const indikatorSikapRoutes = require('./routes/indikatorSikapRoutes');
 const tahunAjaranRoutes = require('./routes/tahunAjaranRoutes');
 const templateRoutes = require('./routes/templateRoutes.js'); // Anda sudah mengimpor ini
+const draftRoutes = require('./routes/draftRoutes');
 
 // Daftarkan semua rute ke aplikasi Express
 app.use('/api/siswa', siswaRoutes);
@@ -53,6 +54,7 @@ app.use('/api/tahun-ajaran', tahunAjaranRoutes);
 // --- INI BAGIAN YANG HILANG ---
 // Daftarkan rute template dengan base path /api/templates
 app.use('/api/templates', templateRoutes);
+app.use('/api/draft', draftRoutes);
 // ------------------------------
 
 // Rute dasar

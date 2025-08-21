@@ -10,7 +10,7 @@ const Sidebar = () => {
                 <h2 className="h4 text-primary text-center">e-Raport</h2>
             </div>
             <ListGroup variant="flush" className="p-2">
-                <h3 className="px-3 py-2 mt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Menu Utama</h3>
+                <h3 className="px-3 py-2 mt-2" style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Menu Utama</h3>
                 <ListGroup.Item action as={NavLink} to="/" className="d-flex align-items-center gap-3 rounded mb-1">
                     <House size={18} /> Dashboard
                 </ListGroup.Item>
@@ -20,29 +20,33 @@ const Sidebar = () => {
                 <ListGroup.Item action as={NavLink} to="/input-nilai" className="d-flex align-items-center gap-3 rounded mb-1">
                     <FileUp size={18} /> Input Nilai
                 </ListGroup.Item>
+                
+                {/* --- MENU BARU DITAMBAHKAN DI SINI --- */}
+                <ListGroup.Item action as={NavLink} to="/generate-raport" className="d-flex align-items-center gap-3 rounded mb-1">
+                    <FileText size={18} /> Generate Raport
+                </ListGroup.Item>
 
-                <h3 className="px-3 py-2 mt-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Master Data</h3>
-                <ListGroup.Item action as={NavLink} to="/tahun-ajaran" className="d-flex align-items-center gap-3 rounded mb-1">
+                <h3 className="px-3 py-2 mt-4" style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Master Data</h3>
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/tahun-ajaran" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Calendar size={18} /> Tahun Ajaran
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/wali-kelas" className="d-flex align-items-center gap-3 rounded mb-1">
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/wali-kelas" className="d-flex align-items-center gap-3 rounded mb-1">
                     <UserCheck size={18} /> Wali Kelas
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/manajemen-kelas" className="d-flex align-items-center gap-3 rounded mb-1">
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kelas" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Layers size={18} /> Manajemen Kelas
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/mata-pelajaran" className="d-flex align-items-center gap-3 rounded mb-1">
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/mata-pelajaran" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Book size={18} /> Mata Pelajaran
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/indikator-sikap" className="d-flex align-items-center gap-3 rounded mb-1">
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/indikator-sikap" className="d-flex align-items-center gap-3 rounded mb-1">
                     <ClipboardList size={18} /> Indikator Sikap
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/kepala-pesantren" className="d-flex align-items-center gap-3 rounded mb-1">
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kepala-pesantren" className="d-flex align-items-center gap-3 rounded mb-1">
                     <UserCog size={18} /> Kepala Pesantren
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/manajemen-template" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <FileText size={18} /> Manajemen Template
-                </ListGroup.Item>
+                
+                {/* Menghapus Manajemen Template karena sudah ada Generate Raport */}
             </ListGroup>
         </aside>
     );
