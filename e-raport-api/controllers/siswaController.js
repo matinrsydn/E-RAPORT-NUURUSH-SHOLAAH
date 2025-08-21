@@ -1,34 +1,44 @@
 // e-raport-api/controllers/siswaController.js
+const db = require('../models');
 
-const { Siswa, WaliKelas, Kelas } = require('../models'); // Hapus KepalaPesantren dari sini
-
+// Mengambil SEMUA siswa dengan data yang BENAR
 exports.getAllSiswa = async (req, res) => {
     try {
-        const siswas = await Siswa.findAll({
+        const siswas = await db.Siswa.findAll({
             include: [
-                // PERBAIKAN: Tambahkan alias yang benar
-                { model: Kelas, as: 'kelas', attributes: ['nama_kelas'] },
-                { model: WaliKelas, as: 'walikelas', attributes: ['nama'] }
-                // Hapus include KepalaPesantren yang tidak valid
+                {
+                    model: db.Kelas,
+                    as: 'kelas', // Ambil data Kelas
+                    include: [{
+                        model: db.WaliKelas,
+                        as: 'walikelas' // Ambil data WaliKelas DARI DALAM Kelas
+                    }]
+                }
             ],
             order: [['nama', 'ASC']]
         });
         res.json(siswas);
     } catch (error) {
-        // Tambahkan log error di server untuk mempermudah debugging
         console.error("SERVER ERROR - GET /api/siswa:", error);
         res.status(500).json({ message: "Gagal mengambil data siswa", error: error.message });
     }
 };
 
+// Mengambil SATU siswa dengan data yang BENAR (untuk cetak/download)
 exports.getSiswaById = async (req, res) => {
     try {
-        const siswa = await Siswa.findByPk(req.params.id, {
+        const siswa = await db.Siswa.findByPk(req.params.id, {
             include: [
-                // PERBAIKAN: Tambahkan alias juga di sini
-                { model: Kelas, as: 'kelas', attributes: ['nama_kelas'] },
-                { model: WaliKelas, as: 'walikelas', attributes: ['nama'] }
-            ]
+                {
+                    model: db.Kelas,
+                    as: 'kelas',
+                    // WAJIB: Memasukkan data WaliKelas ke dalam Kelas
+                    include: [{
+                        model: db.WaliKelas,
+                        as: 'walikelas'
+                    }]
+                },
+            ],
         });
         if (!siswa) return res.status(404).json({ message: "Siswa tidak ditemukan" });
         res.json(siswa);
@@ -38,10 +48,12 @@ exports.getSiswaById = async (req, res) => {
     }
 };
 
-// Fungsi create, update, dan delete tidak perlu diubah
+
+// --- FUNGSI CREATE, UPDATE, DELETE (TIDAK PERLU DIUBAH) ---
+
 exports.createSiswa = async (req, res) => {
     try {
-        const newSiswa = await Siswa.create(req.body);
+        const newSiswa = await db.Siswa.create(req.body);
         res.status(201).json(newSiswa);
     } catch (error) {
         res.status(400).json({ message: "Gagal membuat siswa", error: error.message });
@@ -50,9 +62,9 @@ exports.createSiswa = async (req, res) => {
 
 exports.updateSiswa = async (req, res) => {
     try {
-        const [updated] = await Siswa.update(req.body, { where: { id: req.params.id } });
+        const [updated] = await db.Siswa.update(req.body, { where: { id: req.params.id } });
         if (updated) {
-            const updatedSiswa = await Siswa.findByPk(req.params.id);
+            const updatedSiswa = await db.Siswa.findByPk(req.params.id);
             return res.status(200).json(updatedSiswa);
         }
         throw new Error('Siswa tidak ditemukan');
@@ -63,7 +75,7 @@ exports.updateSiswa = async (req, res) => {
 
 exports.deleteSiswa = async (req, res) => {
     try {
-        const deleted = await Siswa.destroy({ where: { id: req.params.id } });
+        const deleted = await db.Siswa.destroy({ where: { id: req.params.id } });
         if (deleted) return res.status(204).send();
         throw new Error('Siswa tidak ditemukan');
     } catch (error) {

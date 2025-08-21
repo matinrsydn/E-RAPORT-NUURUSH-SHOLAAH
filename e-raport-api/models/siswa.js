@@ -10,10 +10,10 @@ module.exports = (sequelize, DataTypes) => {
         as: 'kelas'
       });
       // PERBAIKAIAN: Ganti 'WaliKela' menjadi 'walikelas'
-      Siswa.belongsTo(models.WaliKelas, {
-        foreignKey: 'wali_kelas_id',
-        as: 'walikelas' // <-- Perbaiki di baris ini
-      });
+      // Siswa.belongsTo(models.WaliKelas, {
+      //   foreignKey: 'wali_kelas_id',
+      //   as: 'walikelas' 
+      // });
 
       // ... relasi lainnya biarkan saja
       Siswa.hasMany(models.NilaiUjian, {

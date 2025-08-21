@@ -89,7 +89,7 @@ const ManajemenKelasPage = () => {
                             <td>{index + 1}</td>
                             <td>{k.nama_kelas}</td>
                             <td>{k.kapasitas}</td>
-                            <td>{k.WaliKela?.nama || 'N/A'}</td>
+                            <td>{k.walikelas?.nama || 'N/A'}</td>
                             <td>
                                 <Button variant="info" size="sm" className="me-1" onClick={() => handleShow(k)}>Edit</Button>
                                 <Button variant="danger" size="sm" onClick={() => handleDelete(k.id)}>Hapus</Button>
