@@ -14,7 +14,7 @@ import ManajemenKepalaPesantrenPage from './pages/ManajemenAkademik/KepalaPesant
 import InputNilaiPage from './pages/InputNilaiPage';
 import GenerateRaportPage from './pages/GenerateRaportPage';
 import ValidasiRaportPage from './pages/ValidasiRaportPage';
-import DraftRaportPage from './pages/DraftRaportPage';
+import DraftRaportPage from './pages/DraftRaportMainPage';
 
 function App() {
   return (

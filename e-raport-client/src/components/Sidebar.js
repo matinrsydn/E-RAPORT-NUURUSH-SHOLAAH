@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { ListGroup } from 'react-bootstrap';
-import { Users, UserCheck, Book, FileUp, FileText, UserCog, House, Layers, ClipboardList, Calendar } from 'lucide-react';
+import { Users, UserCheck, Book, FileUp, FileText, UserCog, House, Layers, ClipboardList, Calendar, FileCheck, FilePlus } from 'lucide-react';
 
 const Sidebar = () => {
     return (
@@ -21,9 +21,12 @@ const Sidebar = () => {
                     <FileUp size={18} /> Input Nilai
                 </ListGroup.Item>
                 
-                {/* --- MENU BARU DITAMBAHKAN DI SINI --- */}
+                {/* --- MENU DRAFT & GENERATE RAPORT --- */}
+                <ListGroup.Item action as={NavLink} to="/draft-raport" className="d-flex align-items-center gap-3 rounded mb-1">
+                    <FileCheck size={18} /> Draft Raport
+                </ListGroup.Item>
                 <ListGroup.Item action as={NavLink} to="/generate-raport" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <FileText size={18} /> Generate Raport
+                    <FilePlus size={18} /> Generate Raport
                 </ListGroup.Item>
 
                 <h3 className="px-3 py-2 mt-4" style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Master Data</h3>
@@ -45,8 +48,6 @@ const Sidebar = () => {
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kepala-pesantren" className="d-flex align-items-center gap-3 rounded mb-1">
                     <UserCog size={18} /> Kepala Pesantren
                 </ListGroup.Item>
-                
-                {/* Menghapus Manajemen Template karena sudah ada Generate Raport */}
             </ListGroup>
         </aside>
     );

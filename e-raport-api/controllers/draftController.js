@@ -15,19 +15,18 @@ const getCellValue = (cell) => {
     }
 
     // Jika sel berisi formula, ambil hasilnya
-    if (cell.value.result) {
+    if (cell.value && typeof cell.value === 'object' && cell.value.result !== undefined) {
         return cell.value.result;
     }
     
     // Jika sel berisi rich text, gabungkan teksnya
-    if (cell.value.richText) {
+    if (cell.value && typeof cell.value === 'object' && cell.value.richText) {
         return cell.value.richText.map(rt => rt.text).join('');
     }
 
     // Untuk semua kasus lain, kembalikan nilai biasa
     return cell.value;
 };
-
 
 /**
  * Helper function untuk melakukan validasi setiap baris data dari Excel.
@@ -55,19 +54,23 @@ async function validateRow(rowData) {
         errors.push(`Nilai Keterampilan '${rowData.keterampilan_angka}' bukan angka yang valid.`);
     }
 
-    // 4. Validasi Kehadiran (Sakit, Izin, Alpha)
-    if (rowData.sakit === null || isNaN(parseInt(rowData.sakit))) {
-        errors.push(`Jumlah Sakit '${rowData.sakit}' bukan angka yang valid.`);
+    // 4. Validasi Kehadiran (Sakit, Izin, Alpha) - dengan default 0 jika null
+    const sakit = rowData.sakit === null || rowData.sakit === undefined ? 0 : rowData.sakit;
+    const izin = rowData.izin === null || rowData.izin === undefined ? 0 : rowData.izin;
+    const alpha = rowData.alpha === null || rowData.alpha === undefined ? 0 : rowData.alpha;
+
+    if (isNaN(parseInt(sakit))) {
+        errors.push(`Jumlah Sakit '${sakit}' bukan angka yang valid.`);
     }
-     if (rowData.izin === null || isNaN(parseInt(rowData.izin))) {
-        errors.push(`Jumlah Izin '${rowData.izin}' bukan angka yang valid.`);
+    if (isNaN(parseInt(izin))) {
+        errors.push(`Jumlah Izin '${izin}' bukan angka yang valid.`);
     }
-     if (rowData.alpha === null || isNaN(parseInt(rowData.alpha))) {
-        errors.push(`Jumlah Alpha '${rowData.alpha}' bukan angka yang valid.`);
+    if (isNaN(parseInt(alpha))) {
+        errors.push(`Jumlah Alpha '${alpha}' bukan angka yang valid.`);
     }
 
     // 5. Validasi Semester dan Tahun Ajaran
-    const semesterStr = String(rowData.semester);
+    const semesterStr = String(rowData.semester || '');
     if (!rowData.semester || !['1', '2'].includes(semesterStr)) {
         errors.push(`Semester '${rowData.semester}' tidak valid. Harus 1 atau 2.`);
     }
@@ -82,7 +85,6 @@ async function validateRow(rowData) {
         mapelId: mapel ? mapel.id : null,
     };
 }
-
 
 /**
  * Mengunggah file Excel, memvalidasi isinya, dan menyimpannya ke tabel draft.
@@ -105,8 +107,12 @@ exports.uploadAndValidate = async (req, res) => {
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
 
-            // Lewati baris kosong
-            if (row.values.length === 0) continue;
+            // Lewati baris kosong - periksa apakah ada data di kolom A sampai L
+            const hasData = row.getCell('A').value || row.getCell('B').value || 
+                           row.getCell('C').value || row.getCell('D').value ||
+                           row.getCell('E').value || row.getCell('F').value;
+            
+            if (!hasData) continue;
 
             const rowData = {
                 nis: getCellValue(row.getCell('A')),
@@ -115,13 +121,15 @@ exports.uploadAndValidate = async (req, res) => {
                 nama_mapel: getCellValue(row.getCell('D')),
                 pengetahuan_angka: getCellValue(row.getCell('E')),
                 keterampilan_angka: getCellValue(row.getCell('F')),
-                sakit: getCellValue(row.getCell('G')),
-                izin: getCellValue(row.getCell('H')),
-                alpha: getCellValue(row.getCell('I')),
+                sakit: getCellValue(row.getCell('G')),  // Kolom G untuk Sakit
+                izin: getCellValue(row.getCell('H')),   // Kolom H untuk Izin
+                alpha: getCellValue(row.getCell('I')),  // Kolom I untuk Alpha
                 catatan_walikelas: getCellValue(row.getCell('J')),
                 semester: getCellValue(row.getCell('K')),
                 tahun_ajaran: getCellValue(row.getCell('L')),
             };
+
+            console.log(`Baris ${i}:`, rowData); // Debug log
             
             const validation = await validateRow(rowData);
             draftEntries.push({
@@ -168,6 +176,28 @@ exports.getDraftData = async (req, res) => {
 };
 
 /**
+ * Mengambil semua batch draft yang tersedia
+ */
+exports.getAllDraftBatches = async (req, res) => {
+    try {
+        const batches = await db.DraftNilai.findAll({
+            attributes: [
+                'upload_batch_id',
+                [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'total_rows'],
+                [db.sequelize.fn('SUM', db.sequelize.literal('CASE WHEN is_valid = true THEN 1 ELSE 0 END')), 'valid_rows'],
+                [db.sequelize.fn('MIN', db.sequelize.col('createdAt')), 'uploaded_at']
+            ],
+            group: ['upload_batch_id'],
+            order: [['createdAt', 'DESC']]
+        });
+
+        res.status(200).json(batches);
+    } catch (error) {
+        res.status(500).json({ message: 'Gagal mengambil daftar draft.', error: error.message });
+    }
+};
+
+/**
  * Mengambil data lengkap untuk preview satu raport siswa.
  */
 exports.getRaportPreview = async (req, res) => {
@@ -186,9 +216,17 @@ exports.getRaportPreview = async (req, res) => {
             return res.status(404).json({ message: "Siswa tidak ditemukan" });
         }
 
-        const nilaiUjian = await db.NilaiUjian.findAll({ where: { siswa_id: siswa.id, semester, tahun_ajaran }, include: ['mapel'] });
-        const kehadiran = await db.Kehadiran.findOne({ where: { siswa_id: siswa.id, semester, tahun_ajaran } });
-        const sikap = await db.Sikap.findAll({ where: { siswa_id: siswa.id, semester, tahun_ajaran }, include: ['indikator'] });
+        const nilaiUjian = await db.NilaiUjian.findAll({ 
+            where: { siswa_id: siswa.id, semester, tahun_ajaran }, 
+            include: [{ model: db.MataPelajaran, as: 'mapel' }]
+        });
+        const kehadiran = await db.Kehadiran.findOne({ 
+            where: { siswa_id: siswa.id, semester, tahun_ajaran } 
+        });
+        const sikap = await db.Sikap.findAll({ 
+            where: { siswa_id: siswa.id, semester, tahun_ajaran }, 
+            include: [{ model: db.IndikatorSikap, as: 'indikator' }]
+        });
         
         res.status(200).json({
             siswa,
@@ -240,16 +278,19 @@ exports.confirmAndSave = async (req, res) => {
             if (!kehadiranToUpdate[processed_data.siswa_id]) {
                 kehadiranToUpdate[processed_data.siswa_id] = {
                     siswa_id: processed_data.siswa_id,
-                    sakit: data.sakit,
-                    izin: data.izin,
-                    alpha: data.alpha,
+                    sakit: data.sakit || 0,
+                    izin: data.izin || 0,
+                    alpha: data.alpha || 0,
                     semester: data.semester,
                     tahun_ajaran: data.tahun_ajaran,
                 };
             }
         }
 
-        await db.NilaiUjian.bulkCreate(nilaiToCreate, { transaction, updateOnDuplicate: ['pengetahuan_angka', 'keterampilan_angka'] });
+        await db.NilaiUjian.bulkCreate(nilaiToCreate, { 
+            transaction, 
+            updateOnDuplicate: ['pengetahuan_angka', 'keterampilan_angka'] 
+        });
 
         for (const siswaId in kehadiranToUpdate) {
             const data = kehadiranToUpdate[siswaId];
