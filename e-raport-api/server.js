@@ -37,6 +37,8 @@ const indikatorSikapRoutes = require('./routes/indikatorSikapRoutes');
 const tahunAjaranRoutes = require('./routes/tahunAjaranRoutes');
 const templateRoutes = require('./routes/templateRoutes.js'); // Anda sudah mengimpor ini
 const draftRoutes = require('./routes/draftRoutes');
+const raportRoutes = require('./routes/raportRoutes');
+
 
 // Daftarkan semua rute ke aplikasi Express
 app.use('/api/siswa', siswaRoutes);
@@ -50,6 +52,7 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/kelas', kelasRoutes);
 app.use('/api/indikator-sikap', indikatorSikapRoutes);
 app.use('/api/tahun-ajaran', tahunAjaranRoutes);
+app.use('/api/raport', raportRoutes);
 
 // --- INI BAGIAN YANG HILANG ---
 // Daftarkan rute template dengan base path /api/templates

@@ -15,6 +15,8 @@ import InputNilaiPage from './pages/InputNilaiPage';
 import GenerateRaportPage from './pages/GenerateRaportPage';
 import ValidasiRaportPage from './pages/ValidasiRaportPage';
 import DraftRaportPage from './pages/DraftRaportMainPage';
+import ManajemenRaportPage from './pages/ManajemenRaportPage';
+
 
 function App() {
   return (
@@ -35,10 +37,11 @@ function App() {
             <Route path="/manajemen-akademik/mata-pelajaran" element={<ManajemenMapelPage />} />
             <Route path="/manajemen-akademik/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
             <Route path="/manajemen-akademik/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
+             <Route path="/manajemen-raport" element={<ManajemenRaportPage />} />
             
             {/* Rute untuk validasi dan draft raport (ini sudah benar) */}
             <Route path="/validasi-raport/:batchId" element={<ValidasiRaportPage />} />
-            <Route path="/draft-raport/:nis/:semester/:tahun_ajaran" element={<DraftRaportPage />} />
+            <Route path="/draft-raport" element={<DraftRaportPage />} /> 
           </Routes>
         </main>
       </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { ListGroup } from 'react-bootstrap';
-import { Users, UserCheck, Book, FileUp, FileText, UserCog, House, Layers, ClipboardList, Calendar, FileCheck, FilePlus } from 'lucide-react';
+import { Users, UserCheck, Book, FileUp, FileText, UserCog, House, Layers, ClipboardList, Calendar, FileCheck, FilePlus, BookUser } from 'lucide-react';
 
 const Sidebar = () => {
     return (
@@ -25,6 +25,9 @@ const Sidebar = () => {
                 <ListGroup.Item action as={NavLink} to="/draft-raport" className="d-flex align-items-center gap-3 rounded mb-1">
                     <FileCheck size={18} /> Draft Raport
                 </ListGroup.Item>
+                <ListGroup.Item action as={NavLink} to="/manajemen-raport" className="d-flex align-items-center gap-3 rounded mb-1">
+                    <BookUser size={18} /> Manajemen Raport
+                </ListGroup.Item>
                 <ListGroup.Item action as={NavLink} to="/generate-raport" className="d-flex align-items-center gap-3 rounded mb-1">
                     <FilePlus size={18} /> Generate Raport
                 </ListGroup.Item>
