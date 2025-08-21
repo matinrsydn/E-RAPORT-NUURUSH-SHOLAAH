@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Modal, Button, Form, Table, FormControl, InputGroup, Row, Col, Alert } from 'react-bootstrap';
+import { Modal, Button, Form, Table, FormControl, InputGroup, Row, Col, Alert, Spinner } from 'react-bootstrap';
 
 const ManajemenSiswaPage = () => {
     const [siswas, setSiswas] = useState([]);
@@ -10,13 +11,33 @@ const ManajemenSiswaPage = () => {
     const [show, setShow] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [downloadingIds, setDownloadingIds] = useState(new Set());
     
     const initialState = {
-        nama: '', nis: '', tempat_lahir: '', tanggal_lahir: '', jenis_kelamin: 'Laki-laki', agama: 'Islam', alamat: '', kelas_id: '', wali_kelas_id: '', kepala_pesantren_id: '',
-        nama_ayah: '', pekerjaan_ayah: '', alamat_ayah: '',
-        nama_ibu: '', pekerjaan_ibu: '', alamat_ibu: '',
-        nama_wali: '', pekerjaan_wali: '', alamat_wali: '',
+        nama: '', 
+        nis: '', 
+        tempat_lahir: '', 
+        tanggal_lahir: '', 
+        jenis_kelamin: 'Laki-laki', 
+        agama: 'Islam', 
+        alamat: '', 
+        kelas_id: '', 
+        wali_kelas_id: '', 
+        kepala_pesantren_id: '',
+        kamar: '',
+        kota_asal: '',
+        nama_ayah: '', 
+        pekerjaan_ayah: '', 
+        alamat_ayah: '',
+        nama_ibu: '', 
+        pekerjaan_ibu: '', 
+        alamat_ibu: '',
+        nama_wali: '', 
+        pekerjaan_wali: '', 
+        alamat_wali: '',
     };
+    
     const [currentSiswa, setCurrentSiswa] = useState(initialState);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -29,10 +50,14 @@ const ManajemenSiswaPage = () => {
 
     const fetchSiswas = async () => {
         try {
+            setLoading(true);
             const res = await axios.get('http://localhost:5000/api/siswa');
             setSiswas(res.data);
         } catch (error) {
             console.error("Gagal mengambil data siswa:", error);
+            setError("Gagal mengambil data siswa. Silakan refresh halaman.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -67,29 +92,82 @@ const ManajemenSiswaPage = () => {
         setShow(false);
         setError(null);
         setCurrentSiswa(initialState);
+        setIsEditing(false);
     };
 
     const handleShow = (siswa) => {
         setError(null);
         setIsEditing(!!siswa);
-        const siswaData = siswa ? { ...siswa, tanggal_lahir: siswa.tanggal_lahir ? new Date(siswa.tanggal_lahir).toISOString().split('T')[0] : '' } : initialState;
-        setCurrentSiswa(siswaData);
+        
+        if (siswa) {
+            // Format tanggal untuk input date
+            const siswaData = {
+                ...siswa,
+                tanggal_lahir: siswa.tanggal_lahir ? new Date(siswa.tanggal_lahir).toISOString().split('T')[0] : '',
+                kelas_id: siswa.kelas_id || '',
+                wali_kelas_id: siswa.wali_kelas_id || '',
+                kepala_pesantren_id: siswa.kepala_pesantren_id || ''
+            };
+            setCurrentSiswa(siswaData);
+        } else {
+            setCurrentSiswa(initialState);
+        }
+        
         setShow(true);
     };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setCurrentSiswa(prev => ({ ...prev, [name]: value }));
+        setCurrentSiswa(prev => ({ 
+            ...prev, 
+            [name]: value 
+        }));
+    };
+
+    const validateForm = () => {
+        if (!currentSiswa.nama?.trim()) {
+            setError("Nama siswa harus diisi");
+            return false;
+        }
+        if (!currentSiswa.nis?.trim()) {
+            setError("NIS harus diisi");
+            return false;
+        }
+        return true;
     };
 
     const handleSave = async () => {
         setError(null);
+        
+        if (!validateForm()) {
+            return;
+        }
+
         try {
+            setLoading(true);
+            
+            // Bersihkan data yang kosong dan set null untuk foreign key yang kosong
             const allData = {
                 ...currentSiswa,
                 wali_kelas_id: currentSiswa.wali_kelas_id || null,
                 kepala_pesantren_id: currentSiswa.kepala_pesantren_id || null,
-                kelas_id: currentSiswa.kelas_id || null, 
+                kelas_id: currentSiswa.kelas_id || null,
+                // Trim string values
+                nama: currentSiswa.nama?.trim(),
+                nis: currentSiswa.nis?.trim(),
+                tempat_lahir: currentSiswa.tempat_lahir?.trim(),
+                alamat: currentSiswa.alamat?.trim(),
+                kamar: currentSiswa.kamar?.trim(),
+                kota_asal: currentSiswa.kota_asal?.trim(),
+                nama_ayah: currentSiswa.nama_ayah?.trim(),
+                pekerjaan_ayah: currentSiswa.pekerjaan_ayah?.trim(),
+                alamat_ayah: currentSiswa.alamat_ayah?.trim(),
+                nama_ibu: currentSiswa.nama_ibu?.trim(),
+                pekerjaan_ibu: currentSiswa.pekerjaan_ibu?.trim(),
+                alamat_ibu: currentSiswa.alamat_ibu?.trim(),
+                nama_wali: currentSiswa.nama_wali?.trim(),
+                pekerjaan_wali: currentSiswa.pekerjaan_wali?.trim(),
+                alamat_wali: currentSiswa.alamat_wali?.trim()
             };
 
             if (isEditing) {
@@ -97,32 +175,92 @@ const ManajemenSiswaPage = () => {
             } else {
                 await axios.post('http://localhost:5000/api/siswa', allData);
             }
-            fetchSiswas();
+            
+            await fetchSiswas(); // Refresh data
             handleClose();
+            
         } catch (error) {
             console.error("Gagal menyimpan data siswa:", error);
-            setError("Gagal menyimpan data. Pastikan semua field terisi dengan benar dan coba lagi.");
+            
+            if (error.response?.data?.message) {
+                setError(error.response.data.message);
+            } else if (error.response?.status === 400) {
+                setError("Data tidak valid. Periksa kembali form Anda.");
+            } else if (error.response?.status === 409) {
+                setError("NIS sudah digunakan oleh siswa lain.");
+            } else {
+                setError("Gagal menyimpan data. Pastikan semua field terisi dengan benar dan coba lagi.");
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm('Apakah Anda yakin ingin menghapus data ini?')) {
+        if (window.confirm('Apakah Anda yakin ingin menghapus data siswa ini? Data yang terkait (nilai, sikap, kehadiran) juga akan terhapus.')) {
             try {
+                setLoading(true);
                 await axios.delete(`http://localhost:5000/api/siswa/${id}`);
-                fetchSiswas();
+                await fetchSiswas(); // Refresh data
             } catch (error) {
                 console.error("Gagal menghapus data siswa:", error);
+                
+                if (error.response?.status === 404) {
+                    setError("Data siswa tidak ditemukan.");
+                } else {
+                    setError("Gagal menghapus data siswa. Silakan coba lagi.");
+                }
+            } finally {
+                setLoading(false);
             }
         }
     };
 
+    // Ganti fungsi handleDownloadIdentitas yang kosong dengan ini:
+    // Ganti fungsi handleDownloadIdentitas yang kosong dengan ini:
     const handleDownloadIdentitas = async (siswa) => {
-        // Fungsi ini tidak diubah
+        try {
+            // Untuk download identitas, kita bisa menggunakan semester dan tahun ajaran default
+            // Atau bisa diminta input dari user melalui modal
+            const semester = '1'; // atau bisa dinamis
+            const tahunAjaran = '2024-2025'; // atau bisa dinamis
+            
+            console.log(`Downloading identitas untuk siswa: ${siswa.nama}`);
+            
+            const response = await axios({
+                method: 'GET',
+                url: `http://localhost:5000/api/templates/generate-identitas/${siswa.id}`,
+                responseType: 'blob', // Important untuk download file
+            });
+            
+            // Buat blob dan download file
+            const blob = new Blob([response.data], {
+                type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            });
+            
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Raport_${siswa.nama.replace(/\s+/g, '_')}_Identitas.docx`;
+            document.body.appendChild(link);
+            link.click();
+            
+            // Cleanup
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(link);
+            
+            console.log('Download identitas berhasil!');
+        } catch (error) {
+            console.error('Error saat download identitas:', error);
+            alert('Gagal mengunduh file identitas. Pastikan template sudah diupload dan data siswa lengkap.');
+        }
     };
 
+    // Filter siswa berdasarkan search term
     const filteredSiswas = siswas.filter(s =>
         (s.nama && s.nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (s.nis && s.nis.toLowerCase().includes(searchTerm.toLowerCase()))
+        (s.nis && s.nis.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.kelas?.nama_kelas && s.kelas.nama_kelas.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return (
@@ -152,7 +290,7 @@ const ManajemenSiswaPage = () => {
                                 <td>{siswa.nis}</td>
                                 <td>{siswa.nama}</td>
                                 <td>{siswa.kelas?.nama_kelas || 'N/A'}</td>
-                                <td>{siswa.walikelas?.nama || 'N/A'}</td>
+                                <td>{siswa.kelas?.walikelas?.nama || 'N/A'}</td>
                                 <td>
                                 <Button variant="success" size="sm" className="me-1" onClick={() => handleDownloadIdentitas(siswa)}>
                                     <i className="bi bi-printer"></i> Cetak Identitas

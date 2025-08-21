@@ -298,3 +298,88 @@ exports.generateRaport = async (req, res) => {
         res.status(500).json({ message: 'Terjadi kesalahan internal saat membuat raport.', error: error.message });
     }
 };
+
+// Tambahkan fungsi ini di templateController.js:
+
+exports.generateIdentitas = async (req, res) => {
+    const { siswaId } = req.params;
+    try {
+        // Ambil data siswa dengan semua relasinya
+        const siswa = await db.Siswa.findOne({
+            where: { id: siswaId },
+            include: [
+                { 
+                    model: db.Kelas, 
+                    as: 'kelas',
+                    include: [{ 
+                        model: db.WaliKelas, 
+                        as: 'walikelas' 
+                    }] 
+                }
+            ]
+        });
+
+        if (!siswa) {
+            return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
+        }
+
+        // Ambil data kepala pesantren
+        const kepalaPesantren = await db.KepalaPesantren.findOne();
+
+        // Siapkan data template untuk identitas saja
+        const templateData = {
+            // Data identitas siswa
+            nama: siswa.nama || '-',
+            no_induk: siswa.nis || '-',
+            ttl: `${siswa.tempat_lahir || ''}, ${formatTanggal(siswa.tanggal_lahir)}`,
+            jk: siswa.jenis_kelamin || '-',
+            agama: siswa.agama || '-',
+            alamat: siswa.alamat || '-',
+            nama_ayah: siswa.nama_ayah || '-',
+            kerja_ayah: siswa.pekerjaan_ayah || '-',
+            alamat_ayah: siswa.alamat_ayah || '-',
+            nama_ibu: siswa.nama_ibu || '-',
+            kerja_ibu: siswa.pekerjaan_ibu || '-',
+            alamat_ibu: siswa.alamat_ibu || '-',
+            nama_wali: siswa.nama_wali || '-',
+            kerja_wali: siswa.pekerjaan_wali || '-',
+            alamat_wali: siswa.alamat_wali || '-',
+            kelas: siswa.kelas?.nama_kelas || '-',
+            wali_kelas: siswa.kelas?.walikelas?.nama || '-',
+            kepsek: kepalaPesantren?.nama || '-',
+            tgl_raport: formatTanggal(new Date()),
+            kamar: siswa.kamar || '-',
+            kota_asal: siswa.kota_asal || '-'
+        };
+
+        // Generate hanya template identitas
+        const identitasTemplatePath = path.join(__dirname, '../uploads/templates/identitas.docx');
+        
+        if (!fs.existsSync(identitasTemplatePath)) {
+            return res.status(404).json({ message: 'Template identitas.docx tidak ditemukan.' });
+        }
+
+        const content = fs.readFileSync(identitasTemplatePath, 'binary');
+        const zip = new PizZip(content);
+        const doc = new Docxtemplater(zip, { 
+            paragraphLoop: true, 
+            linebreaks: true, 
+            nullGetter: () => "" 
+        });
+        
+        doc.render(templateData);
+        const generatedBuffer = doc.getZip().generate({ type: 'nodebuffer' });
+
+        const namaFile = `Identitas_${siswa.nama.replace(/\s+/g, '_')}.docx`;
+        res.setHeader('Content-Disposition', `attachment; filename=${namaFile}`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.send(generatedBuffer);
+
+    } catch (error) {
+        console.error("Gagal membuat identitas:", error);
+        res.status(500).json({ 
+            message: 'Terjadi kesalahan saat membuat identitas.', 
+            error: error.message 
+        });
+    }
+};

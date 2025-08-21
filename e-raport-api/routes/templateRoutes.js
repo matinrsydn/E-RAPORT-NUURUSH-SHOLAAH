@@ -14,4 +14,6 @@ router.delete('/:fileName', templateController.deleteTemplate);
 // Route utama untuk men-generate dan mengunduh file raport DOCX yang sudah digabung
 router.get('/generate/:siswaId/:semester/:tahun_ajaran', templateController.generateRaport);
 
+router.get('/generate-identitas/:siswaId', templateController.generateIdentitas);
+
 module.exports = router;

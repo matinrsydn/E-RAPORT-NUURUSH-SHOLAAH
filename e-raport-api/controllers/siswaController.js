@@ -1,17 +1,17 @@
 // e-raport-api/controllers/siswaController.js
 const db = require('../models');
 
-// Mengambil SEMUA siswa dengan data yang BENAR
+// Mengambil SEMUA siswa dengan data kelas dan wali kelas yang benar
 exports.getAllSiswa = async (req, res) => {
     try {
         const siswas = await db.Siswa.findAll({
             include: [
                 {
                     model: db.Kelas,
-                    as: 'kelas', // Ambil data Kelas
+                    as: 'kelas',
                     include: [{
                         model: db.WaliKelas,
-                        as: 'walikelas' // Ambil data WaliKelas DARI DALAM Kelas
+                        as: 'walikelas'
                     }]
                 }
             ],
@@ -24,7 +24,7 @@ exports.getAllSiswa = async (req, res) => {
     }
 };
 
-// Mengambil SATU siswa dengan data yang BENAR (untuk cetak/download)
+// Mengambil SATU siswa dengan data yang sama (untuk cetak)
 exports.getSiswaById = async (req, res) => {
     try {
         const siswa = await db.Siswa.findByPk(req.params.id, {
@@ -32,7 +32,6 @@ exports.getSiswaById = async (req, res) => {
                 {
                     model: db.Kelas,
                     as: 'kelas',
-                    // WAJIB: Memasukkan data WaliKelas ke dalam Kelas
                     include: [{
                         model: db.WaliKelas,
                         as: 'walikelas'
@@ -47,7 +46,6 @@ exports.getSiswaById = async (req, res) => {
         res.status(500).json({ message: "Gagal mengambil data siswa", error: error.message });
     }
 };
-
 
 // --- FUNGSI CREATE, UPDATE, DELETE (TIDAK PERLU DIUBAH) ---
 
