@@ -10,32 +10,45 @@ exports.getRaportData = async (req, res) => {
     console.log(`REQUEST RAPORT DATA: siswaId=${siswaId}, tahunAjaran=${tahunAjaranFormatted}, semester=${semester}`);
 
     try {
-        // Mengambil semua data secara paralel untuk efisiensi
-        const [nilaiUjian, nilaiHafalan, kehadiran, sikap] = await Promise.all([
-            // 1. Ambil Nilai Ujian beserta nama mata pelajarannya
+        const [nilaiUjian, nilaiHafalan, semuaKehadiran, sikap] = await Promise.all([
+            // 1. Ambil Nilai Ujian (tidak berubah)
             db.NilaiUjian.findAll({
                 where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester },
                 include: [{ model: db.MataPelajaran, as: 'mapel', attributes: ['nama_mapel'] }]
             }),
-            // 2. Ambil Nilai Hafalan
+            // 2. Ambil Nilai Hafalan (tidak berubah)
             db.NilaiHafalan.findAll({
                 where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester }
             }),
-            // 3. Ambil Kehadiran
-            db.Kehadiran.findOne({
+            
+            // ✔️ PERBAIKAN 1: Gunakan findAll untuk mengambil SEMUA data kehadiran
+            db.Kehadiran.findAll({
                 where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester }
             }),
-            // 4. Ambil Sikap beserta indikatornya
+
+            // 4. Ambil Sikap (tidak berubah)
             db.Sikap.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester },
-                include: [{ model: db.IndikatorSikap, as: 'indikator' }]
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester }
             })
         ]);
+        
+        // ✔️ PERBAIKAN 2: Jumlahkan (agregasi) hasil dari semua data kehadiran
+        const rekapKehadiran = semuaKehadiran.reduce((acc, curr) => {
+            acc.sakit += curr.sakit || 0;
+            acc.izin += curr.izin || 0;
+            acc.alpha += curr.absen || 0; // 'absen' adalah nama kolom di database Anda
+            // Jika tidak ada ID, gunakan ID dari item pertama sebagai referensi
+            if (!acc.id && curr.id) {
+                acc.id = curr.id;
+            }
+            return acc;
+        }, { id: null, sakit: 0, izin: 0, alpha: 0 });
+
 
         console.log("HASIL QUERY RAPORT:", {
             nilaiUjianCount: nilaiUjian.length,
             nilaiHafalanCount: nilaiHafalan.length,
-            kehadiranExists: !!kehadiran,
+            kehadiranExists: semuaKehadiran.length > 0, // Cek jika ada data
             sikapCount: sikap.length
         });
 
@@ -58,12 +71,8 @@ exports.getRaportData = async (req, res) => {
         const responseData = {
             nilaiUjian: formattedNilaiUjian,
             nilaiHafalan: formattedNilaiHafalan,
-            kehadiran: kehadiran ? {
-                id: kehadiran.id,
-                sakit: kehadiran.sakit || 0,
-                izin: kehadiran.izin || 0,
-                alpha: kehadiran.alpha || kehadiran.absen || 0
-            } : null,
+            // ✔️ PERBAIKAN 3: Gunakan data yang sudah dijumlahkan
+            kehadiran: semuaKehadiran.length > 0 ? rekapKehadiran : null,
             sikap: sikap.map(s => ({
                 id: s.id,
                 jenis_sikap: s.jenis_sikap,
