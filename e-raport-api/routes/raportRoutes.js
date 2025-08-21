@@ -1,6 +1,11 @@
+// e-raport-api/routes/raportRoutes.js
+
 const express = require('express');
 const router = express.Router();
 const raportController = require('../controllers/raportController');
+
+// Pastikan semua fungsi controller ada dan terdefinisi
+console.log("RAPORT CONTROLLER METHODS:", Object.keys(raportController));
 
 // Route untuk mengambil data raport lengkap
 // GET /api/raport/:siswaId/:tahunAjaran/:semester

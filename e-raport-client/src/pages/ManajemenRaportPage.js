@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Container, Row, Col, Card, Form, Button, Spinner, Alert, Table } from 'react-bootstrap';
-import { Edit, Save, X } from 'lucide-react';
+import { Edit, Save, X, Eye, FileText } from 'lucide-react';
 
 // Komponen untuk mengedit nilai dalam tabel
 const EditableRow = ({ item, onSave, onCancel, fields }) => {
@@ -24,7 +24,6 @@ const EditableRow = ({ item, onSave, onCancel, fields }) => {
                             onChange={handleChange}
                         />
                     ) : (
-                        // Data 'nama_mapel' sudah disiapkan oleh backend, jadi bisa diakses langsung.
                         <span>{item[field.key]}</span>
                     )}
                 </td>
@@ -41,19 +40,22 @@ const EditableRow = ({ item, onSave, onCancel, fields }) => {
     );
 };
 
-
 const ManajemenRaportPage = () => {
     // State untuk filter
     const [tahunAjaranList, setTahunAjaranList] = useState([]);
     const [kelasList, setKelasList] = useState([]);
-    const [siswaList, setSiswaList] = useState([]);
     const [selectedTahunAjaran, setSelectedTahunAjaran] = useState('');
     const [selectedKelas, setSelectedKelas] = useState('');
-    const [selectedSiswa, setSelectedSiswa] = useState('');
 
-    // State untuk data dan UI
+    // State untuk data kelas dan siswa
+    const [kelasData, setKelasData] = useState(null);
+    const [siswaList, setSiswaList] = useState([]);
+    const [selectedSiswaForDetail, setSelectedSiswaForDetail] = useState(null);
     const [raportData, setRaportData] = useState(null);
+
+    // State untuk UI
     const [loading, setLoading] = useState(false);
+    const [loadingRaport, setLoadingRaport] = useState(false);
     const [error, setError] = useState('');
     
     // State untuk mode edit
@@ -64,64 +66,82 @@ const ManajemenRaportPage = () => {
     useEffect(() => {
         const fetchFilters = async () => {
             try {
-                // Mengambil data tahun ajaran dan kelas secara bersamaan
                 const [tahunRes, kelasRes] = await Promise.all([
                     axios.get('http://localhost:5000/api/tahun-ajaran'),
                     axios.get('http://localhost:5000/api/kelas')
                 ]);
+                
+                console.log("DATA TAHUN AJARAN DARI API:", tahunRes.data);
+                console.log("DATA KELAS DARI API:", kelasRes.data);
+                
                 setTahunAjaranList(tahunRes.data);
                 setKelasList(kelasRes.data);
             } catch (err) {
-                setError('Gagal memuat data filter (Tahun Ajaran/Kelas). Pastikan server API berjalan.');
+                setError('Gagal memuat data filter. Pastikan server API berjalan.');
                 console.error("Gagal mengambil data filter:", err);
             }
         };
         fetchFilters();
     }, []);
 
-    // Ambil daftar siswa ketika kelas dipilih
-    useEffect(() => {
-        if (selectedKelas) {
-            axios.get(`http://localhost:5000/api/siswa?kelasId=${selectedKelas}`)
-                .then(res => setSiswaList(res.data))
-                .catch(err => {
-                    console.error("Gagal mengambil siswa:", err);
-                    setSiswaList([]); // Kosongkan daftar siswa jika gagal
-                });
-        } else {
-            setSiswaList([]);
-        }
-    }, [selectedKelas]);
-
-    // --- FUNGSI UTAMA ---
-    const handleFetchRaport = async () => {
-        if (!selectedSiswa || !selectedTahunAjaran) {
-            setError('Silakan pilih Tahun Ajaran, Kelas, dan Siswa terlebih dahulu.');
+    // Ambil data siswa per kelas ketika kelas dipilih
+    const handleShowKelasData = async () => {
+        if (!selectedTahunAjaran || !selectedKelas) {
+            setError('Silakan pilih Tahun Ajaran dan Kelas terlebih dahulu.');
             return;
         }
+
         setLoading(true);
         setError('');
-        setRaportData(null);
+        setSiswaList([]);
+        setKelasData(null);
+        
         try {
-            const parts = selectedTahunAjaran.split('-');
-            if (parts.length !== 2) {
-                throw new Error("Format tahun ajaran dari dropdown tidak valid.");
-            }
+            // Ambil data kelas beserta siswa-siswanya
+            const kelasResponse = await axios.get(`http://localhost:5000/api/kelas/${selectedKelas}`);
+            const siswaResponse = await axios.get(`http://localhost:5000/api/siswa?kelasId=${selectedKelas}`);
             
-            const [tahunAjaranLengkap, semester] = parts;
-            const [tahunAwal] = tahunAjaranLengkap.split('/');
-
-            if (!tahunAwal || !semester) {
-                throw new Error("Gagal mem-parsing tahun awal atau semester.");
-            }
-
-            const response = await axios.get(`http://localhost:5000/api/raport/${selectedSiswa}/${tahunAwal}/${semester}`);
-            setRaportData(response.data);
+            setKelasData(kelasResponse.data);
+            setSiswaList(siswaResponse.data);
+            
         } catch (err) {
-            setError('Gagal mengambil data raport. Pastikan siswa memiliki data di periode ini.');
-            console.error(err);
+            setError('Gagal mengambil data kelas dan siswa.');
+            console.error("Error:", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Fungsi untuk melihat detail raport siswa
+    const handleViewRaportDetail = async (siswa) => {
+        if (!selectedTahunAjaran) {
+            setError('Data tahun ajaran tidak valid.');
+            return;
+        }
+
+        setLoadingRaport(true);
+        setError('');
+        setRaportData(null);
+        setSelectedSiswaForDetail(siswa);
+
+        try {
+            // Parse tahun ajaran dari dropdown
+            const selectedTahunAjaranData = tahunAjaranList.find(ta => ta.id === selectedTahunAjaran);
+            if (!selectedTahunAjaranData) {
+                throw new Error("Data tahun ajaran tidak ditemukan.");
+            }
+
+            const tahunAwal = selectedTahunAjaranData.nama_ajaran.split('/')[0];
+            const semester = selectedTahunAjaranData.semester;
+
+            const response = await axios.get(`http://localhost:5000/api/raport/${siswa.id}/${tahunAwal}/${semester}`);
+            setRaportData(response.data);
+            
+        } catch (err) {
+            setError(`Gagal mengambil data raport untuk ${siswa.nama}: ${err.message}`);
+            console.error("Error detail:", err);
+        } finally {
+            setLoadingRaport(false);
         }
     };
     
@@ -132,7 +152,11 @@ const ManajemenRaportPage = () => {
             alert('Data berhasil diperbarui!');
             setEditingId(null);
             setEditingType('');
-            handleFetchRaport(); // Refresh data
+            
+            // Refresh data raport
+            if (selectedSiswaForDetail) {
+                await handleViewRaportDetail(selectedSiswaForDetail);
+            }
         } catch (err) {
             alert('Gagal memperbarui data.');
             console.error(err);
@@ -141,14 +165,18 @@ const ManajemenRaportPage = () => {
     
     const handleSaveKehadiran = async () => {
         if (!raportData || !raportData.kehadiran || !raportData.kehadiran.id) {
-            alert('Data kehadiran tidak ditemukan, tidak dapat menyimpan.');
+            alert('Data kehadiran tidak ditemukan.');
             return;
         }
         try {
             const { id, sakit, izin, alpha } = raportData.kehadiran;
             await axios.put(`http://localhost:5000/api/raport/kehadiran/${id}`, { sakit, izin, alpha });
             alert('Data kehadiran berhasil diperbarui!');
-            handleFetchRaport();
+            
+            // Refresh data
+            if (selectedSiswaForDetail) {
+                await handleViewRaportDetail(selectedSiswaForDetail);
+            }
         } catch (err) {
             alert('Gagal memperbarui data kehadiran.');
             console.error(err);
@@ -161,7 +189,7 @@ const ManajemenRaportPage = () => {
             ...prev,
             kehadiran: {
                 ...prev.kehadiran,
-                [name]: parseInt(value) || 0 // Pastikan nilai adalah angka
+                [name]: parseInt(value) || 0
             }
         }));
     };
@@ -173,187 +201,293 @@ const ManajemenRaportPage = () => {
             {/* --- Area Filter --- */}
             <Card className="mb-4">
                 <Card.Header>
-                    <Card.Title>Pilih Siswa</Card.Title>
+                    <Card.Title>Pilih Kelas</Card.Title>
                 </Card.Header>
                 <Card.Body>
                     <Row className="align-items-end">
-                        <Col md={4}>
+                        <Col md={5}>
                             <Form.Group>
                                 <Form.Label>Tahun Ajaran & Semester</Form.Label>
                                 <Form.Select value={selectedTahunAjaran} onChange={e => setSelectedTahunAjaran(e.target.value)}>
                                     <option value="">Pilih Tahun Ajaran</option>
-                                    {/* ======================================================================== */}
-                                    {/* PERBAIKAN: Menggunakan `ta.tahunAjaran` (camelCase) */}
-                                    {/* ======================================================================== */}
                                     {tahunAjaranList.map(ta => (
-                                        <option key={ta.id} value={`${ta.tahunAjaran}-${ta.semester}`}>
-                                            {ta.tahunAjaran} - Semester {ta.semester}
+                                        <option key={ta.id} value={ta.id}>
+                                            {ta.display || `${ta.nama_ajaran} - Semester ${ta.semester}`}
                                         </option>
                                     ))}
                                 </Form.Select>
                             </Form.Group>
                         </Col>
-                        <Col md={3}>
+                        <Col md={4}>
                             <Form.Group>
                                 <Form.Label>Kelas</Form.Label>
                                 <Form.Select value={selectedKelas} onChange={e => setSelectedKelas(e.target.value)}>
                                     <option value="">Pilih Kelas</option>
-                                    {kelasList.map(k => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
+                                    {kelasList.map(k => (
+                                        <option key={k.id} value={k.id}>{k.nama_kelas}</option>
+                                    ))}
                                 </Form.Select>
                             </Form.Group>
                         </Col>
                         <Col md={3}>
-                            <Form.Group>
-                                <Form.Label>Siswa</Form.Label>
-                                <Form.Select value={selectedSiswa} onChange={e => setSelectedSiswa(e.target.value)} disabled={!selectedKelas}>
-                                    <option value="">Pilih Siswa</option>
-                                    {siswaList.map(s => <option key={s.id} value={s.id}>{s.nama_lengkap}</option>)}
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={2}>
-                            <Button onClick={handleFetchRaport} className="w-100">
-                                Tampilkan Data
+                            <Button onClick={handleShowKelasData} className="w-100" disabled={!selectedTahunAjaran || !selectedKelas}>
+                                Tampilkan Data Kelas
                             </Button>
                         </Col>
                     </Row>
                 </Card.Body>
             </Card>
 
-            {loading && <div className="text-center"><Spinner animation="border" /></div>}
+            {loading && <div className="text-center mb-4"><Spinner animation="border" /> Loading...</div>}
             {error && <Alert variant="danger">{error}</Alert>}
 
-            {/* --- Area Tampilan Data Raport --- */}
-            {raportData && (
-                <Row>
-                    {/* --- Kolom Kiri: Nilai Ujian & Hafalan --- */}
-                    <Col lg={8}>
-                        {/* Nilai Ujian */}
-                        <Card className="mb-4">
-                            <Card.Header><Card.Title>Nilai Ujian</Card.Title></Card.Header>
-                            <Card.Body>
-                                <Table striped bordered hover responsive>
-                                    <thead>
-                                        <tr>
-                                            <th>Mata Pelajaran</th>
-                                            <th>Pengetahuan</th>
-                                            <th>Keterampilan</th>
-                                            <th>Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {raportData.nilaiUjian.map(item =>
-                                            editingId === item.id && editingType === 'ujian' ? (
-                                                <EditableRow
-                                                    key={item.id}
-                                                    item={item}
-                                                    onSave={(data) => handleSave('nilai-ujian', data)}
-                                                    onCancel={() => setEditingId(null)}
-                                                    fields={[
-                                                        { key: 'nama_mapel', editable: false },
-                                                        { key: 'pengetahuan_angka', editable: true, type: 'number' },
-                                                        { key: 'keterampilan_angka', editable: true, type: 'number' },
-                                                    ]}
-                                                />
-                                            ) : (
-                                                <tr key={item.id}>
-                                                    <td>{item.nama_mapel}</td>
-                                                    <td>{item.pengetahuan_angka}</td>
-                                                    <td>{item.keterampilan_angka}</td>
-                                                    <td>
-                                                        <Button variant="outline-primary" size="sm" onClick={() => { setEditingId(item.id); setEditingType('ujian'); }}>
-                                                            <Edit size={16} />
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        )}
-                                    </tbody>
-                                </Table>
-                            </Card.Body>
-                        </Card>
+            {/* --- Tabel Daftar Siswa Per Kelas --- */}
+            {kelasData && siswaList.length > 0 && (
+                <Card className="mb-4">
+                    <Card.Header>
+                        <Card.Title>Daftar Siswa - {kelasData.nama_kelas}</Card.Title>
+                        <small className="text-muted">
+                            Wali Kelas: {kelasData.walikelas?.nama || 'Belum ditentukan'} | 
+                            Total Siswa: {siswaList.length}
+                        </small>
+                    </Card.Header>
+                    <Card.Body>
+                        <Table striped bordered hover responsive>
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>NIS</th>
+                                    <th>Nama Lengkap</th>
+                                    <th>Jenis Kelamin</th>
+                                    <th>Kamar</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {siswaList.map((siswa, index) => (
+                                    <tr key={siswa.id}>
+                                        <td>{index + 1}</td>
+                                        <td>{siswa.nis}</td>
+                                        <td>{siswa.nama}</td>
+                                        <td>{siswa.jenis_kelamin}</td>
+                                        <td>{siswa.kamar || '-'}</td>
+                                        <td>
+                                            <Button 
+                                                variant="primary" 
+                                                size="sm" 
+                                                onClick={() => handleViewRaportDetail(siswa)}
+                                                disabled={loadingRaport}
+                                            >
+                                                <Eye size={16} className="me-1" />
+                                                {loadingRaport && selectedSiswaForDetail?.id === siswa.id ? 'Loading...' : 'Lihat Raport'}
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </Table>
+                    </Card.Body>
+                </Card>
+            )}
 
-                        {/* Nilai Hafalan */}
-                        <Card>
-                            <Card.Header><Card.Title>Nilai Hafalan</Card.Title></Card.Header>
-                            <Card.Body>
-                                <Table striped bordered hover responsive>
-                                     <thead>
-                                        <tr>
-                                            <th>Kategori Hafalan</th>
-                                            <th>Nilai</th>
-                                            <th>Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {raportData.nilaiHafalan.map(item => 
-                                            editingId === item.id && editingType === 'hafalan' ? (
-                                                <EditableRow
-                                                    key={item.id}
-                                                    item={item}
-                                                    onSave={(data) => handleSave('nilai-hafalan', data)}
-                                                    onCancel={() => setEditingId(null)}
-                                                    fields={[
-                                                        { key: 'kategori', editable: false },
-                                                        { key: 'nilai', editable: true, type: 'number' },
-                                                    ]}
-                                                />
-                                            ) : (
-                                                <tr key={item.id}>
-                                                    <td>{item.kategori}</td>
-                                                    <td>{item.nilai}</td>
-                                                    <td>
-                                                        <Button variant="outline-primary" size="sm" onClick={() => { setEditingId(item.id); setEditingType('hafalan'); }}>
-                                                            <Edit size={16} />
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        )}
-                                    </tbody>
-                                </Table>
-                            </Card.Body>
-                        </Card>
-                    </Col>
+            {/* --- Detail Raport Siswa Terpilih --- */}
+            {selectedSiswaForDetail && raportData && (
+                <>
+                    <Alert variant="info" className="mb-4">
+                        <strong>Detail Raport:</strong> {selectedSiswaForDetail.nama} ({selectedSiswaForDetail.nis})
+                        <Button 
+                            variant="outline-secondary" 
+                            size="sm" 
+                            className="float-end"
+                            onClick={() => {
+                                setSelectedSiswaForDetail(null);
+                                setRaportData(null);
+                            }}
+                        >
+                            <X size={16} /> Tutup Detail
+                        </Button>
+                    </Alert>
 
-                    {/* --- Kolom Kanan: Kehadiran & Sikap --- */}
-                    <Col lg={4}>
-                        <Card className="mb-4">
-                            <Card.Header><Card.Title>Kehadiran</Card.Title></Card.Header>
-                            <Card.Body>
-                                <Form.Group as={Row} className="mb-3">
-                                    <Form.Label column sm="4">Sakit</Form.Label>
-                                    <Col sm="8">
-                                        <Form.Control type="number" name="sakit" value={raportData.kehadiran?.sakit || 0} onChange={handleKehadiranChange} />
-                                    </Col>
-                                </Form.Group>
-                                <Form.Group as={Row} className="mb-3">
-                                    <Form.Label column sm="4">Izin</Form.Label>
-                                    <Col sm="8">
-                                        <Form.Control type="number" name="izin" value={raportData.kehadiran?.izin || 0} onChange={handleKehadiranChange} />
-                                    </Col>
-                                </Form.Group>
-                                <Form.Group as={Row} className="mb-3">
-                                    <Form.Label column sm="4">Alpha</Form.Label>
-                                    <Col sm="8">
-                                        <Form.Control type="number" name="alpha" value={raportData.kehadiran?.alpha || 0} onChange={handleKehadiranChange} />
-                                    </Col>
-                                </Form.Group>
-                                <Button className="w-100" onClick={handleSaveKehadiran} disabled={!raportData.kehadiran}>
-                                    Simpan Perubahan Kehadiran
-                                </Button>
-                            </Card.Body>
-                        </Card>
-                        
-                        <Card>
-                            <Card.Header><Card.Title>Sikap & Catatan</Card.Title></Card.Header>
-                            <Card.Body>
-                                {/* Logika untuk CRUD Sikap bisa ditambahkan di sini */}
-                                <p>Fitur untuk mengedit sikap dan catatan wali kelas akan ditambahkan di sini.</p>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                </Row>
+                    <Row>
+                        {/* --- Kolom Kiri: Nilai Ujian & Hafalan --- */}
+                        <Col lg={8}>
+                            {/* Nilai Ujian */}
+                            {raportData.nilaiUjian && raportData.nilaiUjian.length > 0 && (
+                                <Card className="mb-4">
+                                    <Card.Header><Card.Title>Nilai Ujian</Card.Title></Card.Header>
+                                    <Card.Body>
+                                        <Table striped bordered hover responsive>
+                                            <thead>
+                                                <tr>
+                                                    <th>Mata Pelajaran</th>
+                                                    <th>Pengetahuan</th>
+                                                    <th>Keterampilan</th>
+                                                    <th>Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {raportData.nilaiUjian.map(item =>
+                                                    editingId === item.id && editingType === 'ujian' ? (
+                                                        <EditableRow
+                                                            key={item.id}
+                                                            item={item}
+                                                            onSave={(data) => handleSave('nilai-ujian', data)}
+                                                            onCancel={() => setEditingId(null)}
+                                                            fields={[
+                                                                { key: 'nama_mapel', editable: false },
+                                                                { key: 'pengetahuan_angka', editable: true, type: 'number' },
+                                                                { key: 'keterampilan_angka', editable: true, type: 'number' },
+                                                            ]}
+                                                        />
+                                                    ) : (
+                                                        <tr key={item.id}>
+                                                            <td>{item.nama_mapel}</td>
+                                                            <td>{item.pengetahuan_angka || '-'}</td>
+                                                            <td>{item.keterampilan_angka || '-'}</td>
+                                                            <td>
+                                                                <Button 
+                                                                    variant="outline-primary" 
+                                                                    size="sm" 
+                                                                    onClick={() => { setEditingId(item.id); setEditingType('ujian'); }}
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                )}
+                                            </tbody>
+                                        </Table>
+                                    </Card.Body>
+                                </Card>
+                            )}
+
+                            {/* Nilai Hafalan */}
+                            {raportData.nilaiHafalan && raportData.nilaiHafalan.length > 0 && (
+                                <Card>
+                                    <Card.Header><Card.Title>Nilai Hafalan</Card.Title></Card.Header>
+                                    <Card.Body>
+                                        <Table striped bordered hover responsive>
+                                             <thead>
+                                                <tr>
+                                                    <th>Kategori Hafalan</th>
+                                                    <th>Nilai</th>
+                                                    <th>Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {raportData.nilaiHafalan.map(item => 
+                                                    editingId === item.id && editingType === 'hafalan' ? (
+                                                        <EditableRow
+                                                            key={item.id}
+                                                            item={item}
+                                                            onSave={(data) => handleSave('nilai-hafalan', data)}
+                                                            onCancel={() => setEditingId(null)}
+                                                            fields={[
+                                                                { key: 'kategori', editable: false },
+                                                                { key: 'nilai_angka', editable: true, type: 'number' },
+                                                            ]}
+                                                        />
+                                                    ) : (
+                                                        <tr key={item.id}>
+                                                            <td>{item.kategori}</td>
+                                                            <td>{item.nilai_angka || '-'}</td>
+                                                            <td>
+                                                                <Button 
+                                                                    variant="outline-primary" 
+                                                                    size="sm" 
+                                                                    onClick={() => { setEditingId(item.id); setEditingType('hafalan'); }}
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                )}
+                                            </tbody>
+                                        </Table>
+                                    </Card.Body>
+                                </Card>
+                            )}
+                        </Col>
+
+                        {/* --- Kolom Kanan: Kehadiran & Sikap --- */}
+                        <Col lg={4}>
+                            {/* Kehadiran */}
+                            <Card className="mb-4">
+                                <Card.Header><Card.Title>Kehadiran</Card.Title></Card.Header>
+                                <Card.Body>
+                                    {raportData.kehadiran ? (
+                                        <>
+                                            <Form.Group as={Row} className="mb-3">
+                                                <Form.Label column sm="4">Sakit</Form.Label>
+                                                <Col sm="8">
+                                                    <Form.Control 
+                                                        type="number" 
+                                                        name="sakit" 
+                                                        value={raportData.kehadiran.sakit || 0} 
+                                                        onChange={handleKehadiranChange} 
+                                                    />
+                                                </Col>
+                                            </Form.Group>
+                                            <Form.Group as={Row} className="mb-3">
+                                                <Form.Label column sm="4">Izin</Form.Label>
+                                                <Col sm="8">
+                                                    <Form.Control 
+                                                        type="number" 
+                                                        name="izin" 
+                                                        value={raportData.kehadiran.izin || 0} 
+                                                        onChange={handleKehadiranChange} 
+                                                    />
+                                                </Col>
+                                            </Form.Group>
+                                            <Form.Group as={Row} className="mb-3">
+                                                <Form.Label column sm="4">Alpha</Form.Label>
+                                                <Col sm="8">
+                                                    <Form.Control 
+                                                        type="number" 
+                                                        name="alpha" 
+                                                        value={raportData.kehadiran.alpha || raportData.kehadiran.absen || 0} 
+                                                        onChange={handleKehadiranChange} 
+                                                    />
+                                                </Col>
+                                            </Form.Group>
+                                            <Button className="w-100" onClick={handleSaveKehadiran}>
+                                                Simpan Perubahan Kehadiran
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <p className="text-muted">Data kehadiran belum tersedia.</p>
+                                    )}
+                                </Card.Body>
+                            </Card>
+                            
+                            {/* Sikap */}
+                            <Card>
+                                <Card.Header><Card.Title>Sikap & Catatan</Card.Title></Card.Header>
+                                <Card.Body>
+                                    {raportData.sikap && raportData.sikap.length > 0 ? (
+                                        raportData.sikap.map((sikap, index) => (
+                                            <div key={index} className="mb-3">
+                                                <strong>{sikap.jenis_sikap}:</strong>
+                                                <p>{sikap.deskripsi || 'Tidak ada catatan'}</p>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-muted">Fitur untuk mengedit sikap dan catatan akan ditambahkan.</p>
+                                    )}
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    </Row>
+                </>
+            )}
+
+            {/* Pesan jika tidak ada data */}
+            {kelasData && siswaList.length === 0 && (
+                <Alert variant="warning">
+                    Tidak ada siswa ditemukan di kelas {kelasData.nama_kelas}.
+                </Alert>
             )}
         </Container>
     );

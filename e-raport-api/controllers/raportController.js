@@ -1,9 +1,13 @@
+// e-raport-api/controllers/raportController.js
+
 const db = require('../models');
 
 // Mengambil data raport lengkap untuk satu siswa pada periode tertentu
 exports.getRaportData = async (req, res) => {
     const { siswaId, tahunAjaran, semester } = req.params;
     const tahunAjaranFormatted = `${tahunAjaran}/${parseInt(tahunAjaran) + 1}`;
+
+    console.log(`REQUEST RAPORT DATA: siswaId=${siswaId}, tahunAjaran=${tahunAjaranFormatted}, semester=${semester}`);
 
     try {
         // Mengambil semua data secara paralel untuk efisiensi
@@ -28,24 +32,56 @@ exports.getRaportData = async (req, res) => {
             })
         ]);
 
+        console.log("HASIL QUERY RAPORT:", {
+            nilaiUjianCount: nilaiUjian.length,
+            nilaiHafalanCount: nilaiHafalan.length,
+            kehadiranExists: !!kehadiran,
+            sikapCount: sikap.length
+        });
+
         // Format data agar mudah digunakan di frontend
         const formattedNilaiUjian = nilaiUjian.map(n => ({
             id: n.id,
-            nama_mapel: n.mapel.nama_mapel,
+            nama_mapel: n.mapel?.nama_mapel || 'Mata Pelajaran Tidak Diketahui',
             pengetahuan_angka: n.pengetahuan_angka,
             keterampilan_angka: n.keterampilan_angka
         }));
 
-        res.status(200).json({
+        // Format nilai hafalan
+        const formattedNilaiHafalan = nilaiHafalan.map(n => ({
+            id: n.id,
+            kategori: n.kategori || 'Hafalan',
+            nilai: n.nilai_angka,
+            nilai_angka: n.nilai_angka // Untuk kompatibilitas
+        }));
+
+        const responseData = {
             nilaiUjian: formattedNilaiUjian,
-            nilaiHafalan,
-            kehadiran,
-            sikap
-        });
+            nilaiHafalan: formattedNilaiHafalan,
+            kehadiran: kehadiran ? {
+                id: kehadiran.id,
+                sakit: kehadiran.sakit || 0,
+                izin: kehadiran.izin || 0,
+                alpha: kehadiran.alpha || kehadiran.absen || 0
+            } : null,
+            sikap: sikap.map(s => ({
+                id: s.id,
+                jenis_sikap: s.jenis_sikap,
+                indikator: s.indikator,
+                angka: s.angka,
+                deskripsi: s.deskripsi
+            }))
+        };
+
+        res.status(200).json(responseData);
 
     } catch (error) {
         console.error("Error fetching raport data:", error);
-        res.status(500).json({ message: "Gagal mengambil data raport.", error: error.message });
+        res.status(500).json({ 
+            message: "Gagal mengambil data raport.", 
+            error: error.message,
+            details: `siswaId: ${siswaId}, tahunAjaran: ${tahunAjaranFormatted}, semester: ${semester}`
+        });
     }
 };
 
@@ -55,6 +91,9 @@ exports.updateNilaiUjian = async (req, res) => {
     try {
         const { id } = req.params;
         const { pengetahuan_angka, keterampilan_angka } = req.body;
+        
+        console.log(`UPDATE NILAI UJIAN: id=${id}`, req.body);
+        
         const nilai = await db.NilaiUjian.findByPk(id);
         if (!nilai) return res.status(404).json({ message: "Data nilai tidak ditemukan." });
 
@@ -64,6 +103,7 @@ exports.updateNilaiUjian = async (req, res) => {
         
         res.status(200).json(nilai);
     } catch (error) {
+        console.error("Error update nilai ujian:", error);
         res.status(500).json({ message: "Gagal update nilai ujian.", error: error.message });
     }
 };
@@ -71,15 +111,20 @@ exports.updateNilaiUjian = async (req, res) => {
 exports.updateNilaiHafalan = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nilai: nilaiAngka } = req.body; // 'nilai' adalah nama kolom di db
-        const nilai = await db.NilaiHafalan.findByPk(id);
-        if (!nilai) return res.status(404).json({ message: "Data nilai hafalan tidak ditemukan." });
+        const { nilai } = req.body; // Dari frontend
+        
+        console.log(`UPDATE NILAI HAFALAN: id=${id}`, req.body);
+        
+        const nilaiHafalan = await db.NilaiHafalan.findByPk(id);
+        if (!nilaiHafalan) return res.status(404).json({ message: "Data nilai hafalan tidak ditemukan." });
 
-        nilai.nilai = nilaiAngka;
-        await nilai.save();
+        // Gunakan 'nilai_angka' sesuai dengan model
+        nilaiHafalan.nilai_angka = nilai;
+        await nilaiHafalan.save();
 
-        res.status(200).json(nilai);
+        res.status(200).json(nilaiHafalan);
     } catch (error) {
+        console.error("Error update nilai hafalan:", error);
         res.status(500).json({ message: "Gagal update nilai hafalan.", error: error.message });
     }
 };
@@ -88,16 +133,20 @@ exports.updateKehadiran = async (req, res) => {
     try {
         const { id } = req.params;
         const { sakit, izin, alpha } = req.body;
+        
+        console.log(`UPDATE KEHADIRAN: id=${id}`, req.body);
+        
         const kehadiran = await db.Kehadiran.findByPk(id);
         if (!kehadiran) return res.status(404).json({ message: "Data kehadiran tidak ditemukan." });
 
-        kehadiran.sakit = sakit;
-        kehadiran.izin = izin;
-        kehadiran.alpha = alpha;
+        kehadiran.sakit = sakit || 0;
+        kehadiran.izin = izin || 0;
+        kehadiran.absen = alpha || 0; // Gunakan field 'absen' sesuai model, bukan 'alpha'
         await kehadiran.save();
 
         res.status(200).json(kehadiran);
     } catch (error) {
+        console.error("Error update kehadiran:", error);
         res.status(500).json({ message: "Gagal update kehadiran.", error: error.message });
     }
 };

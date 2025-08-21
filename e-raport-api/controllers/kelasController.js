@@ -21,7 +21,33 @@ exports.getAllKelas = async (req, res) => {
   }
 };
 
-// ... (fungsi createKelas)
+// TAMBAHKAN FUNGSI INI - Mendapatkan data kelas berdasarkan ID
+exports.getKelasById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`REQUEST GET KELAS BY ID: ${id}`);
+    
+    const kelas = await db.Kelas.findByPk(id, {
+      include: [
+        { model: db.WaliKelas, as: 'walikelas', attributes: ['nama'], required: false },
+        { model: db.Siswa, as: 'siswa', attributes: ['id', 'nama', 'nis'], required: false }
+      ]
+    });
+
+    if (!kelas) {
+      console.log(`KELAS ID ${id} TIDAK DITEMUKAN`);
+      return res.status(404).json({ message: 'Kelas tidak ditemukan' });
+    }
+
+    console.log("DATA KELAS DETAIL:", JSON.stringify(kelas, null, 2));
+    res.json(kelas);
+  } catch (error) {
+    console.error('SERVER ERROR - GET /api/kelas/:id:', error);
+    res.status(500).json({ message: 'Gagal mengambil detail kelas.', error: error.message });
+  }
+};
+
+// Fungsi createKelas
 exports.createKelas = async (req, res) => {
     try {
         const newKelas = await db.Kelas.create(req.body);
@@ -30,7 +56,6 @@ exports.createKelas = async (req, res) => {
         res.status(500).json({ message: 'Error saat membuat kelas', error: error.message });
     }
 };
-
 
 // Memperbarui data kelas
 exports.updateKelas = async (req, res) => {
@@ -61,7 +86,7 @@ exports.updateKelas = async (req, res) => {
   }
 };
 
-// ... (fungsi deleteKelas)
+// Fungsi deleteKelas
 exports.deleteKelas = async (req, res) => {
     try {
         const { id } = req.params;
