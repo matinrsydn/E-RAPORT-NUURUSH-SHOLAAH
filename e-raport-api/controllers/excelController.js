@@ -767,7 +767,7 @@ exports.downloadTemplateSikap = async (req, res) => {
 exports.uploadSikap = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'Tidak ada file diupload.' });
-    const filePath = req.file.path;
+    const filePath = req.file.path;5
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.getWorksheet('Sikap');

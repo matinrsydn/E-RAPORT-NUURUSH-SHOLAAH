@@ -8,13 +8,16 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Sikap.init({
-    siswa_id: DataTypes.INTEGER, // Diubah dari siswaId
-    jenis_sikap: DataTypes.STRING,
-    indikator: DataTypes.STRING,
-    angka: DataTypes.FLOAT,
-    deskripsi: DataTypes.TEXT,
+    siswa_id: DataTypes.INTEGER,
+    catatan: DataTypes.TEXT, // Ini adalah catatan dari wali kelas
     semester: DataTypes.STRING,
-    tahun_ajaran: DataTypes.STRING
-  }, { sequelize, modelName: 'Sikap' });
+    tahun_ajaran: DataTypes.STRING,
+    // Kolom tambahan yang mungkin berguna
+    wali_kelas_id: DataTypes.INTEGER, 
+    kelas_id: DataTypes.INTEGER
+  }, { 
+    sequelize, 
+    modelName: 'Sikap' 
+  });
   return Sikap;
 };

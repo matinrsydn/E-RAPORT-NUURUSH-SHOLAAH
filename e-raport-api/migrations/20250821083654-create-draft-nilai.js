@@ -28,6 +28,12 @@ module.exports = {
         type: Sequelize.JSON,
         allowNull: true,
       },
+      // VVV TAMBAHKAN BLOK DI BAWAH INI VVV
+      processed_data: { // Data hasil olahan (ID siswa, mapel, dll)
+        type: Sequelize.JSON,
+        allowNull: true,
+      },
+      // ^^^ TAMBAHKAN BLOK DI ATAS INI ^^^
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE

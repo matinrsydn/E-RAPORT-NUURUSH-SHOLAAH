@@ -82,8 +82,8 @@ const ValidasiRaportPage = () => {
                                 }
                             </td>
                             <td>{item.data.nis}</td>
-                            <td>{item.data.kode_mapel}</td>
-                            <td>{`${item.data.pengetahuan_angka} / ${item.data.keterampilan_angka}`}</td>
+                            <td>{item.data.nilai_ujian?.map(n => n.kode_mapel).join(', ')}</td>
+                            <td>{item.data.nilai_ujian?.map(n => `${n.pengetahuan_angka}/${n.keterampilan_angka}`).join('; ')}</td>
                             <td>{item.validation_errors?.join(', ')}</td>
                             <td>
                                 <Button size="sm" variant="info" onClick={() => handlePreview(item)} disabled={!item.is_valid}>

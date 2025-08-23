@@ -31,11 +31,22 @@ exports.getRaportData = async (req, res) => {
         // Gunakan variabel yang sudah diformat di semua query
         const [nilaiUjian, nilaiHafalan, semuaKehadiran, sikap] = await Promise.all([
             db.NilaiUjian.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted },
-                include: [{ model: db.MataPelajaran, as: 'mapel', attributes: ['nama_mapel'] }]
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semester },
+                // Pastikan bagian ini ada
+                include: [{ 
+                    model: db.MataPelajaran, 
+                    as: 'mapel', 
+                    attributes: ['nama_mapel'] // Ambil hanya nama mapel
+                }]
             }),
             db.NilaiHafalan.findAll({
-                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted }
+                where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semester },
+                // Tambahkan juga di sini
+                include: [{
+                    model: db.MataPelajaran,
+                    as: 'mapel',
+                    attributes: ['nama_mapel']
+                }]
             }),
             db.Kehadiran.findAll({
                 where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted }
@@ -68,7 +79,7 @@ exports.getRaportData = async (req, res) => {
         // Format data agar mudah digunakan di frontend
         const formattedNilaiUjian = nilaiUjian.map(n => ({
             id: n.id,
-            nama_mapel: n.mapel?.nama_mapel || 'Mata Pelajaran Tidak Diketahui',
+            nama_mapel: n.mapel?.nama_mapel || 'N/A', // Ambil nama mapel dari data relasi
             pengetahuan_angka: n.pengetahuan_angka,
             keterampilan_angka: n.keterampilan_angka
         }));

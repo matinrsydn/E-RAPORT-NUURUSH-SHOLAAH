@@ -107,10 +107,3 @@ app.listen(PORT, () => {
     console.log(`Server berjalan pada port ${PORT}.`);
 });
 
-db.sequelize.sync({ force: true }) 
-  .then(() => {
-    console.log("Database tables dropped and re-synced.");
-  })
-  .catch((err) => {
-    console.log("Failed to sync database: " + err.message);
-  });

@@ -1,5 +1,5 @@
+// e-raport-api/migrations/....-create-sikap.js
 'use strict';
-/** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable('Sikaps', {
@@ -9,19 +9,10 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      siswaId: {
+      siswa_id: { // Ganti dari siswaId
         type: Sequelize.INTEGER
       },
-      jenis_sikap: {
-        type: Sequelize.STRING
-      },
-      indikator: {
-        type: Sequelize.STRING
-      },
-      angka: {
-        type: Sequelize.FLOAT
-      },
-      deskripsi: {
+      catatan: { // Ganti dari kolom-kolom lama
         type: Sequelize.TEXT
       },
       semester: {
@@ -29,6 +20,12 @@ module.exports = {
       },
       tahun_ajaran: {
         type: Sequelize.STRING
+      },
+      wali_kelas_id: { // Tambahan
+        type: Sequelize.INTEGER
+      },
+      kelas_id: { // Tambahan
+        type: Sequelize.INTEGER
       },
       createdAt: {
         allowNull: false,

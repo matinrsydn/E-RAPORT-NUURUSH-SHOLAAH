@@ -11,7 +11,8 @@ module.exports = (sequelize, DataTypes) => {
     row_number: DataTypes.INTEGER,
     data: DataTypes.JSON,
     is_valid: DataTypes.BOOLEAN,
-    validation_errors: DataTypes.JSON
+    validation_errors: DataTypes.JSON,
+    processed_data: DataTypes.JSON // <--- TAMBAHKAN BARIS INI
   }, {
     sequelize,
     modelName: 'DraftNilai',
