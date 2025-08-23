@@ -21,4 +21,7 @@ router.put('/nilai-hafalan/:id', raportController.updateNilaiHafalan);
 // PUT /api/raport/kehadiran/:id
 router.put('/kehadiran/:id', raportController.updateKehadiran);
 
+// POST /api/raport/save-validated
+router.post('/save-validated', raportController.saveValidatedRaport);
+
 module.exports = router;

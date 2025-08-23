@@ -326,6 +326,7 @@ exports.confirmAndSave = async (req, res) => {
             transaction
         });
 
+        
         if (validDrafts.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: 'Tidak ada data valid untuk disimpan.' });
@@ -394,9 +395,29 @@ exports.confirmAndSave = async (req, res) => {
         }
 
         // --- Operasi Database ---
-        if (nilaiUjianToCreate.length > 0) await db.NilaiUjian.bulkCreate(nilaiUjianToCreate, { transaction, updateOnDuplicate: ['pengetahuan_angka', 'keterampilan_angka'] });
-        if (nilaiHafalanToCreate.length > 0) await db.NilaiHafalan.bulkCreate(nilaiHafalanToCreate, { transaction, updateOnDuplicate: ['nilai_angka'] });
-        if (Object.values(kehadiranToUpdate).length > 0) await db.Kehadiran.bulkCreate(Object.values(kehadiranToUpdate), { transaction, updateOnDuplicate: ["sakit", "izin", "absen"] });
+        if (nilaiUjianToCreate.length > 0) {
+            await db.NilaiUjian.bulkCreate(nilaiUjianToCreate, { 
+            transaction, 
+            updateOnDuplicate: ['pengetahuan_angka', 'keterampilan_angka', 'updatedAt'] 
+        });
+        }
+        if (nilaiHafalanToCreate.length > 0) {
+            await db.NilaiHafalan.bulkCreate(nilaiHafalanToCreate, { transaction, updateOnDuplicate: ['nilai_angka', 'updatedAt'] });
+        }
+        if (Object.values(kehadiranToUpdate).length > 0) {
+            await db.Kehadiran.bulkCreate(Object.values(kehadiranToUpdate), { 
+            transaction, 
+            updateOnDuplicate: ["sakit", "izin", "absen", 'updatedAt'] 
+        });
+        }
+        for (const siswaId in sikapToUpdate) {
+            if (sikapToUpdate.hasOwnProperty(siswaId)) {
+                await db.Sikap.upsert(sikapToUpdate[siswaId], {
+                transaction
+            });
+            }
+        }
+        
 
         // --- PERBAIKAN: Gunakan `upsert` dalam loop untuk Sikap ---
         for (const siswaId in sikapToUpdate) {

@@ -74,6 +74,9 @@ const tahunAjaranRoutes = require('./routes/tahunAjaranRoutes');
 const templateRoutes = require('./routes/templateRoutes.js');
 const draftRoutes = require('./routes/draftRoutes');
 const raportRoutes = require('./routes/raportRoutes');
+const indikatorKehadiranRoutes = require('./routes/indikatorKehadiranRoutes'); // Tambahkan ini
+
+
 
 console.log("✓ All routes loaded successfully");
 
@@ -94,6 +97,7 @@ app.use('/api/tahun-ajaran', tahunAjaranRoutes);
 app.use('/api/raport', raportRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/draft', draftRoutes);
+app.use('/api/indikator-kehadiran', indikatorKehadiranRoutes);
 
 console.log("✓ All routes registered successfully");
 // Rute dasar

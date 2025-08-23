@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Table, Button, Alert, Spinner, Badge } from 'react-bootstrap';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const ValidasiRaportPage = () => {
     const { batchId } = useParams();
@@ -28,13 +30,45 @@ const ValidasiRaportPage = () => {
     const handleConfirm = async () => {
         setConfirming(true);
         setError('');
+        const toastId = toast.loading("Menyimpan data ke server..."); // Tampilkan notifikasi loading
+
         try {
-            // Panggil API konfirmasi yang sudah dibuat di backend
-            await axios.post(`http://localhost:5000/api/draft/confirm/${batchId}`);
-            alert('Data berhasil disimpan permanen!');
-            navigate('/input-nilai');
+            // 2. Filter untuk hanya mengirim data yang valid
+            const validDataToSend = draftData
+                .filter(item => item.is_valid)
+                .map(item => item.processed_data); // Kirim 'processed_data'
+
+            // 3. Panggil API endpoint yang baru di raportController
+            const response = await axios.post(`http://localhost:5000/api/raports/save-validated`, {
+                validatedData: validDataToSend // Kirim data dalam format yang diharapkan backend
+            });
+            
+            // 4. Tampilkan notifikasi sukses yang jelas
+            toast.update(toastId, {
+                render: response.data.message,
+                type: 'success',
+                isLoading: false,
+                autoClose: 5000,
+            });
+
+            // Beri jeda sejenak agar user bisa membaca notifikasi sebelum pindah halaman
+            setTimeout(() => {
+                navigate('/input-nilai');
+            }, 5000);
+
         } catch (err) {
-            setError(err.response?.data?.message || 'Gagal menyimpan data.');
+            // 5. Tampilkan pesan error dari backend untuk debugging
+            const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Gagal menyimpan data.';
+            
+            toast.update(toastId, {
+                render: `Error: ${errorMessage}`,
+                type: 'error',
+                isLoading: false,
+                autoClose: 8000, // Tampilkan lebih lama
+            });
+
+            // Simpan juga error di state untuk ditampilkan di komponen Alert jika perlu
+            setError(errorMessage);
         } finally {
             setConfirming(false);
         }
@@ -57,6 +91,7 @@ const ValidasiRaportPage = () => {
 
     return (
         <div>
+            <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
             <h2>Validasi Data Unggahan - <small className="text-muted">{batchId}</small></h2>
             {error && <Alert variant="danger">{error}</Alert>}
             <Table striped bordered hover responsive size="sm">

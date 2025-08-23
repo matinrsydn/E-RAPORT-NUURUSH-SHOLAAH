@@ -16,6 +16,9 @@ import GenerateRaportPage from './pages/GenerateRaportPage';
 import ValidasiRaportPage from './pages/ValidasiRaportPage';
 import DraftRaportPage from './pages/DraftRaportMainPage';
 import ManajemenRaportPage from './pages/ManajemenRaportPage';
+import ManajemenIndikatorKehadiranPage from './pages/ManajemenAkademik/ManajemenIndikatorKehadiranPage'; 
+
+
 
 
 function App() {
@@ -37,8 +40,8 @@ function App() {
             <Route path="/manajemen-akademik/mata-pelajaran" element={<ManajemenMapelPage />} />
             <Route path="/manajemen-akademik/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
             <Route path="/manajemen-akademik/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
-             <Route path="/manajemen-raport" element={<ManajemenRaportPage />} />
-            
+            <Route path="/manajemen-raport" element={<ManajemenRaportPage />} />
+            <Route path="/manajemen-akademik/indikator-kehadiran" element={<ManajemenIndikatorKehadiranPage />} />
             {/* Rute untuk validasi dan draft raport (ini sudah benar) */}
             <Route path="/validasi-raport/:batchId" element={<ValidasiRaportPage />} />
             <Route path="/draft-raport" element={<DraftRaportPage />} /> 
