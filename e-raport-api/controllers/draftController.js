@@ -157,17 +157,48 @@ exports.uploadAndValidate = async (req, res) => {
         });
 
         // Proses Sheet Kehadiran (agregasi)
+        // Ganti bagian proses Sheet Kehadiran dengan versi yang lebih debug:
+
+// Proses Sheet Kehadiran (dengan debug untuk kegiatan)
         await processSheet('Template Kehadiran', (row, siswaData) => {
+            const kegiatan = getCellValue(row.getCell('C')); // Kolom C = Kegiatan
             const sakit = getCellValue(row.getCell('D')) || 0;
             const izin = getCellValue(row.getCell('E')) || 0;
             const alpha = getCellValue(row.getCell('F')) || 0;
             
+            console.log(`🔍 DEBUG KEHADIRAN - NIS: ${siswaData.nis}, Kegiatan: "${kegiatan}", Sakit: ${sakit}, Izin: ${izin}, Alpha: ${alpha}`);
+            
+            // Agregasi nilai
             siswaData.kehadiran.sakit = (siswaData.kehadiran.sakit || 0) + sakit;
             siswaData.kehadiran.izin = (siswaData.kehadiran.izin || 0) + izin;
             siswaData.kehadiran.alpha = (siswaData.kehadiran.alpha || 0) + alpha;
+            
+            // Simpan kegiatan (ambil yang pertama ditemukan)
+            if (!siswaData.kehadiran.kegiatan && kegiatan) {
+                siswaData.kehadiran.kegiatan = kegiatan;
+                console.log(`✅ KEGIATAN TERSIMPAN untuk ${siswaData.nis}: "${kegiatan}"`);
+            }
+            
+            // Atau jika ingin menyimpan semua kegiatan sebagai satu string
+            if (kegiatan) {
+                if (!siswaData.kehadiran.kegiatan) {
+                    siswaData.kehadiran.kegiatan = kegiatan;
+                } else if (!siswaData.kehadiran.kegiatan.includes(kegiatan)) {
+                    siswaData.kehadiran.kegiatan += `, ${kegiatan}`;
+                }
+                console.log(`🔄 KEGIATAN UPDATE untuk ${siswaData.nis}: "${siswaData.kehadiran.kegiatan}"`);
+            }
+            
             if (!siswaData.kehadiran.semester) siswaData.kehadiran.semester = getCellValue(row.getCell('G'));
             if (!siswaData.kehadiran.tahun_ajaran) siswaData.kehadiran.tahun_ajaran = getCellValue(row.getCell('H'));
         });
+
+        // TAMBAHKAN LOG SEBELUM MENYIMPAN KE DRAFT
+        console.log("🔍 FINAL DATA SEBELUM DISIMPAN KE DRAFT:");
+        for (const nis in combinedData) {
+            const siswa = combinedData[nis];
+            console.log(`NIS: ${nis}, Kehadiran Kegiatan: "${siswa.kehadiran?.kegiatan || 'NULL'}"`);
+        }
         
         // Proses Sheet Sikap
         await processSheet('Template Sikap', (row, siswaData) => {
@@ -187,6 +218,22 @@ exports.uploadAndValidate = async (req, res) => {
                 ...siswaData.kehadiran,
                 catatan_sikap: siswaData.catatan_walikelas
             };
+
+            // 🔥 PERBAIKAN: Set default kegiatan jika kosong
+            if (!rowData.kegiatan) {
+                // Ambil kegiatan pertama dari database sebagai default
+                try {
+                    const defaultKegiatan = await db.IndikatorKehadiran.findOne({
+                        order: [['id', 'ASC']]
+                    });
+                    if (defaultKegiatan) {
+                        rowData.kegiatan = defaultKegiatan.nama_kegiatan;
+                        console.log(`⚠️  Set default kegiatan "${defaultKegiatan.nama_kegiatan}" untuk NIS: ${siswaData.nis}`);
+                    }
+                } catch (err) {
+                    console.warn(`❌ Gagal mengambil default kegiatan: ${err.message}`);
+                }
+            }
 
             // Lakukan validasi terpusat di sini jika perlu
             const validation = { isValid: true, errors: [], siswaId: null };

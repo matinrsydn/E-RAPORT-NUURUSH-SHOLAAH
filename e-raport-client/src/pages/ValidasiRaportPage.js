@@ -1,3 +1,5 @@
+// e-raport-client/src/pages/ValidasiRaportPage.js
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -30,20 +32,50 @@ const ValidasiRaportPage = () => {
     const handleConfirm = async () => {
         setConfirming(true);
         setError('');
-        const toastId = toast.loading("Menyimpan data ke server..."); // Tampilkan notifikasi loading
+        const toastId = toast.loading("Menyimpan data ke server...");
 
         try {
-            // 2. Filter untuk hanya mengirim data yang valid
+            // 🔥 PERBAIKAN: Kirim data dengan format yang benar
             const validDataToSend = draftData
                 .filter(item => item.is_valid)
-                .map(item => item.processed_data); // Kirim 'processed_data'
+                .map(item => {
+                    // Ambil semester dan tahun ajaran dari data
+                    let semester = null;
+                    let tahun_ajaran = null;
+                    
+                    if (item.data.nilai_ujian && item.data.nilai_ujian.length > 0) {
+                        semester = item.data.nilai_ujian[0].semester;
+                        tahun_ajaran = item.data.nilai_ujian[0].tahun_ajaran;
+                    } else if (item.data.nilai_hafalan && item.data.nilai_hafalan.length > 0) {
+                        semester = item.data.nilai_hafalan[0].semester;
+                        tahun_ajaran = item.data.nilai_hafalan[0].tahun_ajaran;
+                    } else if (item.data.semester) {
+                        semester = item.data.semester;
+                        tahun_ajaran = item.data.tahun_ajaran;
+                    }
+                    
+                    return {
+                        nis: item.data.nis,
+                        semester: semester,
+                        tahun_ajaran: tahun_ajaran,
+                        nilaiUjian: item.data.nilai_ujian || [],
+                        nilaiHafalan: item.data.nilai_hafalan || [],
+                        kehadiran: {
+                            sakit: item.data.sakit || 0,
+                            izin: item.data.izin || 0,
+                            alpha: item.data.alpha || 0,
+                            kegiatan: item.data.kehadiran?.kegiatan || null // 🔥 TAMBAHAN
+                        },
+                        catatan_sikap: item.data.catatan_sikap || null
+                    };
+                });
 
-            // 3. Panggil API endpoint yang baru di raportController
+            console.log('📤 Data yang dikirim ke backend:', JSON.stringify(validDataToSend, null, 2));
+
             const response = await axios.post(`http://localhost:5000/api/raports/save-validated`, {
                 validatedData: validDataToSend
             });
             
-            // 4. Tampilkan notifikasi sukses yang jelas
             toast.update(toastId, {
                 render: response.data.message,
                 type: 'success',
@@ -51,34 +83,29 @@ const ValidasiRaportPage = () => {
                 autoClose: 5000,
             });
 
-            // Beri jeda sejenak agar user bisa membaca notifikasi sebelum pindah halaman
             setTimeout(() => {
                 navigate('/input-nilai');
             }, 5000);
 
         } catch (err) {
-            // 5. Tampilkan pesan error dari backend untuk debugging
             const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Gagal menyimpan data.';
             
             toast.update(toastId, {
                 render: `Error: ${errorMessage}`,
                 type: 'error',
                 isLoading: false,
-                autoClose: 8000, // Tampilkan lebih lama
+                autoClose: 8000,
             });
 
-            // Simpan juga error di state untuk ditampilkan di komponen Alert jika perlu
             setError(errorMessage);
         } finally {
             setConfirming(false);
         }
     };
     
-    // --- FUNGSI YANG DIPERBAIKI ---
     const handlePreview = (item) => {
         const { nis, semester, tahun_ajaran } = item.data;
         if (nis && semester && tahun_ajaran) {
-            // Navigasi ke URL lengkap dengan semua parameter
             navigate(`/draft-raport/${nis}/${semester}/${tahun_ajaran}`);
         } else {
             alert('Data tidak lengkap untuk melihat preview (NIS, Semester, atau Tahun Ajaran kosong).');
