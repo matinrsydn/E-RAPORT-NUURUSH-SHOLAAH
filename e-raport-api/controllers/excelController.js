@@ -727,35 +727,78 @@ exports.downloadCompleteTemplate = async (req, res) => {
     // 🔥 DEBUGGING: Tampilkan data indikator kehadiran
     console.log('📋 Indikator kehadiran yang akan digunakan:');
     indikatorKehadiran.forEach((ind, index) => {
-      console.log(`${index + 1}. ${ind.nama_kegiatan}`);
+      console.log(`${index + 1}. ID: ${ind.id}, Nama: "${ind.nama_kegiatan}"`);
     });
 
-    // 🔥 PERBAIKAN: Gunakan data dari tabel IndikatorKehadiran dengan lebih hati-hati
-    let rowCount = 0;
-    for (const siswa of siswaList) {
-      for (const indikator of indikatorKehadiran) {
-        const rowData = { 
-          nis: siswa.nis, 
-          nama: siswa.nama, 
-          kegiatan: indikator.nama_kegiatan, // ✅ Ambil dari tabel IndikatorKehadiran
-          izin: 0, 
-          sakit: 0, 
-          absen: 0, 
-          semester, 
-          tahun_ajaran 
-        };
-        
-        sheetKehadiran.addRow(rowData);
-        rowCount++;
-        
-        // Debug setiap beberapa baris
-        if (rowCount <= 5 || rowCount % 10 === 0) {
-          console.log(`📝 Baris ${rowCount + 1}: ${siswa.nama} - ${indikator.nama_kegiatan}`);
+    // 🔥 PERBAIKAN: Validasi data indikator kehadiran
+    if (indikatorKehadiran.length === 0) {
+      console.log('❌ TIDAK ADA INDIKATOR KEHADIRAN!');
+      // Buat default data jika tidak ada
+      const defaultKegiatan = [
+        'Shalat Berjamaah',
+        'Mengaji',
+        'Piket',
+        'Tahfidz',
+        'Sekolah'
+      ];
+      
+      console.log('🔄 Menggunakan kegiatan default...');
+      let rowCount = 0;
+      for (const siswa of siswaList) {
+        for (const kegiatan of defaultKegiatan) {
+          const rowData = { 
+            nis: siswa.nis, 
+            nama: siswa.nama, 
+            kegiatan: kegiatan,
+            izin: 0, 
+            sakit: 0, 
+            absen: 0, 
+            semester, 
+            tahun_ajaran 
+          };
+          
+          sheetKehadiran.addRow(rowData);
+          rowCount++;
+          
+          console.log(`📝 Baris ${rowCount}: ${siswa.nama} - ${kegiatan}`);
         }
       }
+      console.log(`✅ Template kehadiran selesai (default) dengan ${rowCount} baris data`);
+      
+    } else {
+      // 🔥 GUNAKAN DATA DARI DATABASE
+      let rowCount = 0;
+      for (const siswa of siswaList) {
+        for (const indikator of indikatorKehadiran) {
+          // 🔥 VALIDASI: Pastikan nama_kegiatan tidak null
+          const namaKegiatan = indikator.nama_kegiatan;
+          if (!namaKegiatan || namaKegiatan.trim() === '') {
+            console.log(`⚠️ Indikator ID ${indikator.id} memiliki nama_kegiatan kosong!`);
+            continue;
+          }
+          
+          const rowData = { 
+            nis: siswa.nis, 
+            nama: siswa.nama, 
+            kegiatan: namaKegiatan.trim(), // Trim whitespace
+            izin: 0, 
+            sakit: 0, 
+            absen: 0, 
+            semester, 
+            tahun_ajaran 
+          };
+          
+          sheetKehadiran.addRow(rowData);
+          rowCount++;
+          
+          // Debug setiap beberapa baris
+          if (rowCount <= 5 || rowCount % 10 === 0) {
+            console.log(`📝 Baris ${rowCount}: ${siswa.nama} - ${namaKegiatan}`);
+          }
+        }
+      }
+      console.log(`✅ Template kehadiran selesai dengan ${rowCount} baris data`);
     }
-
-    console.log(`✅ Template kehadiran selesai dibuat dengan ${rowCount} baris data`);
 
     // 🔥 TAMBAHAN: Format template agar lebih jelas
     const headerRow = sheetKehadiran.getRow(1);
@@ -766,10 +809,19 @@ exports.downloadCompleteTemplate = async (req, res) => {
       fgColor: { argb: 'FFE0E0E0' }
     };
 
+    // 🔥 TAMBAHAN: Validasi data - cek beberapa baris terakhir
+    const lastRowNum = sheetKehadiran.rowCount;
+    console.log(`🔍 VALIDASI TEMPLATE - Total rows: ${lastRowNum}`);
+    if (lastRowNum > 1) {
+      for (let i = Math.max(2, lastRowNum - 2); i <= lastRowNum; i++) {
+        const checkRow = sheetKehadiran.getRow(i);
+        console.log(`Row ${i}: NIS=${checkRow.getCell(1).value}, Nama=${checkRow.getCell(2).value}, Kegiatan="${checkRow.getCell(3).value}"`);
+      }
+    }
+
     // 🔥 TAMBAHAN: Proteksi kolom yang tidak boleh diubah
     sheetKehadiran.getColumn(1).protection = { locked: true }; // NIS
     sheetKehadiran.getColumn(2).protection = { locked: true }; // Nama
-    sheetKehadiran.getColumn(3).protection = { locked: true }; // Kegiatan
     sheetKehadiran.getColumn(7).protection = { locked: true }; // Semester
     sheetKehadiran.getColumn(8).protection = { locked: true }; // Tahun Ajaran
 

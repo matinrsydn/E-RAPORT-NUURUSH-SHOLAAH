@@ -134,7 +134,7 @@ const ManajemenRaportPage = () => {
             const tahunAwal = selectedTahunAjaranData.nama_ajaran.split('/')[0];
             const semester = selectedTahunAjaranData.semester;
 
-            const response = await axios.get(`http://localhost:5000/api/raport/${siswa.id}/${tahunAwal}/${semester}`);
+            const response = await axios.get(`http://localhost:5000/api/raports/${siswa.id}/${tahunAwal}/${semester}`);
             setRaportData(response.data);
             
         } catch (err) {
@@ -148,7 +148,7 @@ const ManajemenRaportPage = () => {
     // --- FUNGSI UNTUK MENYIMPAN PERUBAHAN (UPDATE) ---
     const handleSave = async (type, data) => {
         try {
-            await axios.put(`http://localhost:5000/api/raport/${type}/${data.id}`, data);
+            await axios.put(`http://localhost:5000/api/raports/${type}/${data.id}`, data);
             alert('Data berhasil diperbarui!');
             setEditingId(null);
             setEditingType('');
@@ -170,7 +170,7 @@ const ManajemenRaportPage = () => {
         }
         try {
             const { id, sakit, izin, alpha } = raportData.kehadiran;
-            await axios.put(`http://localhost:5000/api/raport/kehadiran/${id}`, { sakit, izin, alpha });
+            await axios.put(`http://localhost:5000/api/raports/kehadiran/${id}`, { sakit, izin, alpha });
             alert('Data kehadiran berhasil diperbarui!');
             
             // Refresh data

@@ -181,34 +181,46 @@ exports.uploadAndValidate = async (req, res) => {
             
             console.log(`🔍 RAW EXCEL DATA - Row: NIS=${nis}, Nama="${nama}", Kegiatan="${kegiatan}", Izin=${izin}, Sakit=${sakit}, Absen=${absen}`);
             
-            // 🔥 DEBUG: Cek nilai sebelum diproses
-            if (!kegiatan) {
-                console.log(`❌ KEGIATAN KOSONG untuk NIS ${nis}!`);
+            // 🔥 PERBAIKAN: Pastikan kegiatan tidak null atau undefined
+            if (!kegiatan || kegiatan === null || kegiatan === undefined || String(kegiatan).trim() === '') {
+                console.log(`❌ KEGIATAN KOSONG atau NULL untuk NIS ${nis}, row data:`, {
+                    raw_kegiatan: kegiatan,
+                    kegiatan_type: typeof kegiatan,
+                    cell_value: getCellValue(row.getCell('C')),
+                    raw_cell: row.getCell('C').value
+                });
+                return; // Skip baris ini
+            }
+            
+            // 🔥 PERBAIKAN: Trim dan clean kegiatan name
+            const cleanKegiatan = String(kegiatan).trim();
+            if (!cleanKegiatan) {
+                console.log(`❌ KEGIATAN KOSONG setelah trim untuk NIS ${nis}`);
                 return;
             }
             
-            // 🔥 SIMPAN DETAIL PER KEGIATAN (hanya jika ada nilai > 0)
-            if (kegiatan && (izin > 0 || sakit > 0 || absen > 0)) {
-                const detailItem = {
-                    kegiatan,
-                    izin,
-                    sakit,
-                    absen
-                };
-                
-                siswaData.kehadiran_detail.push(detailItem);
-                
-                console.log(`✅ DETAIL DITAMBAHKAN untuk ${nis}:`, detailItem);
-                console.log(`📊 Current kehadiran_detail length: ${siswaData.kehadiran_detail.length}`);
-                console.log(`📋 All details so far:`, JSON.stringify(siswaData.kehadiran_detail, null, 2));
-            } else {
-                console.log(`⚠️ TIDAK ADA NILAI untuk ${nis} - ${kegiatan} (izin:${izin}, sakit:${sakit}, absen:${absen})`);
+            // 🔥 VALIDASI: Pastikan ada nilai kehadiran yang tidak nol
+            if (izin === 0 && sakit === 0 && absen === 0) {
+                console.log(`⚠️ SEMUA NILAI NOL untuk ${nis} - ${cleanKegiatan}, tapi tetap disimpan sebagai record`);
             }
+            
+            // 🔥 SIMPAN DETAIL PER KEGIATAN (bahkan jika nilai 0, tetap simpan untuk konsistensi)
+            const detailItem = {
+                kegiatan: cleanKegiatan,
+                izin,
+                sakit,
+                absen
+            };
+            
+            siswaData.kehadiran_detail.push(detailItem);
+            
+            console.log(`✅ DETAIL DITAMBAHKAN untuk ${nis}:`, detailItem);
+            console.log(`📊 Current kehadiran_detail length: ${siswaData.kehadiran_detail.length}`);
             
             // 🔥 UPDATE TOTAL AGREGAT
             siswaData.kehadiran_summary.izin += izin;
             siswaData.kehadiran_summary.sakit += sakit;
-            siswaData.kehadiran_summary.alpha += absen;
+            siswaData.kehadiran_summary.alpha += absen; // Ini tetap alpha untuk konsistensi internal
             
             console.log(`📈 UPDATED SUMMARY for ${nis}:`, siswaData.kehadiran_summary);
             
@@ -216,6 +228,22 @@ exports.uploadAndValidate = async (req, res) => {
             if (!siswaData.semester) siswaData.semester = semester;
             if (!siswaData.tahun_ajaran) siswaData.tahun_ajaran = tahun_ajaran;
         });
+
+        // 🔥 TAMBAHAN: Log final check sebelum membuat draft entries
+        console.log('\n🔍 FINAL KEHADIRAN CHECK SEBELUM DRAFT:');
+        for (const nis in combinedData) {
+            const siswa = combinedData[nis];
+            console.log(`\n--- SISWA ${nis} (${siswa.nama_siswa}) ---`);
+            console.log(`Kehadiran Detail Count: ${siswa.kehadiran_detail?.length || 0}`);
+            if (siswa.kehadiran_detail && siswa.kehadiran_detail.length > 0) {
+                siswa.kehadiran_detail.forEach((detail, idx) => {
+                    console.log(`  ${idx + 1}. ${detail.kegiatan}: izin=${detail.izin}, sakit=${detail.sakit}, absen=${detail.absen}`);
+                });
+            } else {
+                console.log(`  ❌ TIDAK ADA KEHADIRAN DETAIL!`);
+            }
+            console.log(`Kehadiran Summary:`, siswa.kehadiran_summary);
+        }
 
         // Setelah proses semua sheet, tambahkan ini sebelum membuat draftEntries:
 
