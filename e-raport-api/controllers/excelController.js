@@ -100,45 +100,123 @@ exports.uploadCompleteData = async (req, res) => {
       // ========== PROSES SHEET KEHADIRAN ==========
       // Perbaikan untuk bagian PROSES SHEET KEHADIRAN di uploadCompleteData
       // ========== PROSES SHEET KEHADIRAN ==========
+      // ========== PROSES SHEET KEHADIRAN ==========
       const kehadiranWorksheet = workbook.getWorksheet('Template Kehadiran');
       if (kehadiranWorksheet) {
           const kehadiranData = [];
+          
+          console.log(`📊 Total baris di sheet kehadiran: ${kehadiranWorksheet.rowCount}`);
+          console.log(`📊 Total kolom di sheet kehadiran: ${kehadiranWorksheet.columnCount}`);
+          
+          // 🔥 DEBUGGING: Cek header dulu
+          const headerRow = kehadiranWorksheet.getRow(1);
+          console.log('📋 Header row values:', headerRow.values);
+          
+          // 🔥 DEBUGGING: Lihat beberapa baris pertama
+          for (let rowNum = 2; rowNum <= Math.min(5, kehadiranWorksheet.rowCount); rowNum++) {
+              const debugRow = kehadiranWorksheet.getRow(rowNum);
+              console.log(`🔍 Debug Baris ${rowNum}:`, {
+                  values: debugRow.values,
+                  cell1: debugRow.getCell(1).value,
+                  cell2: debugRow.getCell(2).value,
+                  cell3: debugRow.getCell(3).value,
+                  cell4: debugRow.getCell(4).value,
+                  cell5: debugRow.getCell(5).value,
+                  cell6: debugRow.getCell(6).value,
+                  cell7: debugRow.getCell(7).value,
+                  cell8: debugRow.getCell(8).value,
+              });
+          }
+          
+          // 🔥 METODE ALTERNATIF: Gunakan worksheetjson
+          const worksheetJSON = [];
           kehadiranWorksheet.eachRow((row, rowNumber) => {
               if (rowNumber === 1) return; // Skip header
-              const rowData = {
+              
+              // 🔥 PERBAIKAN: Coba beberapa cara baca data
+              const method1 = {
                   nis: row.values[1],
                   nama_siswa: row.values[2],
                   kegiatan: row.values[3],
-                  izin: parseInt(row.values[4], 10) || 0,
-                  sakit: parseInt(row.values[5], 10) || 0,
-                  absen: parseInt(row.values[6], 10) || 0,
+                  izin: row.values[4],
+                  sakit: row.values[5],
+                  absen: row.values[6],
                   semester: row.values[7],
                   tahun_ajaran: row.values[8],
               };
               
+              const method2 = {
+                  nis: row.getCell(1).value,
+                  nama_siswa: row.getCell(2).value,
+                  kegiatan: row.getCell(3).value,
+                  izin: row.getCell(4).value,
+                  sakit: row.getCell(5).value,
+                  absen: row.getCell(6).value,
+                  semester: row.getCell(7).value,
+                  tahun_ajaran: row.getCell(8).value,
+              };
+              
+              console.log(`🔍 Baris ${rowNumber} - Method1:`, method1);
+              console.log(`🔍 Baris ${rowNumber} - Method2:`, method2);
+              
+              // 🔥 GUNAKAN METHOD YANG LEBIH RELIABLE
+              const rowData = {
+                  nis: method2.nis || method1.nis,
+                  nama_siswa: method2.nama_siswa || method1.nama_siswa,
+                  kegiatan: method2.kegiatan || method1.kegiatan,
+                  izin: parseInt(method2.izin || method1.izin, 10) || 0,
+                  sakit: parseInt(method2.sakit || method1.sakit, 10) || 0,
+                  absen: parseInt(method2.absen || method1.absen, 10) || 0,
+                  semester: method2.semester || method1.semester,
+                  tahun_ajaran: method2.tahun_ajaran || method1.tahun_ajaran,
+              };
+              
+              console.log(`✨ Final rowData baris ${rowNumber}:`, rowData);
+              
+              // 🔥 VALIDASI: Pastikan data tidak kosong
               if (rowData.nis && rowData.kegiatan) {
                   kehadiranData.push(rowData);
+                  console.log(`✅ Data ditambahkan: ${rowData.nis} - ${rowData.kegiatan} (izin:${rowData.izin}, sakit:${rowData.sakit}, absen:${rowData.absen})`);
               } else {
-                  console.log(`⚠️ Baris ${rowNumber} kehadiran diabaikan karena NIS atau kegiatan kosong:`, rowData);
+                  console.log(`❌ Data diabaikan baris ${rowNumber}:`, rowData);
               }
           });
 
-          console.log(`📊 Data kehadiran yang akan diproses: ${kehadiranData.length} baris`);
+          console.log(`📊 RINGKASAN: ${kehadiranData.length} data kehadiran akan diproses`);
+          
+          // 🔥 DEBUGGING: Tampilkan semua data yang akan diproses
+          kehadiranData.forEach((item, index) => {
+              console.log(`📋 Data ${index + 1}:`, item);
+          });
 
+          // 🔥 PROSES PENYIMPANAN
           for (const item of kehadiranData) {
               const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
               if (siswa) {
                   try {
-                      // 🔥 PERBAIKAN: Gunakan findOrCreate atau where condition yang lebih spesifik
-                      // Cari existing record berdasarkan siswa_id, kegiatan, semester, dan tahun_ajaran
-                      const [kehadiranRecord, created] = await db.Kehadiran.findOrCreate({
+                      console.log(`🔄 Akan menyimpan: Siswa ${siswa.nama} - Kegiatan "${item.kegiatan}" - izin:${item.izin}, sakit:${item.sakit}, absen:${item.absen}`);
+                      
+                      // 🔥 CEK: Apakah record sudah ada
+                      const existingRecord = await db.Kehadiran.findOne({
                           where: {
                               siswa_id: siswa.id,
                               kegiatan: item.kegiatan,
                               semester: item.semester,
                               tahun_ajaran: item.tahun_ajaran
-                          },
-                          defaults: {
+                          }
+                      });
+                      
+                      if (existingRecord) {
+                          console.log(`🔄 Record sudah ada, akan diupdate:`, existingRecord.toJSON());
+                          await existingRecord.update({
+                              izin: item.izin,
+                              sakit: item.sakit,
+                              absen: item.absen
+                          }, { transaction });
+                          console.log(`✅ Record berhasil diupdate untuk ${siswa.nama} - ${item.kegiatan}`);
+                      } else {
+                          console.log(`🆕 Membuat record baru`);
+                          const newRecord = await db.Kehadiran.create({
                               siswa_id: siswa.id,
                               kegiatan: item.kegiatan,
                               izin: item.izin,
@@ -146,24 +224,14 @@ exports.uploadCompleteData = async (req, res) => {
                               absen: item.absen,
                               semester: item.semester,
                               tahun_ajaran: item.tahun_ajaran,
-                          },
-                          transaction
-                      });
-
-                      // Jika record sudah ada, update nilainya
-                      if (!created) {
-                          await kehadiranRecord.update({
-                              izin: item.izin,
-                              sakit: item.sakit,
-                              absen: item.absen
                           }, { transaction });
+                          console.log(`✅ Record baru berhasil dibuat:`, newRecord.toJSON());
                       }
                       
                       results.kehadiran.success++;
-                      console.log(`✅ Kehadiran ${created ? 'dibuat' : 'diupdate'} untuk ${siswa.nama} - ${item.kegiatan}`);
                       
                   } catch (error) {
-                      console.error(`❌ Error menyimpan kehadiran untuk ${siswa.nama} - ${item.kegiatan}:`, error.message);
+                      console.error(`❌ Error menyimpan kehadiran untuk ${siswa.nama} - ${item.kegiatan}:`, error);
                       results.kehadiran.errors.push(`NIS ${item.nis} - ${item.kegiatan}: ${error.message}`);
                   }
               } else {
@@ -171,6 +239,24 @@ exports.uploadCompleteData = async (req, res) => {
                   results.kehadiran.errors.push(`NIS ${item.nis} tidak ditemukan dalam database`);
               }
           }
+          
+          // 🔥 DEBUGGING: Cek hasil akhir di database
+          console.log('🔍 VERIFIKASI: Cek data yang tersimpan di database');
+          const allKehadiran = await db.Kehadiran.findAll({
+              where: {
+                  semester: kehadiranData[0]?.semester,
+                  tahun_ajaran: kehadiranData[0]?.tahun_ajaran
+              },
+              include: [{
+                  model: db.Siswa,
+                  attributes: ['nama', 'nis']
+              }]
+          });
+          
+          console.log('📋 Data kehadiran yang tersimpan di database:');
+          allKehadiran.forEach(record => {
+              console.log(`- ${record.Siswa.nama} (${record.Siswa.nis}) - ${record.kegiatan}: izin=${record.izin}, sakit=${record.sakit}, absen=${record.absen}`);
+          });
       }
 
       // ========== PROSES SHEET SIKAP ==========
@@ -633,10 +719,22 @@ exports.downloadCompleteTemplate = async (req, res) => {
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
-    // 🔥 PERBAIKAN: Gunakan data dari tabel IndikatorKehadiran
+
+    console.log('🔄 Membuat template kehadiran...');
+    console.log(`📊 Jumlah siswa: ${siswaList.length}`);
+    console.log(`📊 Jumlah indikator kehadiran: ${indikatorKehadiran.length}`);
+
+    // 🔥 DEBUGGING: Tampilkan data indikator kehadiran
+    console.log('📋 Indikator kehadiran yang akan digunakan:');
+    indikatorKehadiran.forEach((ind, index) => {
+      console.log(`${index + 1}. ${ind.nama_kegiatan}`);
+    });
+
+    // 🔥 PERBAIKAN: Gunakan data dari tabel IndikatorKehadiran dengan lebih hati-hati
+    let rowCount = 0;
     for (const siswa of siswaList) {
       for (const indikator of indikatorKehadiran) {
-        sheetKehadiran.addRow({ 
+        const rowData = { 
           nis: siswa.nis, 
           nama: siswa.nama, 
           kegiatan: indikator.nama_kegiatan, // ✅ Ambil dari tabel IndikatorKehadiran
@@ -645,9 +743,35 @@ exports.downloadCompleteTemplate = async (req, res) => {
           absen: 0, 
           semester, 
           tahun_ajaran 
-        });
+        };
+        
+        sheetKehadiran.addRow(rowData);
+        rowCount++;
+        
+        // Debug setiap beberapa baris
+        if (rowCount <= 5 || rowCount % 10 === 0) {
+          console.log(`📝 Baris ${rowCount + 1}: ${siswa.nama} - ${indikator.nama_kegiatan}`);
+        }
       }
     }
+
+    console.log(`✅ Template kehadiran selesai dibuat dengan ${rowCount} baris data`);
+
+    // 🔥 TAMBAHAN: Format template agar lebih jelas
+    const headerRow = sheetKehadiran.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    // 🔥 TAMBAHAN: Proteksi kolom yang tidak boleh diubah
+    sheetKehadiran.getColumn(1).protection = { locked: true }; // NIS
+    sheetKehadiran.getColumn(2).protection = { locked: true }; // Nama
+    sheetKehadiran.getColumn(3).protection = { locked: true }; // Kegiatan
+    sheetKehadiran.getColumn(7).protection = { locked: true }; // Semester
+    sheetKehadiran.getColumn(8).protection = { locked: true }; // Tahun Ajaran
 
     // ========== Sheet Sikap ==========
     const sheetSikap = workbook.addWorksheet('Template Sikap');

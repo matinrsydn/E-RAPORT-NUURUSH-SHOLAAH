@@ -35,42 +35,44 @@ const ValidasiRaportPage = () => {
         const toastId = toast.loading("Menyimpan data ke server...");
 
         try {
-            // 🔥 PERBAIKAN: Kirim data dengan format yang benar
+            // 🔥 PERBAIKAN: Kirim data dengan struktur kehadiran detail yang benar
             const validDataToSend = draftData
                 .filter(item => item.is_valid)
                 .map(item => {
-                    // Ambil semester dan tahun ajaran dari data
-                    let semester = null;
-                    let tahun_ajaran = null;
+                    console.log('🔍 Item data structure:', JSON.stringify(item.data, null, 2));
                     
-                    if (item.data.nilai_ujian && item.data.nilai_ujian.length > 0) {
+                    // Ambil semester dan tahun ajaran dari data
+                    let semester = item.data.semester;
+                    let tahun_ajaran = item.data.tahun_ajaran;
+                    
+                    // Fallback jika tidak ada di level utama
+                    if (!semester && item.data.nilai_ujian && item.data.nilai_ujian.length > 0) {
                         semester = item.data.nilai_ujian[0].semester;
                         tahun_ajaran = item.data.nilai_ujian[0].tahun_ajaran;
-                    } else if (item.data.nilai_hafalan && item.data.nilai_hafalan.length > 0) {
+                    } else if (!semester && item.data.nilai_hafalan && item.data.nilai_hafalan.length > 0) {
                         semester = item.data.nilai_hafalan[0].semester;
                         tahun_ajaran = item.data.nilai_hafalan[0].tahun_ajaran;
-                    } else if (item.data.semester) {
-                        semester = item.data.semester;
-                        tahun_ajaran = item.data.tahun_ajaran;
                     }
                     
-                    return {
+                    // 🔥 STRUKTUR BARU: Gunakan kehadiran_detail dari parsing
+                    const result = {
                         nis: item.data.nis,
                         semester: semester,
                         tahun_ajaran: tahun_ajaran,
                         nilaiUjian: item.data.nilai_ujian || [],
                         nilaiHafalan: item.data.nilai_hafalan || [],
-                        kehadiran: {
-                            sakit: item.data.sakit || 0,
-                            izin: item.data.izin || 0,
-                            alpha: item.data.alpha || 0,
-                            kegiatan: item.data.kehadiran?.kegiatan || null // 🔥 TAMBAHAN
+                        kehadiran_detail: item.data.kehadiran_detail || [],
+                        kehadiran_summary: item.data.kehadiran_summary || {
+                            sakit: 0,
+                            izin: 0,
+                            alpha: 0
                         },
                         catatan_sikap: item.data.catatan_sikap || null
                     };
+                    
+                    console.log('🔍 Processed data structure:', JSON.stringify(result, null, 2));
+                    return result;
                 });
-
-            console.log('📤 Data yang dikirim ke backend:', JSON.stringify(validDataToSend, null, 2));
 
             const response = await axios.post(`http://localhost:5000/api/raports/save-validated`, {
                 validatedData: validDataToSend
