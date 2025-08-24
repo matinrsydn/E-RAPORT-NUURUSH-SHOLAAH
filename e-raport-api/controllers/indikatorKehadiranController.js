@@ -1,51 +1,84 @@
 // e-raport-api/controllers/indikatorKehadiranController.js
 const { IndikatorKehadiran } = require('../models');
 
-// Mengambil semua indikator
+// Mendapatkan semua indikator kehadiran
 exports.getAll = async (req, res) => {
   try {
-    const data = await IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
-    res.json(data);
+    const indikator = await IndikatorKehadiran.findAll({
+      order: [['nama_kegiatan', 'ASC']]
+    });
+    res.json(indikator);
   } catch (error) {
-    res.status(500).json({ message: 'Gagal mengambil data.', error: error.message });
+    res.status(500).json({ 
+      message: 'Error saat mengambil data indikator kehadiran', 
+      error: error.message 
+    });
   }
 };
 
-// Membuat indikator baru
+// Membuat indikator kehadiran baru
 exports.create = async (req, res) => {
   try {
-    const newData = await IndikatorKehadiran.create(req.body);
-    res.status(201).json(newData);
+    const { nama_kegiatan } = req.body;
+    
+    if (!nama_kegiatan) {
+      return res.status(400).json({ message: 'Nama kegiatan wajib diisi' });
+    }
+
+    const newIndikator = await IndikatorKehadiran.create({ nama_kegiatan });
+    res.status(201).json(newIndikator);
   } catch (error) {
-    res.status(500).json({ message: 'Gagal membuat data.', error: error.message });
+    res.status(500).json({ 
+      message: 'Error saat membuat indikator kehadiran', 
+      error: error.message 
+    });
   }
 };
 
-// Memperbarui indikator
+// Memperbarui indikator kehadiran
 exports.update = async (req, res) => {
   try {
-    const [updated] = await IndikatorKehadiran.update(req.body, { where: { id: req.params.id } });
+    const { id } = req.params;
+    const { nama_kegiatan } = req.body;
+
+    if (!nama_kegiatan) {
+      return res.status(400).json({ message: 'Nama kegiatan wajib diisi' });
+    }
+
+    const [updated] = await IndikatorKehadiran.update(
+      { nama_kegiatan }, 
+      { where: { id } }
+    );
+    
     if (updated) {
-      const updatedData = await IndikatorKehadiran.findByPk(req.params.id);
-      res.json(updatedData);
+      const updatedIndikator = await IndikatorKehadiran.findByPk(id);
+      res.json(updatedIndikator);
     } else {
-      res.status(404).json({ message: 'Data tidak ditemukan.' });
+      res.status(404).json({ message: 'Indikator kehadiran tidak ditemukan' });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Gagal memperbarui data.', error: error.message });
+    res.status(500).json({ 
+      message: 'Error saat memperbarui indikator kehadiran', 
+      error: error.message 
+    });
   }
 };
 
-// Menghapus indikator
+// Menghapus indikator kehadiran
 exports.delete = async (req, res) => {
   try {
-    const deleted = await IndikatorKehadiran.destroy({ where: { id: req.params.id } });
+    const { id } = req.params;
+    const deleted = await IndikatorKehadiran.destroy({ where: { id } });
+    
     if (deleted) {
       res.status(204).send();
     } else {
-      res.status(404).json({ message: 'Data tidak ditemukan.' });
+      res.status(404).json({ message: 'Indikator kehadiran tidak ditemukan' });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Gagal menghapus data.', error: error.message });
+    res.status(500).json({ 
+      message: 'Error saat menghapus indikator kehadiran', 
+      error: error.message 
+    });
   }
 };

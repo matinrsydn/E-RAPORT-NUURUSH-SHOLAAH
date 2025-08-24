@@ -98,13 +98,16 @@ exports.uploadCompleteData = async (req, res) => {
       }
 
       // ========== PROSES SHEET KEHADIRAN ==========
+      // Perbaikan untuk bagian PROSES SHEET KEHADIRAN di uploadCompleteData
+      // ========== PROSES SHEET KEHADIRAN ==========
       const kehadiranWorksheet = workbook.getWorksheet('Template Kehadiran');
       if (kehadiranWorksheet) {
           const kehadiranData = [];
           kehadiranWorksheet.eachRow((row, rowNumber) => {
-              if (rowNumber === 1) return;
+              if (rowNumber === 1) return; // Skip header
               const rowData = {
                   nis: row.values[1],
+                  nama_siswa: row.values[2],
                   kegiatan: row.values[3],
                   izin: parseInt(row.values[4], 10) || 0,
                   sakit: parseInt(row.values[5], 10) || 0,
@@ -112,24 +115,60 @@ exports.uploadCompleteData = async (req, res) => {
                   semester: row.values[7],
                   tahun_ajaran: row.values[8],
               };
+              
               if (rowData.nis && rowData.kegiatan) {
                   kehadiranData.push(rowData);
+              } else {
+                  console.log(`⚠️ Baris ${rowNumber} kehadiran diabaikan karena NIS atau kegiatan kosong:`, rowData);
               }
           });
+
+          console.log(`📊 Data kehadiran yang akan diproses: ${kehadiranData.length} baris`);
 
           for (const item of kehadiranData) {
               const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
               if (siswa) {
-                  await db.Kehadiran.upsert({
-                      siswa_id: siswa.id, // PERBAIKAN: Gunakan snake_case
-                      kegiatan: item.kegiatan,
-                      izin: item.izin,
-                      sakit: item.sakit,
-                      absen: item.absen,
-                      semester: item.semester,
-                      tahun_ajaran: item.tahun_ajaran,
-                  }, { transaction });
-                  results.kehadiran.success++;
+                  try {
+                      // 🔥 PERBAIKAN: Gunakan findOrCreate atau where condition yang lebih spesifik
+                      // Cari existing record berdasarkan siswa_id, kegiatan, semester, dan tahun_ajaran
+                      const [kehadiranRecord, created] = await db.Kehadiran.findOrCreate({
+                          where: {
+                              siswa_id: siswa.id,
+                              kegiatan: item.kegiatan,
+                              semester: item.semester,
+                              tahun_ajaran: item.tahun_ajaran
+                          },
+                          defaults: {
+                              siswa_id: siswa.id,
+                              kegiatan: item.kegiatan,
+                              izin: item.izin,
+                              sakit: item.sakit,
+                              absen: item.absen,
+                              semester: item.semester,
+                              tahun_ajaran: item.tahun_ajaran,
+                          },
+                          transaction
+                      });
+
+                      // Jika record sudah ada, update nilainya
+                      if (!created) {
+                          await kehadiranRecord.update({
+                              izin: item.izin,
+                              sakit: item.sakit,
+                              absen: item.absen
+                          }, { transaction });
+                      }
+                      
+                      results.kehadiran.success++;
+                      console.log(`✅ Kehadiran ${created ? 'dibuat' : 'diupdate'} untuk ${siswa.nama} - ${item.kegiatan}`);
+                      
+                  } catch (error) {
+                      console.error(`❌ Error menyimpan kehadiran untuk ${siswa.nama} - ${item.kegiatan}:`, error.message);
+                      results.kehadiran.errors.push(`NIS ${item.nis} - ${item.kegiatan}: ${error.message}`);
+                  }
+              } else {
+                  console.log(`⚠️ Siswa dengan NIS ${item.nis} tidak ditemukan`);
+                  results.kehadiran.errors.push(`NIS ${item.nis} tidak ditemukan dalam database`);
               }
           }
       }
@@ -504,6 +543,7 @@ exports.uploadSikap = async (req, res) => {
   }
 };
 
+// Perbaikan untuk fungsi downloadCompleteTemplate
 exports.downloadCompleteTemplate = async (req, res) => {
   try {
     const { kelas_id, tahun_ajaran, semester } = req.query;
@@ -514,12 +554,20 @@ exports.downloadCompleteTemplate = async (req, res) => {
 
     const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
     const mapelList = await db.MataPelajaran.findAll({ order: [['nama_mapel', 'ASC']] });
+    
+    // 🔥 PERBAIKAN: Ambil data indikator kehadiran dari tabel IndikatorKehadiran
     const indikatorKehadiran = await db.IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
+    
     const indikatorSpiritual = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' } });
     const indikatorSosial = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' } });
 
     if (siswaList.length === 0) {
       return res.status(404).json({ message: 'Tidak ada siswa di kelas ini.' });
+    }
+
+    // 🔥 VALIDASI: Pastikan ada data indikator kehadiran
+    if (indikatorKehadiran.length === 0) {
+      return res.status(404).json({ message: 'Tidak ada data Indikator Kehadiran. Silakan tambahkan terlebih dahulu di menu Master Data.' });
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -538,7 +586,14 @@ exports.downloadCompleteTemplate = async (req, res) => {
     ];
     for (const siswa of siswaList) {
       for (const mapel of mapelList) {
-        sheetUjian.addRow({ nis: siswa.nis, nama_siswa: siswa.nama, kode_mapel: mapel.kode_mapel, nama_mapel: mapel.nama_mapel, semester, tahun_ajaran });
+        sheetUjian.addRow({ 
+          nis: siswa.nis, 
+          nama_siswa: siswa.nama, 
+          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`, // 🔥 PERBAIKAN: Pastikan kode_mapel ada
+          nama_mapel: mapel.nama_mapel, 
+          semester, 
+          tahun_ajaran 
+        });
       }
     }
 
@@ -555,7 +610,14 @@ exports.downloadCompleteTemplate = async (req, res) => {
     ];
     for (const siswa of siswaList) {
       for (const mapel of mapelList) {
-        sheetHafalan.addRow({ nis: siswa.nis, nama_siswa: siswa.nama, kode_mapel: mapel.kode_mapel, nama_mapel: mapel.nama_mapel, semester, tahun_ajaran });
+        sheetHafalan.addRow({ 
+          nis: siswa.nis, 
+          nama_siswa: siswa.nama, 
+          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`, // 🔥 PERBAIKAN: Pastikan kode_mapel ada
+          nama_mapel: mapel.nama_mapel, 
+          semester, 
+          tahun_ajaran 
+        });
       }
     }
 
@@ -571,9 +633,19 @@ exports.downloadCompleteTemplate = async (req, res) => {
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
+    // 🔥 PERBAIKAN: Gunakan data dari tabel IndikatorKehadiran
     for (const siswa of siswaList) {
       for (const indikator of indikatorKehadiran) {
-        sheetKehadiran.addRow({ nis: siswa.nis, nama: siswa.nama, kegiatan: indikator.nama_kegiatan, izin: 0, sakit: 0, absen: 0, semester, tahun_ajaran });
+        sheetKehadiran.addRow({ 
+          nis: siswa.nis, 
+          nama: siswa.nama, 
+          kegiatan: indikator.nama_kegiatan, // ✅ Ambil dari tabel IndikatorKehadiran
+          izin: 0, 
+          sakit: 0, 
+          absen: 0, 
+          semester, 
+          tahun_ajaran 
+        });
       }
     }
 
@@ -591,10 +663,24 @@ exports.downloadCompleteTemplate = async (req, res) => {
     ];
     for (const siswa of siswaList) {
       for (const ind of indikatorSpiritual) {
-        sheetSikap.addRow({ nis: siswa.nis, nama: siswa.nama, jenis: 'spiritual', indikator: ind.indikator, semester, tahun_ajaran });
+        sheetSikap.addRow({ 
+          nis: siswa.nis, 
+          nama: siswa.nama, 
+          jenis: 'spiritual', 
+          indikator: ind.indikator, 
+          semester, 
+          tahun_ajaran 
+        });
       }
       for (const ind of indikatorSosial) {
-        sheetSikap.addRow({ nis: siswa.nis, nama: siswa.nama, jenis: 'sosial', indikator: ind.indikator, semester, tahun_ajaran });
+        sheetSikap.addRow({ 
+          nis: siswa.nis, 
+          nama: siswa.nama, 
+          jenis: 'sosial', 
+          indikator: ind.indikator, 
+          semester, 
+          tahun_ajaran 
+        });
       }
     }
 
