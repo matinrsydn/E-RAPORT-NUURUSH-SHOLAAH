@@ -22,6 +22,11 @@ router.put('/nilai-hafalan/:id', raportController.updateNilaiHafalan);
 router.put('/kehadiran/:id', raportController.updateKehadiran);
 
 // POST /api/raport/save-validated
-router.post('/save-validated', raportController.saveValidatedRaport);
+router.post('/save-validated', (req, res, next) => {
+  console.log("🚀 ROUTE /save-validated HIT");
+  console.log("📦 Body diterima:", JSON.stringify(req.body, null, 2));
+  next();
+}, raportController.saveValidatedRaport);
+
 
 module.exports = router;

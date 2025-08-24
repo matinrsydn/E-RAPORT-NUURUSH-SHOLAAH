@@ -353,10 +353,15 @@ exports.downloadTemplateKehadiran = async (req, res) => {
   try {
     const { kelas_id, tahun_ajaran, semester } = req.query;
     const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
-    const kegiatanList = ['Shalat Berjamaah', 'Mengaji', 'Tahfidz', 'Sekolah Formal'];
+    const indikatorList = await db.IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
+
+    if (indikatorList.length === 0) {
+      return res.status(404).json({ message: 'Tidak ada data Indikator Kehadiran. Silakan tambahkan terlebih dahulu di menu Master Data.' });
+    }
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Kehadiran');
+
     sheet.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
       { header: 'Nama Siswa', key: 'nama', width: 25 },
@@ -367,19 +372,32 @@ exports.downloadTemplateKehadiran = async (req, res) => {
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
+
     for (const siswa of siswaList) {
-      for (const k of kegiatanList) {
-        sheet.addRow({ nis: siswa.nis, nama: siswa.nama, kegiatan: k, izin: 0, sakit: 0, absen: 0, semester, tahun_ajaran });
+      for (const indikator of indikatorList) {
+        sheet.addRow({
+          nis: siswa.nis,
+          nama: siswa.nama,
+          kegiatan: indikator.nama_kegiatan, // ✅ ambil dari tabel
+          izin: 0,
+          sakit: 0,
+          absen: 0,
+          semester,
+          tahun_ajaran
+        });
       }
     }
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="Template_Kehadiran.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
+
   } catch (err) {
     res.status(500).json({ message: 'Gagal membuat template kehadiran', error: err.message });
   }
 };
+
 
 exports.uploadKehadiran = async (req, res) => {
   try {
@@ -413,6 +431,8 @@ exports.uploadKehadiran = async (req, res) => {
     res.status(500).json({ message: 'Gagal upload kehadiran', error: err.message });
   }
 };
+
+
 
 // ====================== SIKAP ======================
 exports.downloadTemplateSikap = async (req, res) => {
@@ -481,5 +501,111 @@ exports.uploadSikap = async (req, res) => {
     res.json({ message: `Berhasil upload ${success} data sikap.` });
   } catch (err) {
     res.status(500).json({ message: 'Gagal upload sikap', error: err.message });
+  }
+};
+
+exports.downloadCompleteTemplate = async (req, res) => {
+  try {
+    const { kelas_id, tahun_ajaran, semester } = req.query;
+
+    if (!kelas_id || !tahun_ajaran || !semester) {
+      return res.status(400).json({ message: 'Parameter kelas_id, tahun_ajaran, semester wajib diisi.' });
+    }
+
+    const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
+    const mapelList = await db.MataPelajaran.findAll({ order: [['nama_mapel', 'ASC']] });
+    const indikatorKehadiran = await db.IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
+    const indikatorSpiritual = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' } });
+    const indikatorSosial = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' } });
+
+    if (siswaList.length === 0) {
+      return res.status(404).json({ message: 'Tidak ada siswa di kelas ini.' });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+
+    // ========== Sheet Nilai Ujian ==========
+    const sheetUjian = workbook.addWorksheet('Template Nilai Ujian');
+    sheetUjian.columns = [
+      { header: 'NIS', key: 'nis', width: 15 },
+      { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
+      { header: 'Kode Mapel', key: 'kode_mapel', width: 15 },
+      { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
+      { header: 'Pengetahuan (Angka)', key: 'pengetahuan', width: 20 },
+      { header: 'Keterampilan (Angka)', key: 'keterampilan', width: 20 },
+      { header: 'Semester', key: 'semester', width: 12 },
+      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
+    ];
+    for (const siswa of siswaList) {
+      for (const mapel of mapelList) {
+        sheetUjian.addRow({ nis: siswa.nis, nama_siswa: siswa.nama, kode_mapel: mapel.kode_mapel, nama_mapel: mapel.nama_mapel, semester, tahun_ajaran });
+      }
+    }
+
+    // ========== Sheet Hafalan ==========
+    const sheetHafalan = workbook.addWorksheet('Template Hafalan');
+    sheetHafalan.columns = [
+      { header: 'NIS', key: 'nis', width: 15 },
+      { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
+      { header: 'Kode Mapel', key: 'kode_mapel', width: 15 },
+      { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
+      { header: 'Nilai Hafalan', key: 'nilai', width: 15 },
+      { header: 'Semester', key: 'semester', width: 12 },
+      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
+    ];
+    for (const siswa of siswaList) {
+      for (const mapel of mapelList) {
+        sheetHafalan.addRow({ nis: siswa.nis, nama_siswa: siswa.nama, kode_mapel: mapel.kode_mapel, nama_mapel: mapel.nama_mapel, semester, tahun_ajaran });
+      }
+    }
+
+    // ========== Sheet Kehadiran ==========
+    const sheetKehadiran = workbook.addWorksheet('Template Kehadiran');
+    sheetKehadiran.columns = [
+      { header: 'NIS', key: 'nis', width: 15 },
+      { header: 'Nama Siswa', key: 'nama', width: 25 },
+      { header: 'Kegiatan', key: 'kegiatan', width: 20 },
+      { header: 'Izin', key: 'izin', width: 10 },
+      { header: 'Sakit', key: 'sakit', width: 10 },
+      { header: 'Absen', key: 'absen', width: 10 },
+      { header: 'Semester', key: 'semester', width: 12 },
+      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
+    ];
+    for (const siswa of siswaList) {
+      for (const indikator of indikatorKehadiran) {
+        sheetKehadiran.addRow({ nis: siswa.nis, nama: siswa.nama, kegiatan: indikator.nama_kegiatan, izin: 0, sakit: 0, absen: 0, semester, tahun_ajaran });
+      }
+    }
+
+    // ========== Sheet Sikap ==========
+    const sheetSikap = workbook.addWorksheet('Template Sikap');
+    sheetSikap.columns = [
+      { header: 'NIS', key: 'nis', width: 15 },
+      { header: 'Nama Siswa', key: 'nama', width: 25 },
+      { header: 'Jenis Sikap', key: 'jenis', width: 15 },
+      { header: 'Indikator', key: 'indikator', width: 30 },
+      { header: 'Nilai Angka', key: 'angka', width: 15 },
+      { header: 'Deskripsi', key: 'deskripsi', width: 40 },
+      { header: 'Semester', key: 'semester', width: 12 },
+      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
+    ];
+    for (const siswa of siswaList) {
+      for (const ind of indikatorSpiritual) {
+        sheetSikap.addRow({ nis: siswa.nis, nama: siswa.nama, jenis: 'spiritual', indikator: ind.indikator, semester, tahun_ajaran });
+      }
+      for (const ind of indikatorSosial) {
+        sheetSikap.addRow({ nis: siswa.nis, nama: siswa.nama, jenis: 'sosial', indikator: ind.indikator, semester, tahun_ajaran });
+      }
+    }
+
+    // Response
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Template_Complete.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (err) {
+    console.error('Error creating complete template:', err);
+    res.status(500).json({ message: 'Gagal membuat template lengkap', error: err.message });
   }
 };

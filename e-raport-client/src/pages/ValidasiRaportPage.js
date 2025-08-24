@@ -40,7 +40,7 @@ const ValidasiRaportPage = () => {
 
             // 3. Panggil API endpoint yang baru di raportController
             const response = await axios.post(`http://localhost:5000/api/raports/save-validated`, {
-                validatedData: validDataToSend // Kirim data dalam format yang diharapkan backend
+                validatedData: validDataToSend
             });
             
             // 4. Tampilkan notifikasi sukses yang jelas

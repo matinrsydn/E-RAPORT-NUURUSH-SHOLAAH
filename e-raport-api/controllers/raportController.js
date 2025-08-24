@@ -6,36 +6,46 @@ const db = require('../models');
 // BARU: FUNGSI UNTUK MENYIMPAN DATA DARI HALAMAN VALIDASI
 // ==========================================================================================
 exports.saveValidatedRaport = async (req, res) => {
-    // Ambil data yang sudah divalidasi dari body request
-    const { validatedData } = req.body;
+    console.log("📥 saveValidatedRaport HIT"); // ✅ cek apakah masuk
 
-    // Pastikan data tidak kosong
+    const { validatedData } = req.body;
+    console.log("📦 validatedData:", JSON.stringify(validatedData, null, 2)); // ✅ cek isi body
+
     if (!validatedData || validatedData.length === 0) {
         return res.status(400).json({ message: "Tidak ada data untuk disimpan." });
     }
 
-    const transaction = await db.sequelize.transaction(); // Mulai transaksi database
+    const transaction = await db.sequelize.transaction();
 
     try {
-        // --- Siapkan semua data untuk disimpan ---
         const nilaiUjianToCreate = [];
-        const nilaiHafalanToCreate = [];
-        const kehadiranToCreate = [];
-        const sikapToCreate = [];
 
-        // Loop melalui setiap baris data yang valid dari frontend
-        validatedData.forEach(item => {
-            // Asumsikan struktur data dari frontend seperti ini
-            // Sesuaikan jika perlu
-            if (item.nilaiUjian) nilaiUjianToCreate.push(...item.nilaiUjian);
-            if (item.nilaiHafalan) nilaiHafalanToCreate.push(...item.nilaiHafalan);
-            if (item.kehadiran) kehadiranToCreate.push(...item.kehadiran);
-            if (item.sikap) sikapToCreate.push(item.sikap);
-        });
+        for (const item of validatedData) {
+            if (item.nilaiUjian) {
+                for (const nilai of item.nilaiUjian) {
+                    const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
+                    console.log("🔎 siswa found:", siswa?.id, siswa?.nama);
 
-        // --- Lakukan operasi database secara massal ---
-        
-        // 1. Simpan/Update Nilai Ujian
+                    const mapel = await db.MataPelajaran.findOne({ where: { kode_mapel: nilai.kode_mapel } });
+                    console.log("📘 mapel found:", mapel?.id, mapel?.nama_mapel);
+
+                    if (!siswa) throw new Error(`Siswa dengan NIS ${item.nis} tidak ditemukan`);
+                    if (!mapel) throw new Error(`Mapel dengan kode ${nilai.kode_mapel} tidak ditemukan`);
+
+                    nilaiUjianToCreate.push({
+                        siswa_id: siswa.id,
+                        mapel_id: mapel.id,
+                        pengetahuan_angka: nilai.pengetahuan_angka,
+                        keterampilan_angka: nilai.keterampilan_angka,
+                        semester: item.semester,
+                        tahun_ajaran: item.tahun_ajaran
+                    });
+                }
+            }
+        }
+
+        console.log("📝 nilaiUjianToCreate:", JSON.stringify(nilaiUjianToCreate, null, 2)); // ✅ cek data sebelum insert
+
         if (nilaiUjianToCreate.length > 0) {
             await db.NilaiUjian.bulkCreate(nilaiUjianToCreate, {
                 transaction,
@@ -43,40 +53,12 @@ exports.saveValidatedRaport = async (req, res) => {
             });
         }
 
-        // 2. Simpan/Update Nilai Hafalan
-        if (nilaiHafalanToCreate.length > 0) {
-            await db.NilaiHafalan.bulkCreate(nilaiHafalanToCreate, {
-                transaction,
-                updateOnDuplicate: ['nilai_angka', 'updatedAt']
-            });
-        }
-
-        // 3. Simpan/Update Kehadiran
-        if (kehadiranToCreate.length > 0) {
-            await db.Kehadiran.bulkCreate(kehadiranToCreate, {
-                transaction,
-                updateOnDuplicate: ["sakit", "izin", "absen", 'updatedAt']
-            });
-        }
-        
-        // 4. Simpan/Update Sikap (menggunakan upsert)
-        if (sikapToCreate.length > 0) {
-            for (const sikap of sikapToCreate) {
-                await db.Sikap.upsert(sikap, { transaction });
-            }
-        }
-        
-        // Jika semua operasi di atas berhasil, commit transaksi
         await transaction.commit();
-
         res.status(200).json({ message: 'Data raport berhasil disimpan.' });
 
     } catch (error) {
-        // Jika ada satu saja error, batalkan semua perubahan
         await transaction.rollback();
-
-        // Kirim pesan error yang jelas ke frontend untuk debugging
-        console.error("GAGAL MENYIMPAN RAPORT DARI HALAMAN VALIDASI:", error);
+        console.error("❌ GAGAL MENYIMPAN RAPORT:", error);
         res.status(500).json({
             message: 'Terjadi kesalahan saat menyimpan data.',
             error: error.message

@@ -94,7 +94,7 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/kelas', kelasRoutes);
 app.use('/api/indikator-sikap', indikatorSikapRoutes);
 app.use('/api/tahun-ajaran', tahunAjaranRoutes);
-app.use('/api/raport', raportRoutes);
+app.use('/api/raports', raportRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/draft', draftRoutes);
 app.use('/api/indikator-kehadiran', indikatorKehadiranRoutes);
@@ -109,5 +109,10 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server berjalan pada port ${PORT}.`);
+});
+
+app.use((req, res, next) => {
+  console.log(`➡️ ${req.method} ${req.url}`);
+  next();
 });
 
