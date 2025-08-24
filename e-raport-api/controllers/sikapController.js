@@ -18,7 +18,7 @@ exports.bulkUpdateOrInsertSikap = async (req, res) => {
             // Hanya proses jika ada nilai yang diinput (tidak kosong)
             if (sikap.angka !== null) {
                 await Sikap.upsert({
-                    siswaId: sikap.siswa_id,
+                    siswa_id: sikap.siswa_id, // ✅ Ganti siswaId -> siswa_id
                     jenis_sikap: sikap.jenis_sikap,
                     indikator: sikap.indikator,
                     angka: sikap.angka,
@@ -82,7 +82,7 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
     try {
         const sikapSpiritual = await Sikap.findAll({
             where: {
-                siswaId: siswa_id,
+                siswa_id: siswa_id, // ✅ Ganti siswaId -> siswa_id
                 jenis_sikap: 'spiritual',
                 semester: semester,
                 tahun_ajaran: tahun_ajaran
@@ -91,7 +91,7 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
 
         const sikapSosial = await Sikap.findAll({
             where: {
-                siswaId: siswa_id,
+                siswa_id: siswa_id, // ✅ Ganti siswaId -> siswa_id
                 jenis_sikap: 'sosial',
                 semester: semester,
                 tahun_ajaran: tahun_ajaran
@@ -133,7 +133,7 @@ exports.updateDeskripsiSikap = async (req, res) => {
             { deskripsi: deskripsi },
             {
                 where: {
-                    siswaId: siswa_id,
+                    siswa_id: siswa_id, // ✅ Ganti siswaId -> siswa_id
                     jenis_sikap: jenis_sikap,
                     semester: semester,
                     tahun_ajaran: tahun_ajaran
@@ -157,8 +157,8 @@ exports.updateDeskripsiSikap = async (req, res) => {
 // 1. Membuat satu entri nilai sikap baru
 exports.createSikap = async (req, res) => {
     try {
-        const { siswaId, jenis_sikap, indikator, angka, semester, tahun_ajaran } = req.body;
-        if (!siswaId || !jenis_sikap || !indikator || !semester || !tahun_ajaran) {
+        const { siswa_id, jenis_sikap, indikator, angka, semester, tahun_ajaran } = req.body; // ✅ Ganti siswaId -> siswa_id
+        if (!siswa_id || !jenis_sikap || !indikator || !semester || !tahun_ajaran) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
         const newSikap = await Sikap.create(req.body);

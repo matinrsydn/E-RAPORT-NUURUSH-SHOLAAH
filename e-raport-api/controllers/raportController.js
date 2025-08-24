@@ -118,7 +118,7 @@ exports.saveValidatedRaport = async (req, res) => {
                     
                     // 🔥 PASTIKAN FIELD NAMES DAN TIPE DATA BENAR
                     const kehadiranData = {
-                        siswa_id: siswa.id,
+                        siswa_id: siswa.id, // ✅ PERBAIKAN: Gunakan siswa_id, bukan siswaId
                         kegiatan: String(kegiatanDetail.kegiatan).trim(),
                         izin: parseInt(kegiatanDetail.izin) || 0,
                         sakit: parseInt(kegiatanDetail.sakit) || 0,
@@ -168,7 +168,7 @@ exports.saveValidatedRaport = async (req, res) => {
                 console.log(`📝 Processing sikap for ${siswa.nama}...`);
                 
                 await db.Sikap.upsert({
-                    siswa_id: siswa.id,
+                    siswa_id: siswa.id, // ✅ PERBAIKAN: Gunakan siswa_id, bukan siswaId
                     catatan: item.catatan_sikap,
                     semester: item.semester,
                     tahun_ajaran: item.tahun_ajaran,
@@ -247,33 +247,154 @@ exports.saveValidatedRaport = async (req, res) => {
 exports.getRaportData = async (req, res) => {
     const { siswaId, tahunAjaran, semester } = req.params;
     const tahunAjaranFormatted = `${tahunAjaran}/${parseInt(tahunAjaran) + 1}`;
-    let semesterFormatted = semester === '1' ? 'Ganjil' : 'Genap';
+    
+    console.log("=== DEBUG getRaportData ===");
+    console.log("siswaId:", siswaId);
+    console.log("tahunAjaran:", tahunAjaran);
+    console.log("semester:", semester);
+    console.log("tahunAjaranFormatted:", tahunAjaranFormatted);
 
     try {
+        // 🔥 PERBAIKAN 1: Gunakan siswa_id yang konsisten untuk kehadiran
+        const kehadiranQuery = {
+            siswa_id: siswaId,
+            tahun_ajaran: tahunAjaranFormatted,
+            // 🔥 PERBAIKAN 2: Coba dua format semester
+            [db.Sequelize.Op.or]: [
+                { semester: semester },           // angka: 1, 2
+                { semester: semester === '1' ? 'Ganjil' : 'Genap' }  // text
+            ]
+        };
+
+        // 🔥 PERBAIKAN 3: Gunakan siswa_id yang konsisten untuk sikap
+        const sikapQuery = {
+            siswa_id: siswaId,
+            tahun_ajaran: tahunAjaranFormatted,
+            // 🔥 PERBAIKAN 4: Coba dua format semester untuk sikap juga
+            [db.Sequelize.Op.or]: [
+                { semester: semester },
+                { semester: semester === '1' ? 'Ganjil' : 'Genap' }
+            ]
+        };
+
+        console.log("kehadiranQuery:", JSON.stringify(kehadiranQuery, null, 2));
+        console.log("sikapQuery:", JSON.stringify(sikapQuery, null, 2));
+
         const [nilaiUjian, nilaiHafalan, semuaKehadiran, sikap] = await Promise.all([
-            db.NilaiUjian.findAll({ where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semester }, include: [{ model: db.MataPelajaran, as: 'mapel', attributes: ['nama_mapel'] }] }),
-            db.NilaiHafalan.findAll({ where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semester }, include: [{ model: db.MataPelajaran, as: 'mapel', attributes: ['nama_mapel'] }] }),
-            db.Kehadiran.findAll({ where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted } }),
-            db.Sikap.findAll({ where: { siswa_id: siswaId, tahun_ajaran: tahunAjaranFormatted, semester: semesterFormatted } })
+            db.NilaiUjian.findAll({ 
+                where: { 
+                    siswa_id: siswaId, 
+                    tahun_ajaran: tahunAjaranFormatted, 
+                    semester: semester 
+                }, 
+                include: [{ 
+                    model: db.MataPelajaran, 
+                    as: 'mapel', 
+                    attributes: ['nama_mapel'] 
+                }] 
+            }),
+            db.NilaiHafalan.findAll({ 
+                where: { 
+                    siswa_id: siswaId, 
+                    tahun_ajaran: tahunAjaranFormatted, 
+                    semester: semester 
+                }, 
+                include: [{ 
+                    model: db.MataPelajaran, 
+                    as: 'mapel', 
+                    attributes: ['nama_mapel'] 
+                }] 
+            }),
+            // 🔥 PERBAIKAN: Gunakan query yang lebih fleksibel
+            db.Kehadiran.findAll({ 
+                where: kehadiranQuery
+            }),
+            // 🔥 PERBAIKAN: Gunakan query yang lebih fleksibel
+            db.Sikap.findAll({ 
+                where: sikapQuery
+            })
         ]);
 
+        console.log("=== HASIL QUERY ===");
+        console.log("nilaiUjian count:", nilaiUjian.length);
+        console.log("nilaiHafalan count:", nilaiHafalan.length);
+        console.log("semuaKehadiran count:", semuaKehadiran.length);
+        console.log("sikap count:", sikap.length);
+
+        // Log detail kehadiran jika ada
+        if (semuaKehadiran.length > 0) {
+            console.log("Sample kehadiran:", semuaKehadiran[0].toJSON());
+        }
+
+        // Log detail sikap jika ada
+        if (sikap.length > 0) {
+            console.log("Sample sikap:", sikap[0].toJSON());
+        }
+
+        // 🔥 PERBAIKAN: Hitung rekap kehadiran dengan lebih hati-hati
         const rekapKehadiran = semuaKehadiran.reduce((acc, curr) => {
-            acc.sakit += curr.sakit || 0;
-            acc.izin += curr.izin || 0;
-            acc.alpha += curr.absen || 0;
+            acc.sakit += parseInt(curr.sakit) || 0;
+            acc.izin += parseInt(curr.izin) || 0;
+            acc.alpha += parseInt(curr.absen) || 0; // absen = alpha
             if (!acc.id && curr.id) acc.id = curr.id;
             return acc;
         }, { id: null, sakit: 0, izin: 0, alpha: 0 });
 
+        console.log("rekapKehadiran:", rekapKehadiran);
+
         res.status(200).json({
-            nilaiUjian: nilaiUjian.map(n => ({ id: n.id, nama_mapel: n.mapel?.nama_mapel || 'N/A', pengetahuan_angka: n.pengetahuan_angka, keterampilan_angka: n.keterampilan_angka })),
-            nilaiHafalan: nilaiHafalan.map(n => ({ id: n.id, kategori: n.kategori || 'Hafalan', nilai: n.nilai_angka, nilai_angka: n.nilai_angka })),
-            kehadiran: semuaKehadiran.length > 0 ? rekapKehadiran : null,
-            sikap: sikap.map(s => ({ id: s.id, jenis_sikap: s.jenis_sikap, indikator: s.indikator, angka: s.angka, deskripsi: s.deskripsi }))
+            nilaiUjian: nilaiUjian.map(n => ({ 
+                id: n.id, 
+                nama_mapel: n.mapel?.nama_mapel || 'N/A', 
+                pengetahuan_angka: n.pengetahuan_angka, 
+                keterampilan_angka: n.keterampilan_angka 
+            })),
+            nilaiHafalan: nilaiHafalan.map(n => ({ 
+                id: n.id, 
+                kategori: n.kategori || 'Hafalan', 
+                nilai: n.nilai_angka, 
+                nilai_angka: n.nilai_angka 
+            })),
+            // 🔥 PERBAIKAN: Pastikan kehadiran selalu ada datanya
+            kehadiran: rekapKehadiran.id ? rekapKehadiran : {
+                id: null,
+                sakit: 0,
+                izin: 0, 
+                alpha: 0
+            },
+            // 🔥 PERBAIKAN: Format sikap dengan lebih baik
+            sikap: sikap.map(s => ({ 
+                id: s.id, 
+                jenis_sikap: s.jenis_sikap, 
+                indikator: s.indikator, 
+                angka: s.angka, 
+                deskripsi: s.deskripsi || s.catatan || 'Tidak ada catatan'
+            })),
+            // 🔥 DEBUG: Tambahkan data mentah untuk debugging
+            debug: {
+                kehadiran_raw: semuaKehadiran.map(k => k.toJSON()),
+                sikap_raw: sikap.map(s => s.toJSON()),
+                queries: {
+                    kehadiranQuery,
+                    sikapQuery
+                }
+            }
         });
+        
     } catch (error) {
-        console.error("Error fetching raport data:", error);
-        res.status(500).json({ message: "Gagal mengambil data raport.", error: error.message });
+        console.error("=== ERROR in getRaportData ===");
+        console.error("Error details:", error);
+        console.error("Error stack:", error.stack);
+        res.status(500).json({ 
+            message: "Gagal mengambil data raport.", 
+            error: error.message,
+            debug: {
+                siswaId,
+                tahunAjaran,
+                semester,
+                tahunAjaranFormatted
+            }
+        });
     }
 };
 

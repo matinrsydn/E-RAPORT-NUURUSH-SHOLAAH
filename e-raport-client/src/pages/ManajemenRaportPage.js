@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { Container, Row, Col, Card, Form, Button, Spinner, Alert, Table } from 'react-bootstrap';
 import { Edit, Save, X, Eye, FileText } from 'lucide-react';
@@ -153,13 +153,11 @@ const ManajemenRaportPage = () => {
             setEditingId(null);
             setEditingType('');
             
-            // Refresh data raport
             if (selectedSiswaForDetail) {
                 await handleViewRaportDetail(selectedSiswaForDetail);
             }
         } catch (err) {
             alert('Gagal memperbarui data.');
-            console.error(err);
         }
     };
     
@@ -193,6 +191,39 @@ const ManajemenRaportPage = () => {
             }
         }));
     };
+
+    const groupedSikap = useMemo(() => {
+        if (!raportData || !raportData.sikap) return {};
+        
+        return raportData.sikap.reduce((acc, sikap) => {
+            // Hanya proses item yang memiliki `jenis_sikap` yang valid (bukan null atau undefined)
+            if (!sikap.jenis_sikap) {
+                return acc; // Lewati item ini
+            }
+
+            const { jenis_sikap, indikator, angka, deskripsi } = sikap;
+            
+            // Buat grup jika belum ada
+            if (!acc[jenis_sikap]) {
+                acc[jenis_sikap] = {
+                    indicators: [],
+                    deskripsi: 'Tidak ada catatan' // Default deskripsi
+                };
+            }
+            
+            // Tambahkan indikator jika ada
+            if (indikator) {
+                acc[jenis_sikap].indicators.push({ indikator, angka });
+            }
+
+            // Selalu perbarui deskripsi dengan yang terbaru ditemukan untuk grup tersebut
+            if (deskripsi) {
+                acc[jenis_sikap].deskripsi = deskripsi;
+            }
+            
+            return acc;
+        }, {});
+    }, [raportData]);
 
     return (
         <Container fluid>
@@ -466,15 +497,27 @@ const ManajemenRaportPage = () => {
                             <Card>
                                 <Card.Header><Card.Title>Sikap & Catatan</Card.Title></Card.Header>
                                 <Card.Body>
-                                    {raportData.sikap && raportData.sikap.length > 0 ? (
-                                        raportData.sikap.map((sikap, index) => (
-                                            <div key={index} className="mb-3">
-                                                <strong>{sikap.jenis_sikap}:</strong>
-                                                <p>{sikap.deskripsi || 'Tidak ada catatan'}</p>
+                                    {Object.keys(groupedSikap).length > 0 ? (
+                                        Object.keys(groupedSikap).map(jenisSikap => (
+                                            <div key={jenisSikap} className="mb-3">
+                                                <h6 className="text-capitalize"><strong>Sikap {jenisSikap}</strong></h6>
+                                                <ul className="list-unstyled ps-3">
+                                                    {groupedSikap[jenisSikap].indicators.map((item, index) => (
+                                                        <li key={index}>
+                                                            {item.indikator}: <span className="badge bg-secondary">{item.angka}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                                <p className="mb-0 mt-2">
+                                                    <strong>Catatan:</strong> 
+                                                    <br/>
+                                                    <em>{groupedSikap[jenisSikap].deskripsi}</em>
+                                                </p>
+                                                {Object.keys(groupedSikap).length > 1 && <hr/>}
                                             </div>
                                         ))
                                     ) : (
-                                        <p className="text-muted">Fitur untuk mengedit sikap dan catatan akan ditambahkan.</p>
+                                        <p className="text-muted">Data sikap dan catatan belum tersedia.</p>
                                     )}
                                 </Card.Body>
                             </Card>
