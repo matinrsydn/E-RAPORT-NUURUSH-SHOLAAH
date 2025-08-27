@@ -77,30 +77,48 @@ const ManajemenTahunAjaranPage = () => {
                 Tambah Tahun Ajaran
             </Button>
             <Table striped bordered hover responsive>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Tahun Ajaran</th>
-                        <th>Status</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {data.map((item, index) => (
-                        <tr key={item.id}>
-                            <td>{index + 1}</td>
-                            <td>{item.nama_ajaran}</td>
-                            <td>
-                                {item.status === 'aktif' ? <Badge bg="success">Aktif</Badge> : <Badge bg="secondary">Tidak Aktif</Badge>}
-                            </td>
-                            <td>
-                                <Button variant="info" size="sm" className="me-1" onClick={() => handleShow(item)}>Edit</Button>
-                                <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>Hapus</Button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
+            <thead>
+                <tr>
+                <th>#</th>
+                <th>Tahun Ajaran</th>
+                <th>Semester</th>   {/* kolom baru */}
+                <th>Status</th>
+                <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {data.map((item, index) => (
+                <tr key={item.id}>
+                    <td>{index + 1}</td>
+                    <td>{item.nama_ajaran}</td>
+                    <td>{item.semester}</td>   {/* tampilkan semester */}
+                    <td>
+                    {item.status === 'aktif'
+                        ? <Badge bg="success">Aktif</Badge>
+                        : <Badge bg="secondary">Tidak Aktif</Badge>}
+                    </td>
+                    <td>
+                    <Button
+                        variant="info"
+                        size="sm"
+                        className="me-1"
+                        onClick={() => handleShow(item)}
+                    >
+                        Edit
+                    </Button>
+                    <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDelete(item.id)}
+                    >
+                        Hapus
+                    </Button>
+                    </td>
+                </tr>
+                ))}
+            </tbody>
             </Table>
+
 
             <Modal show={show} onHide={handleClose}>
                 <Modal.Header closeButton>
@@ -109,20 +127,43 @@ const ManajemenTahunAjaranPage = () => {
                 <Modal.Body>
                     {error && <Alert variant="danger">{error}</Alert>}
                     <Form>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Tahun Ajaran (Contoh: 2024/2025)</Form.Label>
-                            <Form.Control type="text" name="nama_ajaran" value={currentData.nama_ajaran} onChange={handleChange} />
-                        </Form.Group>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Status</Form.Label>
-                            <Form.Select name="status" value={currentData.status} onChange={handleChange}>
-                                <option value="tidak-aktif">Tidak Aktif</option>
-                                <option value="aktif">Aktif</option>
-                            </Form.Select>
-                            <Form.Text className="text-muted">
-                                Mengaktifkan tahun ajaran ini akan menonaktifkan yang lain.
-                            </Form.Text>
-                        </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Tahun Ajaran (Contoh: 2024/2025)</Form.Label>
+                        <Form.Control
+                        type="text"
+                        name="nama_ajaran"
+                        value={currentData.nama_ajaran}
+                        onChange={handleChange}
+                        placeholder="2024/2025"
+                        />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                        <Form.Label>Semester</Form.Label>
+                        <Form.Select
+                        name="semester"
+                        value={currentData.semester || '1'}
+                        onChange={handleChange}
+                        >
+                        <option value="1">Semester 1</option>
+                        <option value="2">Semester 2</option>
+                        </Form.Select>
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                        <Form.Label>Status</Form.Label>
+                        <Form.Select
+                        name="status"
+                        value={currentData.status}
+                        onChange={handleChange}
+                        >
+                        <option value="tidak-aktif">Tidak Aktif</option>
+                        <option value="aktif">Aktif</option>
+                        </Form.Select>
+                        <Form.Text className="text-muted">
+                        Mengaktifkan tahun ajaran ini akan menonaktifkan yang lain.
+                        </Form.Text>
+                    </Form.Group>
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>

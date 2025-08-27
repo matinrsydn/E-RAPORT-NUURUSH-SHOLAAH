@@ -25,13 +25,23 @@ module.exports = (sequelize, DataTypes) => {
     sequelize, 
     modelName: 'MataPelajaran',
     hooks: {
-      beforeCreate: (mapel, options) => {
-        // Auto-generate kode_mapel jika tidak ada
-        if (!mapel.kode_mapel) {
-          mapel.kode_mapel = `MP${mapel.id?.toString().padStart(3, '0') || '000'}`;
+    beforeCreate: async (mapel, options) => {
+      if (!mapel.kode_mapel) {
+        // Cari kode_mapel terakhir
+        const lastKode = await MataPelajaran.max('kode_mapel');
+        if (lastKode) {
+          // Ambil angka dari kode terakhir, misal "MP007" -> 7
+          const lastNum = parseInt(lastKode.replace('MP', ''), 10);
+          const nextNum = lastNum + 1;
+          mapel.kode_mapel = `MP${nextNum.toString().padStart(3, '0')}`;
+        } else {
+          // Kalau tabel masih kosong, mulai dari MP001
+          mapel.kode_mapel = 'MP001';
         }
       }
     }
+  }
+
   });
   return MataPelajaran;
 };

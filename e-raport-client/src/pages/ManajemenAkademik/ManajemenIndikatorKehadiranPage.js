@@ -79,17 +79,42 @@ const ManajemenIndikatorKehadiranPage = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm('Apakah Anda yakin ingin menghapus indikator ini?')) {
+    // const handleDelete = async (id) => {
+    //     if (window.confirm('Apakah Anda yakin ingin menghapus indikator ini?')) {
+    //         try {
+    //             await axios.delete(`${API_URL}/${id}`);
+    //             toast.success('Indikator berhasil dihapus.');
+    //             fetchData(); // Muat ulang data
+    //         } catch (err) {
+    //             toast.error(err.response?.data?.message || 'Gagal menghapus data.');
+    //         }
+    //     }
+    // };
+
+    const handleDeactivate = async (id) => {
+        if (window.confirm('Yakin ingin menonaktifkan indikator ini?')) {
             try {
-                await axios.delete(`${API_URL}/${id}`);
-                toast.success('Indikator berhasil dihapus.');
-                fetchData(); // Muat ulang data
+                await axios.patch(`${API_URL}/${id}/deactivate`);
+                toast.success('Indikator berhasil dinonaktifkan.');
+                fetchData();
             } catch (err) {
-                toast.error(err.response?.data?.message || 'Gagal menghapus data.');
+                toast.error(err.response?.data?.message || 'Gagal menonaktifkan indikator.');
             }
         }
     };
+
+    const handleActivate = async (id) => {
+        if (window.confirm('Yakin ingin mengaktifkan kembali indikator ini?')) {
+            try {
+                await axios.patch(`${API_URL}/${id}/activate`);
+                toast.success('Indikator berhasil diaktifkan kembali.');
+                fetchData();
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Gagal mengaktifkan indikator.');
+            }
+        }
+    };
+
 
     return (
         <div>
@@ -111,25 +136,40 @@ const ManajemenIndikatorKehadiranPage = () => {
                         <tr>
                             <th>#</th>
                             <th>Nama Kegiatan</th>
+                            <th>Status</th> 
                             <th style={{ width: '150px' }}>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {indikatorList.map((item, index) => (
                             <tr key={item.id}>
-                                <td>{index + 1}</td>
-                                <td>{item.nama_kegiatan}</td>
-                                <td>
-                                    <Button variant="warning" size="sm" onClick={() => handleShowModal(item)} className="me-2">
-                                        <i className="fas fa-edit"></i> Edit
-                                    </Button>
-                                    <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>
-                                        <i className="fas fa-trash"></i> Hapus
-                                    </Button>
-                                </td>
+                            <td>{index + 1}</td>
+                            <td>{item.nama_kegiatan}</td>
+                            <td>{item.is_active ? 'Aktif' : 'Nonaktif'}</td>
+                            <td>
+                                {item.is_active ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => handleDeactivate(item.id)}
+                                    className="me-2"
+                                >
+                                    <i className="fas fa-ban"></i> Nonaktifkan
+                                </Button>
+                                ) : (
+                                <Button
+                                    variant="success"
+                                    size="sm"
+                                    onClick={() => handleActivate(item.id)}
+                                    className="me-2"
+                                >
+                                    <i className="fas fa-check"></i> Aktifkan
+                                </Button>
+                                )}
+                            </td>
                             </tr>
                         ))}
-                    </tbody>
+                        </tbody>
                 </Table>
             )}
 

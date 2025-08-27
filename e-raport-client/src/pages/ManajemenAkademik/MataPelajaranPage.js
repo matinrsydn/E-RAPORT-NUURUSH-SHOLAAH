@@ -108,12 +108,22 @@ const MataPelajaranPage = () => {
                     {error && <Alert variant="danger">{error}</Alert>}
                     <Form>
                         <Form.Group className="mb-3">
-                            <Form.Label>Nama Mata Pelajaran</Form.Label>
-                            <Form.Control type="text" name="nama_mapel" value={currentData.nama_mapel} onChange={handleChange} />
+                        <Form.Label>Nama Mata Pelajaran</Form.Label>
+                        <Form.Control
+                            type="text"
+                            name="nama_mapel"   // penting!
+                            value={currentData.nama_mapel}
+                            onChange={handleChange}
+                        />
                         </Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label>Kitab</Form.Label>
-                            <Form.Control type="text" name="kitab" value={currentData.kitab} onChange={handleChange} />
+                        <Form.Label>Kitab</Form.Label>
+                        <Form.Control
+                            type="text"
+                            name="kitab"
+                            value={currentData.kitab}
+                            onChange={handleChange}
+                        />
                         </Form.Group>
                     </Form>
                 </Modal.Body>

@@ -16,17 +16,6 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'indikator_sikap_id',
         as: 'indikator_sikap'
       });
-      
-      // Relasi ke WaliKelas dan Kelas (opsional)
-      Sikap.belongsTo(models.WaliKelas, { 
-        foreignKey: 'wali_kelas_id',
-        as: 'wali_kelas'
-      });
-      
-      Sikap.belongsTo(models.Kelas, { 
-        foreignKey: 'kelas_id',
-        as: 'kelas'
-      });
     }
   }
 
@@ -52,13 +41,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     
     // 🔥 TAMBAHAN: Nilai angka untuk sikap (WAJIB)
-    angka: {
-      type: DataTypes.DECIMAL(4, 2), // Contoh: 8.75
+    nilai: {
+      type: DataTypes.DECIMAL(4, 2),
       allowNull: true,
-      validate: {
-        min: 0,
-        max: 10
-      }
+      validate: { min: 0, max: 10 }
     },
     
     // Deskripsi/catatan sikap individual (per indikator)
@@ -66,12 +52,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    
-    // Catatan umum dari wali kelas (untuk keseluruhan sikap siswa)
-    catatan_wali_kelas: {
-      type: DataTypes.TEXT,
-      allowNull: true
-    },
+
     
     // Periode
     semester: {
@@ -89,17 +70,6 @@ module.exports = (sequelize, DataTypes) => {
         is: /^\d{4}\/\d{4}$/
       }
     },
-    
-    // Relasi tambahan
-    wali_kelas_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    
-    kelas_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    }
   }, { 
     sequelize, 
     modelName: 'Sikap',

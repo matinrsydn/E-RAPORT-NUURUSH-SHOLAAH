@@ -5,7 +5,7 @@ const controller = require('../controllers/indikatorKehadiranController');
 
 router.get('/', controller.getAll);
 router.post('/', controller.create);
-router.put('/:id', controller.update);
-router.delete('/:id', controller.delete);
+router.patch('/:id/deactivate', controller.deactivate);
+router.patch('/:id/activate', controller.activate);
 
 module.exports = router;

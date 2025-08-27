@@ -32,11 +32,18 @@ const ManajemenKelasPage = () => {
     const fetchWaliKelas = async () => {
         try {
             const response = await axios.get(WALI_KELAS_API_URL);
-            setWaliKelasOptions(response.data);
+
+            // filter supaya wali kelas unik berdasarkan id
+            const uniqueWaliKelas = response.data.filter(
+            (wk, index, self) => index === self.findIndex(t => t.id === wk.id)
+            );
+
+            setWaliKelasOptions(uniqueWaliKelas);
         } catch (error) {
             console.error("Error fetching wali kelas:", error);
         }
     };
+
 
     // Menangani perubahan input pada form
     const handleInputChange = (e) => {
@@ -88,7 +95,9 @@ const ManajemenKelasPage = () => {
                     <input type="number" name="kapasitas" value={formData.kapasitas} onChange={handleInputChange} placeholder="Kapasitas" className="p-2 border rounded" required />
                     <select name="wali_kelas_id" value={formData.wali_kelas_id} onChange={handleInputChange} className="p-2 border rounded">
                         <option value="">Pilih Wali Kelas</option>
-                        {waliKelasOptions.map(wk => <option key={wk.id} value={wk.id}>{wk.nama}</option>)}
+                        {waliKelasOptions.map((wk, index) => 
+                        <option key={`${wk.id}-${index}`} value={wk.id}>{wk.nama}</option>
+                        )}
                     </select>
                 </div>
                 <div className="mt-4">

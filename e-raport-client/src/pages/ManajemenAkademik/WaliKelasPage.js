@@ -8,7 +8,7 @@ const WaliKelasPage = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState(null);
     
-    const initialState = { nama: '' };
+    const initialState = { nama: '', nip: '' };
     const [currentData, setCurrentData] = useState(initialState);
 
     // REVISI: Pastikan URL API benar -> '/api/wali-kelas'
@@ -82,6 +82,7 @@ const WaliKelasPage = () => {
                     <tr>
                         <th>#</th>
                         <th>Nama Wali Kelas</th>
+                        <th>NIP</th>
                         <th>Kelas yang Diajar</th> {/* Tambah kolom baru */}
                         <th>Aksi</th>
                     </tr>
@@ -91,6 +92,7 @@ const WaliKelasPage = () => {
                         <tr key={wk.id}>
                             <td>{index + 1}</td>
                             <td>{wk.nama}</td>
+                            <td>{wk.nip || '-'}</td> 
                             {/* Tampilkan nama kelas, jika ada */}
                             <td>{wk.kelas ? wk.kelas.nama_kelas : 'N/A'}</td>
                             <td>
@@ -103,23 +105,40 @@ const WaliKelasPage = () => {
             </Table>
 
             <Modal show={show} onHide={handleClose}>
-                <Modal.Header closeButton>
-                    <Modal.Title>{isEditing ? 'Edit Wali Kelas' : 'Tambah Wali Kelas'}</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    {error && <Alert variant="danger">{error}</Alert>}
-                    <Form>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Nama Wali Kelas</Form.Label>
-                            <Form.Control type="text" name="nama" value={currentData.nama} onChange={handleChange} />
-                        </Form.Group>
-                    </Form>
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={handleClose}>Batal</Button>
-                    <Button variant="primary" onClick={handleSave}>Simpan</Button>
-                </Modal.Footer>
+            <Modal.Header closeButton>
+                <Modal.Title>{isEditing ? 'Edit Wali Kelas' : 'Tambah Wali Kelas'}</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                {error && <Alert variant="danger">{error}</Alert>}
+                <Form>
+                <Form.Group className="mb-3">
+                    <Form.Label>Nama Wali Kelas</Form.Label>
+                    <Form.Control
+                    type="text"
+                    name="nama"
+                    value={currentData.nama}
+                    onChange={handleChange}
+                    />
+                </Form.Group>
+
+                {/* Tambahkan field NIP di sini */}
+                <Form.Group className="mb-3">
+                    <Form.Label>NIP</Form.Label>
+                    <Form.Control
+                    type="text"
+                    name="nip"
+                    value={currentData.nip || ""}
+                    onChange={handleChange}
+                    />
+                </Form.Group>
+                </Form>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={handleClose}>Batal</Button>
+                <Button variant="primary" onClick={handleSave}>Simpan</Button>
+            </Modal.Footer>
             </Modal>
+
         </div>
     );
 };

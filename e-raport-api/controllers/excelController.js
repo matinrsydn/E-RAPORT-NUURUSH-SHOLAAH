@@ -352,21 +352,54 @@ exports.downloadTemplate = async (req, res) => {
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
 
+    let currentRow = 2;
     for (const siswa of siswaList) {
+      const startRow = currentRow;
+      
       for (const mapel of mapelList) {
         sheet.addRow({
-          nis: siswa.nis,
-          nama_siswa: siswa.nama,
+          nis: '',
+          nama_siswa: '',
           kode_mapel: mapel.kode_mapel || `MP${mapel.id}`,
           nama_mapel: mapel.nama_mapel,
           semester,
           tahun_ajaran
         });
+        currentRow++;
+      }
+      
+      const endRow = currentRow - 1;
+      
+      // Merge cells untuk NIS dan Nama
+      try {
+        const nisRange = `A${startRow}:A${endRow}`;
+        const namaRange = `B${startRow}:B${endRow}`;
+        
+        sheet.mergeCells(nisRange);
+        sheet.mergeCells(namaRange);
+        
+        sheet.getCell(`A${startRow}`).value = siswa.nis;
+        sheet.getCell(`A${startRow}`).alignment = { vertical: 'middle', horizontal: 'center' };
+        
+        sheet.getCell(`B${startRow}`).value = siswa.nama;
+        sheet.getCell(`B${startRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
+        
+      } catch (error) {
+        console.error(`Error merging cells untuk ${siswa.nama}:`, error.message);
       }
     }
 
+    // Apply styling
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Template_Nilai_Ujian.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Template_Nilai_Ujian_MergeCells.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
 
@@ -498,23 +531,47 @@ exports.downloadTemplateKehadiran = async (req, res) => {
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
 
+    let currentRow = 2;
     for (const siswa of siswaList) {
+      const startRow = currentRow;
+      
       for (const indikator of indikatorList) {
         sheet.addRow({
-          nis: siswa.nis,
-          nama: siswa.nama,
-          kegiatan: indikator.nama_kegiatan, // ✅ ambil dari tabel
+          nis: '',
+          nama: '',
+          kegiatan: indikator.nama_kegiatan,
           izin: 0,
           sakit: 0,
           absen: 0,
           semester,
           tahun_ajaran
         });
+        currentRow++;
+      }
+      
+      const endRow = currentRow - 1;
+      
+      // Merge cells
+      try {
+        const nisRange = `A${startRow}:A${endRow}`;
+        const namaRange = `B${startRow}:B${endRow}`;
+        
+        sheet.mergeCells(nisRange);
+        sheet.mergeCells(namaRange);
+        
+        sheet.getCell(`A${startRow}`).value = siswa.nis;
+        sheet.getCell(`A${startRow}`).alignment = { vertical: 'middle', horizontal: 'center' };
+        
+        sheet.getCell(`B${startRow}`).value = siswa.nama;
+        sheet.getCell(`B${startRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
+        
+      } catch (error) {
+        console.error(`Error merging cells untuk ${siswa.nama}:`, error.message);
       }
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Template_Kehadiran.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Template_Kehadiran_MergeCells.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
 
@@ -640,10 +697,7 @@ exports.downloadCompleteTemplate = async (req, res) => {
 
     const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
     const mapelList = await db.MataPelajaran.findAll({ order: [['nama_mapel', 'ASC']] });
-    
-    // 🔥 PERBAIKAN: Ambil data indikator kehadiran dari tabel IndikatorKehadiran
     const indikatorKehadiran = await db.IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
-    
     const indikatorSpiritual = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' } });
     const indikatorSosial = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' } });
 
@@ -651,14 +705,62 @@ exports.downloadCompleteTemplate = async (req, res) => {
       return res.status(404).json({ message: 'Tidak ada siswa di kelas ini.' });
     }
 
-    // 🔥 VALIDASI: Pastikan ada data indikator kehadiran
-    if (indikatorKehadiran.length === 0) {
-      return res.status(404).json({ message: 'Tidak ada data Indikator Kehadiran. Silakan tambahkan terlebih dahulu di menu Master Data.' });
-    }
-
     const workbook = new ExcelJS.Workbook();
 
-    // ========== Sheet Nilai Ujian ==========
+    // ========== HELPER FUNCTION UNTUK MERGE CELLS ==========
+    const mergeCellsForStudent = (sheet, startRow, endRow, siswa) => {
+      if (endRow <= startRow) return;
+      
+      try {
+        // Merge NIS (kolom A)
+        const nisRange = `A${startRow}:A${endRow}`;
+        sheet.mergeCells(nisRange);
+        const nisCell = sheet.getCell(`A${startRow}`);
+        nisCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        nisCell.value = siswa.nis;
+        
+        // Merge Nama Siswa (kolom B)  
+        const namaRange = `B${startRow}:B${endRow}`;
+        sheet.mergeCells(namaRange);
+        const namaCell = sheet.getCell(`B${startRow}`);
+        namaCell.alignment = { vertical: 'middle', horizontal: 'left' };
+        namaCell.value = siswa.nama;
+        
+        console.log(`✅ Merged cells untuk ${siswa.nama}: Baris ${startRow}-${endRow}`);
+      } catch (error) {
+        console.error(`❌ Error merging cells untuk ${siswa.nama}:`, error.message);
+      }
+    };
+
+    // HELPER FUNCTION UNTUK STYLING
+    const applySheetStyling = (sheet) => {
+      // Format header
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Apply border ke semua cells
+      for (let rowIndex = 1; rowIndex <= sheet.rowCount; rowIndex++) {
+        const row = sheet.getRow(rowIndex);
+        for (let colIndex = 1; colIndex <= sheet.columnCount; colIndex++) {
+          const cell = row.getCell(colIndex);
+          if (!cell.border) {
+            cell.border = {
+              top: { style: 'thin' },
+              left: { style: 'thin' },
+              bottom: { style: 'thin' },
+              right: { style: 'thin' }
+            };
+          }
+        }
+      }
+    };
+
+    // ========== Sheet Nilai Ujian dengan Merge Cells ==========
     const sheetUjian = workbook.addWorksheet('Template Nilai Ujian');
     sheetUjian.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
@@ -670,20 +772,31 @@ exports.downloadCompleteTemplate = async (req, res) => {
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
+
+    let currentRowUjian = 2;
     for (const siswa of siswaList) {
+      const startRowUjian = currentRowUjian;
+      
       for (const mapel of mapelList) {
         sheetUjian.addRow({ 
-          nis: siswa.nis, 
-          nama_siswa: siswa.nama, 
-          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`, // 🔥 PERBAIKAN: Pastikan kode_mapel ada
+          nis: '', // Kosongkan dulu, akan diisi saat merge
+          nama_siswa: '', // Kosongkan dulu, akan diisi saat merge
+          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`,
           nama_mapel: mapel.nama_mapel, 
           semester, 
           tahun_ajaran 
         });
+        currentRowUjian++;
       }
+      
+      const endRowUjian = currentRowUjian - 1;
+      mergeCellsForStudent(sheetUjian, startRowUjian, endRowUjian, siswa);
     }
+    
+    applySheetStyling(sheetUjian);
+    console.log(`✅ Sheet Nilai Ujian selesai dengan merge cells`);
 
-    // ========== Sheet Hafalan ==========
+    // ========== Sheet Hafalan dengan Merge Cells ==========
     const sheetHafalan = workbook.addWorksheet('Template Hafalan');
     sheetHafalan.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
@@ -694,20 +807,31 @@ exports.downloadCompleteTemplate = async (req, res) => {
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
+
+    let currentRowHafalan = 2;
     for (const siswa of siswaList) {
+      const startRowHafalan = currentRowHafalan;
+      
       for (const mapel of mapelList) {
         sheetHafalan.addRow({ 
-          nis: siswa.nis, 
-          nama_siswa: siswa.nama, 
-          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`, // 🔥 PERBAIKAN: Pastikan kode_mapel ada
+          nis: '',
+          nama_siswa: '',
+          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`,
           nama_mapel: mapel.nama_mapel, 
           semester, 
           tahun_ajaran 
         });
+        currentRowHafalan++;
       }
+      
+      const endRowHafalan = currentRowHafalan - 1;
+      mergeCellsForStudent(sheetHafalan, startRowHafalan, endRowHafalan, siswa);
     }
+    
+    applySheetStyling(sheetHafalan);
+    console.log(`✅ Sheet Hafalan selesai dengan merge cells`);
 
-    // ========== Sheet Kehadiran ==========
+    // ========== Sheet Kehadiran dengan Merge Cells ==========
     const sheetKehadiran = workbook.addWorksheet('Template Kehadiran');
     sheetKehadiran.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
@@ -720,112 +844,45 @@ exports.downloadCompleteTemplate = async (req, res) => {
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
 
-    console.log('🔄 Membuat template kehadiran...');
-    console.log(`📊 Jumlah siswa: ${siswaList.length}`);
-    console.log(`📊 Jumlah indikator kehadiran: ${indikatorKehadiran.length}`);
+    let currentRowKehadiran = 2;
+    
+    // Gunakan data dari database atau default
+    const kegiatanList = indikatorKehadiran.length > 0 
+      ? indikatorKehadiran 
+      : [
+          { nama_kegiatan: 'Shalat Berjamaah' },
+          { nama_kegiatan: 'Mengaji' },
+          { nama_kegiatan: 'Piket' },
+          { nama_kegiatan: 'Tahfidz' },
+          { nama_kegiatan: 'Sekolah' }
+        ];
 
-    // 🔥 DEBUGGING: Tampilkan data indikator kehadiran
-    console.log('📋 Indikator kehadiran yang akan digunakan:');
-    indikatorKehadiran.forEach((ind, index) => {
-      console.log(`${index + 1}. ID: ${ind.id}, Nama: "${ind.nama_kegiatan}"`);
-    });
-
-    // 🔥 PERBAIKAN: Validasi data indikator kehadiran
-    if (indikatorKehadiran.length === 0) {
-      console.log('❌ TIDAK ADA INDIKATOR KEHADIRAN!');
-      // Buat default data jika tidak ada
-      const defaultKegiatan = [
-        'Shalat Berjamaah',
-        'Mengaji',
-        'Piket',
-        'Tahfidz',
-        'Sekolah'
-      ];
+    for (const siswa of siswaList) {
+      const startRowKehadiran = currentRowKehadiran;
       
-      console.log('🔄 Menggunakan kegiatan default...');
-      let rowCount = 0;
-      for (const siswa of siswaList) {
-        for (const kegiatan of defaultKegiatan) {
-          const rowData = { 
-            nis: siswa.nis, 
-            nama: siswa.nama, 
-            kegiatan: kegiatan,
-            izin: 0, 
-            sakit: 0, 
-            absen: 0, 
-            semester, 
-            tahun_ajaran 
-          };
-          
-          sheetKehadiran.addRow(rowData);
-          rowCount++;
-          
-          console.log(`📝 Baris ${rowCount}: ${siswa.nama} - ${kegiatan}`);
-        }
+      for (const kegiatan of kegiatanList) {
+        const namaKegiatan = kegiatan.nama_kegiatan || kegiatan;
+        sheetKehadiran.addRow({ 
+          nis: '',
+          nama: '',
+          kegiatan: namaKegiatan,
+          izin: 0, 
+          sakit: 0, 
+          absen: 0, 
+          semester, 
+          tahun_ajaran 
+        });
+        currentRowKehadiran++;
       }
-      console.log(`✅ Template kehadiran selesai (default) dengan ${rowCount} baris data`);
       
-    } else {
-      // 🔥 GUNAKAN DATA DARI DATABASE
-      let rowCount = 0;
-      for (const siswa of siswaList) {
-        for (const indikator of indikatorKehadiran) {
-          // 🔥 VALIDASI: Pastikan nama_kegiatan tidak null
-          const namaKegiatan = indikator.nama_kegiatan;
-          if (!namaKegiatan || namaKegiatan.trim() === '') {
-            console.log(`⚠️ Indikator ID ${indikator.id} memiliki nama_kegiatan kosong!`);
-            continue;
-          }
-          
-          const rowData = { 
-            nis: siswa.nis, 
-            nama: siswa.nama, 
-            kegiatan: namaKegiatan.trim(), // Trim whitespace
-            izin: 0, 
-            sakit: 0, 
-            absen: 0, 
-            semester, 
-            tahun_ajaran 
-          };
-          
-          sheetKehadiran.addRow(rowData);
-          rowCount++;
-          
-          // Debug setiap beberapa baris
-          if (rowCount <= 5 || rowCount % 10 === 0) {
-            console.log(`📝 Baris ${rowCount}: ${siswa.nama} - ${namaKegiatan}`);
-          }
-        }
-      }
-      console.log(`✅ Template kehadiran selesai dengan ${rowCount} baris data`);
+      const endRowKehadiran = currentRowKehadiran - 1;
+      mergeCellsForStudent(sheetKehadiran, startRowKehadiran, endRowKehadiran, siswa);
     }
+    
+    applySheetStyling(sheetKehadiran);
+    console.log(`✅ Sheet Kehadiran selesai dengan merge cells`);
 
-    // 🔥 TAMBAHAN: Format template agar lebih jelas
-    const headerRow = sheetKehadiran.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' }
-    };
-
-    // 🔥 TAMBAHAN: Validasi data - cek beberapa baris terakhir
-    const lastRowNum = sheetKehadiran.rowCount;
-    console.log(`🔍 VALIDASI TEMPLATE - Total rows: ${lastRowNum}`);
-    if (lastRowNum > 1) {
-      for (let i = Math.max(2, lastRowNum - 2); i <= lastRowNum; i++) {
-        const checkRow = sheetKehadiran.getRow(i);
-        console.log(`Row ${i}: NIS=${checkRow.getCell(1).value}, Nama=${checkRow.getCell(2).value}, Kegiatan="${checkRow.getCell(3).value}"`);
-      }
-    }
-
-    // 🔥 TAMBAHAN: Proteksi kolom yang tidak boleh diubah
-    sheetKehadiran.getColumn(1).protection = { locked: true }; // NIS
-    sheetKehadiran.getColumn(2).protection = { locked: true }; // Nama
-    sheetKehadiran.getColumn(7).protection = { locked: true }; // Semester
-    sheetKehadiran.getColumn(8).protection = { locked: true }; // Tahun Ajaran
-
-    // ========== Sheet Sikap ==========
+    // ========== Sheet Sikap dengan Merge Cells (Termasuk Deskripsi) ==========
     const sheetSikap = workbook.addWorksheet('Template Sikap');
     sheetSikap.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
@@ -837,34 +894,70 @@ exports.downloadCompleteTemplate = async (req, res) => {
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
+
+    let currentRowSikap = 2;
     for (const siswa of siswaList) {
+      const startRowSikap = currentRowSikap;
+      
+      // Tambahkan indikator spiritual
       for (const ind of indikatorSpiritual) {
         sheetSikap.addRow({ 
-          nis: siswa.nis, 
-          nama: siswa.nama, 
+          nis: '',
+          nama: '',
           jenis: 'spiritual', 
           indikator: ind.indikator, 
           semester, 
           tahun_ajaran 
         });
+        currentRowSikap++;
       }
+      
+      // Tambahkan indikator sosial
       for (const ind of indikatorSosial) {
         sheetSikap.addRow({ 
-          nis: siswa.nis, 
-          nama: siswa.nama, 
+          nis: '',
+          nama: '',
           jenis: 'sosial', 
           indikator: ind.indikator, 
           semester, 
           tahun_ajaran 
         });
+        currentRowSikap++;
+      }
+      
+      const endRowSikap = currentRowSikap - 1;
+      
+      // Merge NIS dan Nama
+      mergeCellsForStudent(sheetSikap, startRowSikap, endRowSikap, siswa);
+      
+      // Merge Deskripsi (kolom F)
+      if (endRowSikap > startRowSikap) {
+        try {
+          const deskripsiRange = `F${startRowSikap}:F${endRowSikap}`;
+          sheetSikap.mergeCells(deskripsiRange);
+          const deskripsiCell = sheetSikap.getCell(`F${startRowSikap}`);
+          deskripsiCell.alignment = { 
+            vertical: 'top', 
+            horizontal: 'left',
+            wrapText: true 
+          };
+          console.log(`✅ Merged deskripsi untuk ${siswa.nama}: ${deskripsiRange}`);
+        } catch (error) {
+          console.error(`❌ Error merging deskripsi untuk ${siswa.nama}:`, error.message);
+        }
       }
     }
+    
+    applySheetStyling(sheetSikap);
+    console.log(`✅ Sheet Sikap selesai dengan merge cells untuk NIS, Nama, dan Deskripsi`);
 
     // Response
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Template_Complete.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Template_Complete_with_MergeCells.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
+
+    console.log(`🎉 Template lengkap dengan merge cells berhasil dibuat untuk ${siswaList.length} siswa`);
 
   } catch (err) {
     console.error('Error creating complete template:', err);

@@ -6,11 +6,11 @@ const IndikatorSikap = db.IndikatorSikap;
 const { Op } = require("sequelize");
 
 // 🔥 FUNGSI HELPER UNTUK KONVERSI NILAI KE PREDIKAT
-const nilaiSikapKePredikat = (angka) => {
-    if (angka === null || angka === undefined || isNaN(angka)) return '-';
-    if (angka > 8.0) return 'Baik Sekali';
-    if (angka > 7.0) return 'Baik';
-    if (angka > 6.0) return 'Cukup';
+const nilaiSikapKePredikat = (nilai) => {
+    if (nilai === null || nilai === undefined || isNaN(nilai)) return '-';
+    if (nilai > 8.0) return 'Baik Sekali';
+    if (nilai > 7.0) return 'Baik';
+    if (nilai > 6.0) return 'Cukup';
     return 'Kurang';
 };
 
@@ -26,7 +26,7 @@ exports.bulkUpdateOrInsertSikap = async (req, res) => {
 
         for (const sikap of sikapBatch) {
             // Hanya proses jika ada nilai yang diinput (tidak kosong)
-            if (sikap.angka !== null && sikap.angka !== undefined) {
+            if (sikap.nilai !== null && sikap.nilai !== undefined) {
                 
                 // 🔥 VALIDASI: Pastikan indikator_sikap_id ada
                 if (!sikap.indikator_sikap_id) {
@@ -35,16 +35,12 @@ exports.bulkUpdateOrInsertSikap = async (req, res) => {
 
                 await Sikap.upsert({
                     siswa_id: sikap.siswa_id,
-                    indikator_sikap_id: sikap.indikator_sikap_id, // 🔥 GUNAKAN FOREIGN KEY
-                    angka: sikap.angka, // 🔥 NILAI ANGKA
-                    deskripsi: sikap.deskripsi || '',
-                    catatan_wali_kelas: sikap.catatan_wali_kelas || '',
-                    semester: sikap.semester,
-                    tahun_ajaran: sikap.tahun_ajaran,
-                    wali_kelas_id: sikap.wali_kelas_id,
-                    kelas_id: sikap.kelas_id
-                }, {
-                    transaction
+                    semester: sikap.semester || "Ganjil",
+                    tahun_ajaran: sikap.tahun_ajaran || "2025/2026",
+                    indikator_sikap_id: sikap.indikator_sikap_id,
+                    nilai: sikap.nilai || 0,
+                    deskripsi: sikap.deskripsi || "Belum ada deskripsi",
+                    catatan: sikap.catatan || "Belum ada catatan",
                 });
             }
         }
@@ -90,7 +86,7 @@ exports.getSiswaWithSikapByFilter = async (req, res) => {
         // 🔥 TRANSFORM DATA: Tambahkan perhitungan rata-rata dan predikat
         const transformedData = siswaList.map(siswa => {
             const sikapData = siswa.sikap || [];
-            const totalNilai = sikapData.reduce((sum, s) => sum + (parseFloat(s.angka) || 0), 0);
+            const totalNilai = sikapData.reduce((sum, s) => sum + (parseFloat(s.nilai) || 0), 0);
             const rataRata = sikapData.length > 0 ? (totalNilai / sikapData.length).toFixed(2) : 0;
             
             return {
@@ -101,8 +97,8 @@ exports.getSiswaWithSikapByFilter = async (req, res) => {
                     predikat: nilaiSikapKePredikat(rataRata),
                     detail: sikapData.map(s => ({
                         indikator: s.indikator_sikap?.indikator,
-                        angka: s.angka,
-                        predikat: nilaiSikapKePredikat(s.angka),
+                        nilai: s.nilai,
+                        predikat: nilaiSikapKePredikat(s.nilai),
                         deskripsi: s.deskripsi
                     }))
                 }
@@ -144,15 +140,13 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
         // 🔥 HITUNG RATA-RATA
         const hitungRataRata = (daftarSikap) => {
             if (daftarSikap.length === 0) return 0;
-            const total = daftarSikap.reduce((sum, s) => sum + (parseFloat(s.angka) || 0), 0);
+            const total = daftarSikap.reduce((sum, s) => sum + (parseFloat(s.nilai) || 0), 0);
             return (total / daftarSikap.length).toFixed(2);
         };
 
         const rataSpiritual = hitungRataRata(sikapSpiritual);
         const rataSosial = hitungRataRata(sikapSosial);
 
-        // 🔥 AMBIL CATATAN WALI KELAS (ambil yang pertama jika ada)
-        const catatanWaliKelas = semuaSikap.length > 0 ? semuaSikap[0].catatan_wali_kelas || '' : '';
 
         res.status(200).json({
             spiritual: {
@@ -161,8 +155,8 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
                 indikator: sikapSpiritual.map(s => ({
                     id: s.id,
                     indikator: s.indikator_sikap?.indikator,
-                    angka: s.angka,
-                    predikat: nilaiSikapKePredikat(s.angka),
+                    nilai: s.nilai,
+                    predikat: nilaiSikapKePredikat(s.nilai),
                     deskripsi: s.deskripsi
                 }))
             },
@@ -172,8 +166,8 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
                 indikator: sikapSosial.map(s => ({
                     id: s.id,
                     indikator: s.indikator_sikap?.indikator,
-                    angka: s.angka,
-                    predikat: nilaiSikapKePredikat(s.angka),
+                    nilai: s.nilai,
+                    predikat: nilaiSikapKePredikat(s.nilai),
                     deskripsi: s.deskripsi
                 }))
             },
@@ -187,38 +181,7 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
     }
 };
 
-// --- FUNGSI UNTUK UPDATE CATATAN WALI KELAS ---
-exports.updateCatatanWaliKelas = async (req, res) => {
-    const { siswa_id, semester, tahun_ajaran, catatan_wali_kelas } = req.body;
-    const transaction = await db.sequelize.transaction();
 
-    try {
-        if (!siswa_id || !semester || !tahun_ajaran) {
-            return res.status(400).json({ message: "Data input tidak lengkap." });
-        }
-
-        // Update semua record sikap untuk siswa tersebut dengan catatan yang sama
-        await Sikap.update(
-            { catatan_wali_kelas: catatan_wali_kelas },
-            {
-                where: {
-                    siswa_id: siswa_id,
-                    semester: semester,
-                    tahun_ajaran: tahun_ajaran
-                },
-                transaction
-            }
-        );
-
-        await transaction.commit();
-        res.status(200).json({ message: "Catatan wali kelas berhasil diperbarui." });
-
-    } catch (error) {
-        await transaction.rollback();
-        console.error("Error saat update catatan wali kelas:", error);
-        res.status(500).json({ message: "Terjadi kesalahan di server.", error: error.message });
-    }
-};
 
 // --- FUNGSI UNTUK MENDAPATKAN TEMPLATE NILAI SIKAP ---
 exports.getTemplateSikapBySiswa = async (req, res) => {
@@ -252,9 +215,9 @@ exports.getTemplateSikapBySiswa = async (req, res) => {
                 indikator_sikap_id: indikator.id,
                 indikator: indikator.indikator,
                 jenis_sikap: indikator.jenis_sikap,
-                angka: existing ? existing.angka : null,
-                deskripsi: existing ? existing.deskripsi : '',
-                predikat: existing ? nilaiSikapKePredikat(existing.angka) : '-'
+                nilai: existing ? existing.nilai : null,
+                nilai: existing ? existing.nilai : null,
+                predikat: existing ? nilaiSikapKePredikat(existing.nilai) : '-'
             };
         });
 
@@ -268,27 +231,43 @@ exports.getTemplateSikapBySiswa = async (req, res) => {
 // --- FUNGSI-FUNGSI CRUD STANDAR (DIPERBARUI) ---
 
 // 1. Membuat satu entri nilai sikap baru
+// Create Sikap
 exports.createSikap = async (req, res) => {
-    try {
-        const { siswa_id, indikator_sikap_id, angka, semester, tahun_ajaran } = req.body;
-        
-        if (!siswa_id || !indikator_sikap_id || !semester || !tahun_ajaran) {
-            return res.status(400).json({ message: "Data input tidak lengkap." });
-        }
-        
-        const newSikap = await Sikap.create(req.body);
-        
-        // Include indikator_sikap untuk response
-        const sikapWithIndikator = await Sikap.findByPk(newSikap.id, {
-            include: [{ model: IndikatorSikap, as: 'indikator_sikap' }]
-        });
-        
-        res.status(201).json(sikapWithIndikator);
-    } catch (error) {
-        console.error("Error membuat nilai sikap:", error);
-        res.status(500).json({ message: "Gagal membuat entri nilai sikap baru.", error: error.message });
-    }
+  try {
+    const {
+      siswa_id,
+      semester,
+      tahun_ajaran,
+      wali_kelas_id,
+      kelas_id,
+      indikator_sikap_id,
+      nilai,
+      deskripsi,
+      catatan
+    } = req.body;
+
+    const newSikap = await Sikap.create({
+      siswa_id: siswa_id,
+      semester: semester || "Ganjil",        // default "Ganjil"
+      tahun_ajaran: tahun_ajaran || "2025/2026", // default tahun ajaran
+      wali_kelas_id: wali_kelas_id || 1,     // default wali kelas
+      kelas_id: kelas_id || 1,               // default kelas
+      indikator_sikap_id: indikator_sikap_id || null,
+      nilai: nilai || 0,                     // default nilai = 0
+      deskripsi: deskripsi || "Belum ada deskripsi",
+      catatan: catatan || "Belum ada catatan",
+    });
+
+    res.status(201).json({
+      message: "Sikap berhasil dibuat",
+      data: newSikap,
+    });
+  } catch (error) {
+    console.error("Error create sikap:", error);
+    res.status(500).json({ message: "Gagal membuat sikap", error: error.message });
+  }
 };
+
 
 // 2. Mengambil semua data nilai sikap (termasuk nama siswa dan indikator)
 exports.getAllSikap = async (req, res) => {

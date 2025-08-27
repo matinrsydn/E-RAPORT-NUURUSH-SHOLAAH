@@ -36,49 +36,92 @@ exports.create = async (req, res) => {
 };
 
 // Memperbarui indikator kehadiran
-exports.update = async (req, res) => {
+// exports.update = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { nama_kegiatan } = req.body;
+
+//     if (!nama_kegiatan) {
+//       return res.status(400).json({ message: 'Nama kegiatan wajib diisi' });
+//     }
+
+//     const [updated] = await IndikatorKehadiran.update(
+//       { nama_kegiatan }, 
+//       { where: { id } }
+//     );
+    
+//     if (updated) {
+//       const updatedIndikator = await IndikatorKehadiran.findByPk(id);
+//       res.json(updatedIndikator);
+//     } else {
+//       res.status(404).json({ message: 'Indikator kehadiran tidak ditemukan' });
+//     }
+//   } catch (error) {
+//     res.status(500).json({ 
+//       message: 'Error saat memperbarui indikator kehadiran', 
+//       error: error.message 
+//     });
+//   }
+// };
+
+// Menghapus indikator kehadiran
+// exports.delete = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const deleted = await IndikatorKehadiran.destroy({ where: { id } });
+    
+//     if (deleted) {
+//       res.status(204).send();
+//     } else {
+//       res.status(404).json({ message: 'Indikator kehadiran tidak ditemukan' });
+//     }
+//   } catch (error) {
+//     res.status(500).json({ 
+//       message: 'Error saat menghapus indikator kehadiran', 
+//       error: error.message 
+//     });
+//   }
+// };
+
+// Nonaktifkan indikator tanpa menghapus
+exports.deactivate = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama_kegiatan } = req.body;
-
-    if (!nama_kegiatan) {
-      return res.status(400).json({ message: 'Nama kegiatan wajib diisi' });
-    }
-
     const [updated] = await IndikatorKehadiran.update(
-      { nama_kegiatan }, 
+      { is_active: false },
       { where: { id } }
     );
-    
     if (updated) {
       const updatedIndikator = await IndikatorKehadiran.findByPk(id);
       res.json(updatedIndikator);
     } else {
-      res.status(404).json({ message: 'Indikator kehadiran tidak ditemukan' });
+      res.status(404).json({ message: 'Indikator tidak ditemukan' });
     }
   } catch (error) {
-    res.status(500).json({ 
-      message: 'Error saat memperbarui indikator kehadiran', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error saat menonaktifkan indikator',
+      error: error.message
     });
   }
 };
 
-// Menghapus indikator kehadiran
-exports.delete = async (req, res) => {
+exports.activate = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await IndikatorKehadiran.destroy({ where: { id } });
-    
-    if (deleted) {
-      res.status(204).send();
+    const [updated] = await IndikatorKehadiran.update(
+      { is_active: true },
+      { where: { id } }
+    );
+    if (updated) {
+      const updatedIndikator = await IndikatorKehadiran.findByPk(id);
+      res.json(updatedIndikator);
     } else {
-      res.status(404).json({ message: 'Indikator kehadiran tidak ditemukan' });
+      res.status(404).json({ message: 'Indikator tidak ditemukan' });
     }
   } catch (error) {
-    res.status(500).json({ 
-      message: 'Error saat menghapus indikator kehadiran', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error saat mengaktifkan indikator',
+      error: error.message
     });
   }
 };

@@ -15,16 +15,20 @@ module.exports = (sequelize, DataTypes) => {
   }
   TahunAjaran.init({
     nama_ajaran: DataTypes.STRING,
-    // --- TAMBAHKAN ATRIBUT INI SECARA MANUAL ---
+    semester: {
+      type: DataTypes.ENUM('1', '2'),
+      allowNull: false,
+      defaultValue: '1'
+    },
     status: {
       type: DataTypes.ENUM('aktif', 'tidak-aktif'),
       allowNull: false,
       defaultValue: 'tidak-aktif'
     }
-    // -------------------------------------------
   }, {
     sequelize,
     modelName: 'TahunAjaran',
   });
+
   return TahunAjaran;
 };

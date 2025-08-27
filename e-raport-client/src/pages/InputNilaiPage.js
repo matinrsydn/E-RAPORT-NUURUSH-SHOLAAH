@@ -88,8 +88,12 @@ const InputNilaiPage = () => {
             fileDownload(response.data, namaFile);
             setSuccess('Template Excel lengkap berhasil diunduh dengan 5 sheet (Nilai Ujian, Hafalan, Kehadiran, Sikap, Panduan).');
         } catch (err) {
-            console.error('Download error:', err); // Debug log
-            setError(err.response?.data?.message || 'Gagal mengunduh template lengkap.');
+            console.error('Download error:', err);
+            if (err.response?.status === 404) {
+                setError(`Tidak ada siswa ditemukan pada kelas yang dipilih (${kelasOptions.find(k => k.id == filtersExcel.kelas_id)?.nama_kelas || ''}). Template kosong tidak bisa diunduh.`);
+            } else {
+                setError(err.response?.data?.message || 'Gagal mengunduh template lengkap.');
+            }
         } finally {
             setLoading(false);
         }

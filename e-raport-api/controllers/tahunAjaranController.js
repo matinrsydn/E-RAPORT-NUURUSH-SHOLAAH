@@ -5,30 +5,9 @@ const db = require('../models');
 exports.getAll = async (req, res) => {
     try {
         const tahunAjaran = await db.TahunAjaran.findAll({
-            order: [['nama_ajaran', 'DESC']]
+            order: [['nama_ajaran', 'DESC'], ['semester', 'ASC']]
         });
-        
-        // Format data untuk frontend dengan menambah semester 1 dan 2
-        const formattedData = [];
-        tahunAjaran.forEach(ta => {
-            formattedData.push({
-                id: `${ta.id}-1`,
-                nama_ajaran: ta.nama_ajaran,
-                semester: '1',
-                status: ta.status,
-                display: `${ta.nama_ajaran} - Semester 1`
-            });
-            formattedData.push({
-                id: `${ta.id}-2`,
-                nama_ajaran: ta.nama_ajaran,
-                semester: '2',
-                status: ta.status,
-                display: `${ta.nama_ajaran} - Semester 2`
-            });
-        });
-        
-        console.log("FORMATTED TAHUN AJARAN DATA:", formattedData);
-        res.json(formattedData);
+        res.json(tahunAjaran);
     } catch (error) {
         console.error('Error get tahun ajaran:', error);
         res.status(500).json({ message: 'Error mengambil tahun ajaran', error: error.message });

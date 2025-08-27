@@ -15,18 +15,16 @@ exports.bulkUpdateOrInsertKehadiran = async (req, res) => {
 
         for (const kehadiran of kehadiranBatch) {
             // Hanya proses jika ada data yang diinput
-            if (kehadiran.kegiatan) {
+            if (kehadiran.indikatorkehadirans_id) {
                 await Kehadiran.upsert({
-                    siswaId: kehadiran.siswa_id,
-                    kegiatan: kehadiran.kegiatan,
+                    siswa_id: kehadiran.siswa_id,
+                    indikatorkehadirans_id: kehadiran.indikatorkehadirans_id,
                     izin: kehadiran.izin || 0,
                     sakit: kehadiran.sakit || 0,
                     absen: kehadiran.absen || 0,
                     semester: kehadiran.semester,
                     tahun_ajaran: kehadiran.tahun_ajaran,
-                }, {
-                    transaction
-                });
+                }, { transaction });
             }
         }
 
@@ -58,7 +56,10 @@ exports.getSiswaWithKehadiranByFilter = async (req, res) => {
                     semester: semester,
                     tahun_ajaran: tahun_ajaran
                 },
-                required: false // LEFT JOIN, agar siswa tetap tampil meskipun belum ada data kehadiran
+                required: false,
+                include: [
+                    { model: db.IndikatorKehadiran, attributes: ['id', 'nama_kegiatan'] }
+                ]
             }],
             order: [['nama', 'ASC']]
         });
@@ -96,8 +97,8 @@ exports.getTemplateKegiatan = async (req, res) => {
 // 1. Membuat satu entri kehadiran baru
 exports.createKehadiran = async (req, res) => {
     try {
-        const { siswaId, kegiatan, semester, tahun_ajaran } = req.body;
-        if (!siswaId || !kegiatan || !semester || !tahun_ajaran) {
+        const { siswa_id, indikatorkehadirans_id, semester, tahun_ajaran } = req.body;
+        if (!siswa_id || !indikatorkehadirans_id || !semester || !tahun_ajaran) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
         const newKehadiran = await Kehadiran.create(req.body);
@@ -113,7 +114,8 @@ exports.getAllKehadiran = async (req, res) => {
     try {
         const allKehadiran = await Kehadiran.findAll({
             include: [
-                { model: Siswa, attributes: ['nama', 'nis'] }
+                { model: Siswa, attributes: ['nama', 'nis'] },
+                { model: db.IndikatorKehadiran, attributes: ['nama_kegiatan'] }
             ],
             order: [['tahun_ajaran', 'DESC'], ['semester', 'DESC']]
         });
@@ -130,7 +132,8 @@ exports.getKehadiranById = async (req, res) => {
         const { id } = req.params;
         const kehadiran = await Kehadiran.findByPk(id, {
             include: [
-                { model: Siswa }
+                { model: Siswa },
+                { model: db.IndikatorKehadiran, attributes: ['nama_kegiatan'] }
             ]
         });
         if (!kehadiran) {
@@ -196,7 +199,8 @@ exports.getRangkumanKehadiran = async (req, res) => {
                 tahun_ajaran: tahun_ajaran
             },
             include: [
-                { model: Siswa, attributes: ['nama', 'nis'] }
+                { model: Siswa, attributes: ['nama', 'nis'] },
+                { model: db.IndikatorKehadiran, attributes: ['nama_kegiatan'] }
             ]
         });
 

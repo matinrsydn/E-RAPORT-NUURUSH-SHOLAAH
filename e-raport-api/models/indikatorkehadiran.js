@@ -10,10 +10,15 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   IndikatorKehadiran.init({
-    nama_kegiatan: DataTypes.STRING
+    nama_kegiatan: DataTypes.STRING,
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'IndikatorKehadiran',
   });
+
   return IndikatorKehadiran;
 };
