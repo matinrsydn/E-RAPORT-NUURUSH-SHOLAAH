@@ -270,9 +270,36 @@ exports.uploadAndValidate = async (req, res) => {
 
         // 4. Proses Sheet Sikap
         await processSheet('Template Sikap', async (row, siswaData) => {
-            if (!siswaData.catatan_walikelas) {
-                siswaData.catatan_walikelas = getCellValue(row.getCell('F'));
+            const jenis_sikap = getCellValue(row.getCell('C')); // Kolom C = Jenis Sikap
+            const indikator = getCellValue(row.getCell('D'));   // Kolom D = Indikator
+            const nilai = getCellValue(row.getCell('E'));       // Kolom E = Nilai
+            const deskripsi = getCellValue(row.getCell('F'));   // Kolom F = Deskripsi
+            const semester = getCellValue(row.getCell('G'));    // Kolom G = Semester
+            const tahun_ajaran = getCellValue(row.getCell('H')); // Kolom H = Tahun Ajaran
+
+            console.log(`📝 Memproses sikap untuk ${siswaData.nis}:`);
+            console.log(`   Jenis: ${jenis_sikap}, Indikator: ${indikator}, Nilai: ${nilai}`);
+
+            // Pastikan ada data sikap yang valid
+            if (jenis_sikap && indikator) {
+                const sikapData = {
+                    jenis_sikap: jenis_sikap,
+                    indikator: indikator,
+                    nilai: nilai ? parseFloat(nilai) : null,
+                    deskripsi: deskripsi || '',
+                    semester: semester,
+                    tahun_ajaran: tahun_ajaran
+                };
+                
+                siswaData.sikap.push(sikapData);
+                console.log(`✅ Data sikap ditambahkan:`, sikapData);
+            } else {
+                console.log(`⚠️ Data sikap tidak lengkap, dilewati`);
             }
+
+            // Set semester dan tahun ajaran global
+            if (!siswaData.semester && semester) siswaData.semester = semester;
+            if (!siswaData.tahun_ajaran && tahun_ajaran) siswaData.tahun_ajaran = tahun_ajaran;
         });
 
         // 🔥 LOG DEBUGGING: Tampilkan hasil parsing
@@ -312,9 +339,10 @@ exports.uploadAndValidate = async (req, res) => {
                 tahun_ajaran: siswaData.tahun_ajaran,
                 nilai_ujian: siswaData.nilai_ujian,
                 nilai_hafalan: siswaData.nilai_hafalan,
-                kehadiran_detail: siswaData.kehadiran_detail, // 🔥 DETAIL PER KEGIATAN
-                kehadiran_summary: siswaData.kehadiran_summary, // 🔥 TOTAL AGREGAT
-                catatan_sikap: siswaData.catatan_walikelas
+                kehadiran_detail: siswaData.kehadiran_detail,
+                kehadiran_summary: siswaData.kehadiran_summary,
+                sikap: siswaData.sikap, // 🔥 PERBAIKAN: Gunakan array sikap, bukan catatan_walikelas
+                catatan_sikap: siswaData.catatan_walikelas // Tetap simpan catatan umum jika ada
             };
 
             console.log(`💾 Data untuk NIS ${nis}:`, {
@@ -537,16 +565,80 @@ exports.confirmAndSave = async (req, res) => {
             }
 
             // 4. Simpan Sikap
+            if (data.sikap && Array.isArray(data.sikap)) {
+                console.log(`📝 Menyimpan ${data.sikap.length} data sikap...`);
+                
+                for (const sikapDetail of data.sikap) {
+                    // Cari indikator di master data
+                    const indikator = await db.IndikatorSikap.findOne({
+                        where: {
+                            jenis_sikap: sikapDetail.jenis_sikap,
+                            indikator: sikapDetail.indikator,
+                            is_active: 1
+                        }
+                    });
+
+                    let final_indikator_sikap_id = null;
+                    const final_indikator_text = sikapDetail.indikator;
+                    
+                    if (indikator) {
+                        final_indikator_sikap_id = indikator.id;
+                        console.log(`✅ Indikator ditemukan di master: ID=${indikator.id}`);
+                    } else {
+                        console.log(`⚠️ Indikator '${sikapDetail.indikator}' tidak ditemukan di master, ID akan diisi NULL.`);
+                    }
+
+                    const finalNilai = (sikapDetail.nilai !== null && sikapDetail.nilai !== undefined && !isNaN(parseFloat(sikapDetail.nilai)))
+                        ? parseFloat(sikapDetail.nilai)
+                        : null;
+
+                    // Cari tahun ajaran ID
+                    const tahunAjaranDb = await db.TahunAjaran.findOne({
+                        where: { 
+                            nama_ajaran: tahun_ajaran, 
+                            semester: semester,
+                            status: 'aktif' 
+                        }
+                    });
+
+                    if (tahunAjaranDb) {
+                        await db.Sikap.upsert({
+                            siswa_id,
+                            tahun_ajaran_id: tahunAjaranDb.id,
+                            semester,
+                            indikator_sikap_id: final_indikator_sikap_id,
+                            indikator_text: final_indikator_text,
+                            nilai: sikapDetail.nilai,
+                            deskripsi: sikapDetail.deskripsi
+                        }, { transaction });
+                        
+                        console.log(`✅ Sikap disimpan: ${sikapDetail.jenis_sikap} - ${final_indikator_text}`);
+                    } else {
+                        console.log(`❌ TahunAjaran tidak ditemukan: ${tahun_ajaran} semester ${semester}`);
+                    }
+                }
+            }
             if (data.catatan_sikap) {
-                await db.Sikap.upsert({
-                    siswa_id,
-                    catatan: data.catatan_sikap,
-                    semester,
-                    tahun_ajaran,
-                    wali_kelas_id,
-                    kelas_id
-                }, { transaction });
-                console.log(`✅ Catatan sikap disimpan`);
+                const tahunAjaranDb = await db.TahunAjaran.findOne({
+                    where: { 
+                        nama_ajaran: tahun_ajaran, 
+                        semester: semester,
+                        status: 'aktif' 
+                    }
+                });
+
+                if (tahunAjaranDb) {
+                    await db.Sikap.upsert({
+                        siswa_id,
+                        tahun_ajaran_id: tahunAjaranDb.id,
+                        semester,
+                        indikator_sikap_id: null,
+                        indikator_text: 'Catatan Wali Kelas',
+                        nilai: finalNilai,
+                        deskripsi: data.catatan_sikap
+                    }, { transaction });
+                    console.log(`✅ Catatan sikap umum disimpan`);
+                }
             }
         }
         

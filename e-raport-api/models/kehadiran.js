@@ -58,7 +58,9 @@ module.exports = (sequelize, DataTypes) => {
     indexes: [
       {
         unique: true,
-        fields: ['siswa_id', 'indikatorkehadirans_id', 'semester', 'tahun_ajaran_id']
+        fields: ['siswa_id', 'indikatorkehadirans_id', 'semester', 'tahun_ajaran_id'],
+        // PERBAIKAN: Menambahkan nama yang lebih pendek untuk index
+        name: 'unique_kehadiran_siswa'
       }
     ]
   });

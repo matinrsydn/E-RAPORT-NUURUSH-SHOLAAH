@@ -1,3 +1,5 @@
+// e-raport-api/models/indikatorsikap.js
+
 'use strict';
 const {
   Model
@@ -10,15 +12,25 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      // definisikan asosiasi di sini
+      IndikatorSikap.hasMany(models.Sikap, {
+        foreignKey: 'indikator_sikap_id',
+        as: 'sikap'
+      });
     }
   }
   IndikatorSikap.init({
-    jenis_sikap: DataTypes.ENUM('spiritual', 'sosial'),
-    indikator: DataTypes.STRING
+    // PERBAIKAN: Sesuaikan nilai ENUM dengan database
+    jenis_sikap: DataTypes.ENUM('Spiritual', 'Sosial'),
+    indikator: DataTypes.STRING,
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'IndikatorSikap',
+    tableName: 'indikatorsikaps' // Tambahkan nama tabel eksplisit
   });
   return IndikatorSikap;
 };

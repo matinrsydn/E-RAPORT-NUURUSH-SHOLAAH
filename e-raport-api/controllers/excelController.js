@@ -8,320 +8,260 @@ const fs = require('fs');
 
 // Upload data dari multi-sheet Excel
 exports.uploadCompleteData = async (req, res) => {
-  try {
     if (!req.file) {
-      return res.status(400).json({ message: 'Tidak ada file yang diunggah.' });
+        return res.status(400).json({ message: 'Tidak ada file yang diunggah.' });
     }
 
     const filePath = req.file.path;
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(filePath);
-
-    const results = {
-      nilai_ujian: { success: 0, errors: [] },
-      hafalan: { success: 0, errors: [] },
-      kehadiran: { success: 0, errors: [] },
-      sikap: { success: 0, errors: [] }
-    };
-
     const transaction = await db.sequelize.transaction();
 
     try {
-      // ========== PROSES SHEET NILAI UJIAN ==========
-      const nilaiWorksheet = workbook.getWorksheet('Template Nilai Ujian');
-      if (nilaiWorksheet) {
-        const nilaiData = [];
-        nilaiWorksheet.eachRow((row, rowNumber) => {
-          if (rowNumber === 1) return; // Skip header
-          const rowData = {
-            nis: row.values[1],
-            kode_mapel: row.values[3],
-            pengetahuan_angka: parseFloat(row.values[5]) || null,
-            keterampilan_angka: parseFloat(row.values[6]) || null,
-            semester: row.values[7],
-            tahun_ajaran: row.values[8],
-          };
-          if (rowData.nis && rowData.kode_mapel && (rowData.pengetahuan_angka !== null || rowData.keterampilan_angka !== null)) {
-            nilaiData.push(rowData);
-          }
-        });
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
 
-        for (const item of nilaiData) {
-          const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
-          const mapel = await db.MataPelajaran.findOne({ where: { id: parseInt(item.kode_mapel.replace('MP', ''), 10) } });
-          if (siswa && mapel) {
-            await db.NilaiUjian.upsert({
-              siswa_id: siswa.id, // PERBAIKAN: Gunakan snake_case
-              mapel_id: mapel.id, // PERBAIKAN: Gunakan snake_case
-              pengetahuan_angka: item.pengetahuan_angka,
-              keterampilan_angka: item.keterampilan_angka,
-              semester: item.semester,
-              tahun_ajaran: item.tahun_ajaran,
-            }, { transaction });
-            results.nilai_ujian.success++;
-          }
+        const results = {
+            nilai_ujian: { success: 0, errors: 0 },
+            hafalan: { success: 0, errors: 0 },
+            kehadiran: { success: 0, errors: 0 },
+            sikap: { success: 0, errors: 0 }
+        };
+
+        // Cache untuk optimasi pencarian ID
+        const cache = {
+            siswa: {},
+            mapel: {},
+            tahunAjaran: {},
+            indikatorKehadiran: {},
+            indikatorSikap: {}
+        };
+
+        // Helper untuk mencari ID dengan cache
+        const findSiswa = async (nis) => {
+            if (!cache.siswa[nis]) cache.siswa[nis] = await db.Siswa.findOne({ where: { nis } });
+            return cache.siswa[nis];
+        };
+        const findMapel = async (kode_mapel) => {
+            if (!cache.mapel[kode_mapel]) cache.mapel[kode_mapel] = await db.MataPelajaran.findOne({ where: { kode_mapel } });
+            return cache.mapel[kode_mapel];
+        };
+        const findTahunAjaran = async (nama_ajaran, semester) => {
+            const key = `${nama_ajaran}-${semester}`;
+            if (!cache.tahunAjaran[key]) cache.tahunAjaran[key] = await db.TahunAjaran.findOne({ where: { nama_ajaran, semester, status: 'aktif' } });
+            return cache.tahunAjaran[key];
+        };
+        const findIndikatorKehadiran = async (nama_kegiatan) => {
+            if (!cache.indikatorKehadiran[nama_kegiatan]) cache.indikatorKehadiran[nama_kegiatan] = await db.IndikatorKehadiran.findOne({ where: { nama_kegiatan } });
+            return cache.indikatorKehadiran[nama_kegiatan];
+        };
+        const findIndikatorSikap = async (jenis_sikap, indikator) => {
+            const key = `${jenis_sikap}-${indikator}`;
+            if (!cache.indikatorSikap[key]) {
+                cache.indikatorSikap[key] = await db.IndikatorSikap.findOne({ 
+                    where: { 
+                        jenis_sikap: jenis_sikap, // Pastikan case-sensitive match
+                        indikator: indikator,
+                        is_active: 1
+                    } 
+                });
+                
+                // DEBUG: Log hasil pencarian
+                console.log(`🔍 Mencari indikator: jenis='${jenis_sikap}', indikator='${indikator}'`);
+                console.log(`📋 Hasil:`, cache.indikatorSikap[key] ? 'DITEMUKAN' : 'TIDAK DITEMUKAN');
+                if (cache.indikatorSikap[key]) {
+                    console.log(`   ID: ${cache.indikatorSikap[key].id}, Indikator: ${cache.indikatorSikap[key].indikator}`);
+                }
+            }
+            return cache.indikatorSikap[key];
+        };
+
+        // ========== 1. PROSES SHEET NILAI UJIAN ==========
+        const nilaiWorksheet = workbook.getWorksheet('Template Nilai Ujian');
+        if (nilaiWorksheet) {
+            for (let i = 2; i <= nilaiWorksheet.rowCount; i++) {
+                const nis = getCellValue(nilaiWorksheet, i, 1);
+                const kode_mapel = getCellValue(nilaiWorksheet, i, 3);
+                const nama_mapel_text = getCellValue(nilaiWorksheet, i, 4); // Ambil nama mapel dari excel
+                const tahun_ajaran_str = getCellValue(nilaiWorksheet, i, 8);
+                const semester = getCellValue(nilaiWorksheet, i, 7);
+
+                const siswa = await findSiswa(nis);
+                const mapel = await findMapel(kode_mapel);
+                const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
+
+                if (siswa && mapel && tahunAjaran) {
+                    await db.NilaiUjian.upsert({
+                        siswa_id: siswa.id,
+                        mapel_id: mapel.id,
+                        tahun_ajaran_id: tahunAjaran.id,
+                        semester,
+                        nilai_pengetahuan: parseFloat(getCellValue(nilaiWorksheet, i, 5)) || null,
+                        nilai_keterampilan: parseFloat(getCellValue(nilaiWorksheet, i, 6)) || null,
+                        mapel_text: nama_mapel_text // Simpan teks historis
+                    }, { transaction });
+                    results.nilai_ujian.success++;
+                } else {
+                    results.nilai_ujian.errors++;
+                }
+            }
         }
-      }
 
-      // ========== PROSES SHEET HAFALAN ==========
-      const hafalanWorksheet = workbook.getWorksheet('Template Hafalan');
-      if (hafalanWorksheet) {
-          const hafalanData = [];
-          hafalanWorksheet.eachRow((row, rowNumber) => {
-              if (rowNumber === 1) return;
-              const rowData = {
-                  nis: row.values[1],
-                  kode_mapel: row.values[3],
-                  nilai_hafalan: parseFloat(row.values[5]) || null,
-                  semester: row.values[6],
-                  tahun_ajaran: row.values[7],
-              };
-              if (rowData.nis && rowData.kode_mapel && rowData.nilai_hafalan !== null) {
-                  hafalanData.push(rowData);
-              }
-          });
+        // ========== 2. PROSES SHEET HAFALAN ==========
+        const hafalanWorksheet = workbook.getWorksheet('Template Hafalan');
+        if (hafalanWorksheet) {
+            for (let i = 2; i <= hafalanWorksheet.rowCount; i++) {
+                const nis = getCellValue(hafalanWorksheet, i, 1);
+                const kode_mapel = getCellValue(hafalanWorksheet, i, 3);
+                const nama_mapel_text = getCellValue(hafalanWorksheet, i, 4);
+                const tahun_ajaran_str = getCellValue(hafalanWorksheet, i, 7);
+                const semester = getCellValue(hafalanWorksheet, i, 6);
 
-          for (const item of hafalanData) {
-              const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
-              const mapel = await db.MataPelajaran.findOne({ where: { id: parseInt(item.kode_mapel.replace('MP', ''), 10) } });
-              if (siswa && mapel) {
-                  await db.NilaiHafalan.upsert({
-                      siswa_id: siswa.id,        // PERBAIKAN: Gunakan snake_case
-                      mapel_id: mapel.id,  // PERBAIKAN: Gunakan snake_case
-                      nilai_angka: item.nilai_hafalan,
-                      semester: item.semester,
-                      tahun_ajaran: item.tahun_ajaran,
-                  }, { transaction });
-                  results.hafalan.success++;
-              }
-          }
-      }
+                const siswa = await findSiswa(nis);
+                const mapel = await findMapel(kode_mapel);
+                const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
 
-      // ========== PROSES SHEET KEHADIRAN ==========
-      // Perbaikan untuk bagian PROSES SHEET KEHADIRAN di uploadCompleteData
-      // ========== PROSES SHEET KEHADIRAN ==========
-      // ========== PROSES SHEET KEHADIRAN ==========
-      const kehadiranWorksheet = workbook.getWorksheet('Template Kehadiran');
-      if (kehadiranWorksheet) {
-          const kehadiranData = [];
-          
-          console.log(`📊 Total baris di sheet kehadiran: ${kehadiranWorksheet.rowCount}`);
-          console.log(`📊 Total kolom di sheet kehadiran: ${kehadiranWorksheet.columnCount}`);
-          
-          // 🔥 DEBUGGING: Cek header dulu
-          const headerRow = kehadiranWorksheet.getRow(1);
-          console.log('📋 Header row values:', headerRow.values);
-          
-          // 🔥 DEBUGGING: Lihat beberapa baris pertama
-          for (let rowNum = 2; rowNum <= Math.min(5, kehadiranWorksheet.rowCount); rowNum++) {
-              const debugRow = kehadiranWorksheet.getRow(rowNum);
-              console.log(`🔍 Debug Baris ${rowNum}:`, {
-                  values: debugRow.values,
-                  cell1: debugRow.getCell(1).value,
-                  cell2: debugRow.getCell(2).value,
-                  cell3: debugRow.getCell(3).value,
-                  cell4: debugRow.getCell(4).value,
-                  cell5: debugRow.getCell(5).value,
-                  cell6: debugRow.getCell(6).value,
-                  cell7: debugRow.getCell(7).value,
-                  cell8: debugRow.getCell(8).value,
-              });
-          }
-          
-          // 🔥 METODE ALTERNATIF: Gunakan worksheetjson
-          const worksheetJSON = [];
-          kehadiranWorksheet.eachRow((row, rowNumber) => {
-              if (rowNumber === 1) return; // Skip header
-              
-              // 🔥 PERBAIKAN: Coba beberapa cara baca data
-              const method1 = {
-                  nis: row.values[1],
-                  nama_siswa: row.values[2],
-                  kegiatan: row.values[3],
-                  izin: row.values[4],
-                  sakit: row.values[5],
-                  absen: row.values[6],
-                  semester: row.values[7],
-                  tahun_ajaran: row.values[8],
-              };
-              
-              const method2 = {
-                  nis: row.getCell(1).value,
-                  nama_siswa: row.getCell(2).value,
-                  kegiatan: row.getCell(3).value,
-                  izin: row.getCell(4).value,
-                  sakit: row.getCell(5).value,
-                  absen: row.getCell(6).value,
-                  semester: row.getCell(7).value,
-                  tahun_ajaran: row.getCell(8).value,
-              };
-              
-              console.log(`🔍 Baris ${rowNumber} - Method1:`, method1);
-              console.log(`🔍 Baris ${rowNumber} - Method2:`, method2);
-              
-              // 🔥 GUNAKAN METHOD YANG LEBIH RELIABLE
-              const rowData = {
-                  nis: method2.nis || method1.nis,
-                  nama_siswa: method2.nama_siswa || method1.nama_siswa,
-                  kegiatan: method2.kegiatan || method1.kegiatan,
-                  izin: parseInt(method2.izin || method1.izin, 10) || 0,
-                  sakit: parseInt(method2.sakit || method1.sakit, 10) || 0,
-                  absen: parseInt(method2.absen || method1.absen, 10) || 0,
-                  semester: method2.semester || method1.semester,
-                  tahun_ajaran: method2.tahun_ajaran || method1.tahun_ajaran,
-              };
-              
-              console.log(`✨ Final rowData baris ${rowNumber}:`, rowData);
-              
-              // 🔥 VALIDASI: Pastikan data tidak kosong
-              if (rowData.nis && rowData.kegiatan) {
-                  kehadiranData.push(rowData);
-                  console.log(`✅ Data ditambahkan: ${rowData.nis} - ${rowData.kegiatan} (izin:${rowData.izin}, sakit:${rowData.sakit}, absen:${rowData.absen})`);
-              } else {
-                  console.log(`❌ Data diabaikan baris ${rowNumber}:`, rowData);
-              }
-          });
+                if (siswa && mapel && tahunAjaran) {
+                    await db.NilaiHafalan.upsert({
+                        siswa_id: siswa.id,
+                        mapel_id: mapel.id,
+                        tahun_ajaran_id: tahunAjaran.id,
+                        semester,
+                        nilai: parseFloat(getCellValue(hafalanWorksheet, i, 5)) || null,
+                        mapel_text: nama_mapel_text // Simpan teks historis
+                    }, { transaction });
+                    results.hafalan.success++;
+                } else {
+                    results.hafalan.errors++;
+                }
+            }
+        }
+        
+        // ========== 3. PROSES SHEET KEHADIRAN ==========
+        const kehadiranWorksheet = workbook.getWorksheet('Template Kehadiran');
+        if (kehadiranWorksheet) {
+            for (let i = 2; i <= kehadiranWorksheet.rowCount; i++) {
+                const nis = getCellValue(kehadiranWorksheet, i, 1);
+                const kegiatan_text = getCellValue(kehadiranWorksheet, i, 3);
+                const tahun_ajaran_str = getCellValue(kehadiranWorksheet, i, 8);
+                const semester = getCellValue(kehadiranWorksheet, i, 7);
 
-          console.log(`📊 RINGKASAN: ${kehadiranData.length} data kehadiran akan diproses`);
-          
-          // 🔥 DEBUGGING: Tampilkan semua data yang akan diproses
-          kehadiranData.forEach((item, index) => {
-              console.log(`📋 Data ${index + 1}:`, item);
-          });
+                const siswa = await findSiswa(nis);
+                const indikator = await findIndikatorKehadiran(kegiatan_text);
+                const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
+                
+                if (siswa && tahunAjaran && kegiatan_text) {
+                    await db.Kehadiran.upsert({
+                        siswa_id: siswa.id,
+                        tahun_ajaran_id: tahunAjaran.id,
+                        semester,
+                        indikatorkehadirans_id: indikator ? indikator.id : null,
+                        indikator_text: kegiatan_text, // Selalu simpan teks historis
+                        izin: parseInt(getCellValue(kehadiranWorksheet, i, 4), 10) || 0,
+                        sakit: parseInt(getCellValue(kehadiranWorksheet, i, 5), 10) || 0,
+                        absen: parseInt(getCellValue(kehadiranWorksheet, i, 6), 10) || 0,
+                    }, { transaction });
+                    results.kehadiran.success++;
+                } else {
+                    results.kehadiran.errors++;
+                }
+            }
+        }
 
-          // 🔥 PROSES PENYIMPANAN
-          for (const item of kehadiranData) {
-              const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
-              if (siswa) {
-                  try {
-                      console.log(`🔄 Akan menyimpan: Siswa ${siswa.nama} - Kegiatan "${item.kegiatan}" - izin:${item.izin}, sakit:${item.sakit}, absen:${item.absen}`);
-                      
-                      // 🔥 CEK: Apakah record sudah ada
-                      const existingRecord = await db.Kehadiran.findOne({
-                          where: {
-                              siswa_id: siswa.id,
-                              kegiatan: item.kegiatan,
-                              semester: item.semester,
-                              tahun_ajaran: item.tahun_ajaran
-                          }
-                      });
-                      
-                      if (existingRecord) {
-                          console.log(`🔄 Record sudah ada, akan diupdate:`, existingRecord.toJSON());
-                          await existingRecord.update({
-                              izin: item.izin,
-                              sakit: item.sakit,
-                              absen: item.absen
-                          }, { transaction });
-                          console.log(`✅ Record berhasil diupdate untuk ${siswa.nama} - ${item.kegiatan}`);
-                      } else {
-                          console.log(`🆕 Membuat record baru`);
-                          const newRecord = await db.Kehadiran.create({
-                              siswa_id: siswa.id,
-                              kegiatan: item.kegiatan,
-                              izin: item.izin,
-                              sakit: item.sakit,
-                              absen: item.absen,
-                              semester: item.semester,
-                              tahun_ajaran: item.tahun_ajaran,
-                          }, { transaction });
-                          console.log(`✅ Record baru berhasil dibuat:`, newRecord.toJSON());
-                      }
-                      
-                      results.kehadiran.success++;
-                      
-                  } catch (error) {
-                      console.error(`❌ Error menyimpan kehadiran untuk ${siswa.nama} - ${item.kegiatan}:`, error);
-                      results.kehadiran.errors.push(`NIS ${item.nis} - ${item.kegiatan}: ${error.message}`);
-                  }
-              } else {
-                  console.log(`⚠️ Siswa dengan NIS ${item.nis} tidak ditemukan`);
-                  results.kehadiran.errors.push(`NIS ${item.nis} tidak ditemukan dalam database`);
-              }
-          }
-          
-          // 🔥 DEBUGGING: Cek hasil akhir di database
-          console.log('🔍 VERIFIKASI: Cek data yang tersimpan di database');
-          const allKehadiran = await db.Kehadiran.findAll({
-              where: {
-                  semester: kehadiranData[0]?.semester,
-                  tahun_ajaran: kehadiranData[0]?.tahun_ajaran
-              },
-              include: [{
-                  model: db.Siswa,
-                  attributes: ['nama', 'nis']
-              }]
-          });
-          
-          console.log('📋 Data kehadiran yang tersimpan di database:');
-          allKehadiran.forEach(record => {
-              console.log(`- ${record.Siswa.nama} (${record.Siswa.nis}) - ${record.kegiatan}: izin=${record.izin}, sakit=${record.sakit}, absen=${record.absen}`);
-          });
-      }
+        // ========== 4. PROSES SHEET SIKAP (DIPERBAIKI) ==========
+        const sikapWorksheet = workbook.getWorksheet('Template Sikap');
+        if (sikapWorksheet) {
+            for (let i = 2; i <= sikapWorksheet.rowCount; i++) {
+                const nis = getCellValue(sikapWorksheet, i, 1);
+                const jenis_sikap = getCellValue(sikapWorksheet, i, 3);
+                const indikator_text_from_excel = getCellValue(sikapWorksheet, i, 4);
+                const nilai_from_excel = getCellValue(sikapWorksheet, i, 5); // PERBAIKAN: Ambil nilai dari kolom 5
+                const deskripsi_from_excel = getCellValue(sikapWorksheet, i, 6);
+                const tahun_ajaran_str = getCellValue(sikapWorksheet, i, 8);
+                const semester = getCellValue(sikapWorksheet, i, 7);
 
-      // ========== PROSES SHEET SIKAP ==========
-      const sikapWorksheet = workbook.getWorksheet('Template Sikap');
-      if (sikapWorksheet) {
-          const sikapData = [];
-          sikapWorksheet.eachRow((row, rowNumber) => {
-              if (rowNumber === 1) return;
-              const rowData = {
-                  nis: row.values[1],
-                  jenis_sikap: row.values[3],
-                  indikator: row.values[4],
-                  nilai_angka: parseFloat(row.values[5]) || null,
-                  deskripsi: row.values[6] || '',
-                  semester: row.values[7],
-                  tahun_ajaran: row.values[8],
-              };
-              if (rowData.nis && rowData.jenis_sikap && rowData.indikator && rowData.nilai_angka !== null) {
-                  sikapData.push(rowData);
-              }
-          });
+                console.log(`\n📝 Memproses baris ${i}:`);
+                console.log(`   NIS: ${nis}`);
+                console.log(`   Jenis: ${jenis_sikap}`);
+                console.log(`   Indikator dari Excel: ${indikator_text_from_excel}`);
+                console.log(`   Nilai dari Excel: ${nilai_from_excel}`);
 
-          for (const item of sikapData) {
-              const siswa = await db.Siswa.findOne({ where: { nis: item.nis } });
-              if (siswa) {
-                  await db.Sikap.upsert({
-                      siswa_id: siswa.id, // PERBAIKAN: Gunakan snake_case
-                      jenis_sikap: item.jenis_sikap,
-                      indikator: item.indikator,
-                      angka: item.nilai_angka,
-                      deskripsi: item.deskripsi,
-                      semester: item.semester,
-                      tahun_ajaran: item.tahun_ajaran,
-                  }, { transaction });
-                  results.sikap.success++;
-              }
-          }
-      }
+                const siswa = await findSiswa(nis);
+                const indikator = await findIndikatorSikap(jenis_sikap, indikator_text_from_excel);
+                const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
 
-      await transaction.commit();
-      fs.unlinkSync(filePath); // Hapus file setelah diproses
+                if (siswa && tahunAjaran && indikator_text_from_excel) {
+                    // PERBAIKAN LOGIC UTAMA:
+                    let final_indikator_sikap_id = null;
+                    const final_indikator_text = indikator_text_from_excel; 
+                    
+                    if (indikator) {
+                        // Jika ditemukan di master data
+                        final_indikator_sikap_id = indikator.id;
+                        console.log(`✅ Indikator ditemukan di master. ID: ${final_indikator_sikap_id}`);
+                        
+                        console.log(`✅ Indikator ditemukan di master:`)
+                        console.log(`   ID: ${final_indikator_sikap_id}`)
+                        console.log(`   Text dari master: ${final_indikator_text}`)
+                    } else {
+                        // Jika tidak ditemukan di master data
+                        console.log(`⚠️ Indikator tidak ditemukan di master, menggunakan text dari Excel`)
+                    }
 
-      res.status(200).json({
-        message: 'Data berhasil diimpor dari template lengkap.',
-        results: results
-      });
+                    const finalNilai = (nilai_from_excel !== null && nilai_from_excel !== '' && !isNaN(parseFloat(nilai_from_excel)))
+                        ? parseFloat(nilai_from_excel) 
+                        : null;
 
-    } catch (dbError) {
-      await transaction.rollback();
-      throw dbError; // Lempar error untuk ditangkap oleh blok catch luar
-    }
+                    console.log(`💯 Nilai final yang akan disimpan: ${finalNilai}`);
 
-  } catch (error) {
-    console.error('Error processing complete excel file:', error);
-    if (req.file) { // Pastikan file dihapus jika terjadi error
-        const filePath = req.file.path;
+                    await db.Sikap.upsert({
+                        siswa_id: siswa.id,
+                        tahun_ajaran_id: tahunAjaran.id,
+                        semester,
+                        indikator_sikap_id: final_indikator_sikap_id,
+                        indikator_text: final_indikator_text,
+                        nilai: finalNilai,
+                        deskripsi: deskripsi_from_excel || '',
+                    }, { transaction });
+                    
+                    results.sikap.success++;
+                    console.log(`✅ Data sikap berhasil disimpan untuk ${siswa.nama}`);
+                } else {
+                    results.sikap.errors++;
+                    console.log(`❌ Gagal memproses data sikap untuk NIS: ${nis}`);
+                    if (!siswa) console.log(`   - Siswa tidak ditemukan`);
+                    if (!tahunAjaran) console.log(`   - Tahun ajaran tidak ditemukan`);
+                    if (!indikator_text_from_excel) console.log(`   - Indikator text kosong`);
+                }
+            }
+        }
+
+        function getCellValue(worksheet, row, col) {
+            const cell = worksheet.getRow(row).getCell(col);
+            if (!cell || cell.value === null || cell.value === undefined) {
+                return '';
+            }
+            
+            // Handle different cell types
+            if (typeof cell.value === 'object' && cell.value.text) {
+                return String(cell.value.text).trim();
+            } else if (typeof cell.value === 'string') {
+                return cell.value.trim();
+            } else {
+                return String(cell.value).trim();
+            }
+        }
+
+        await transaction.commit();
+        res.status(200).json({ message: 'Data berhasil diimpor.', results });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Error processing complete excel file:', error);
+        res.status(500).json({ message: 'Terjadi kesalahan saat memproses file.', error: error.message });
+    } finally {
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
         }
     }
-    res.status(500).json({
-      message: 'Terjadi kesalahan saat memproses file Excel lengkap.',
-      error: error.message
-    });
-  }
 };
 
 // ====================== NILAI UJIAN ======================

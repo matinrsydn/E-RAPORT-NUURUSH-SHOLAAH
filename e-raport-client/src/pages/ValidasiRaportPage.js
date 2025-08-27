@@ -62,6 +62,11 @@ const ValidasiRaportPage = () => {
                         nilaiUjian: item.data.nilai_ujian || [],
                         nilaiHafalan: item.data.nilai_hafalan || [],
                         kehadiran_detail: item.data.kehadiran_detail || [],
+                        
+                        // ======================= PERBAIKAN DI SINI =======================
+                        sikap: item.data.sikap || [], // <-- TAMBAHKAN BARIS INI
+                        // ===============================================================
+
                         kehadiran_summary: item.data.kehadiran_summary || {
                             sakit: 0,
                             izin: 0,
@@ -70,7 +75,7 @@ const ValidasiRaportPage = () => {
                         catatan_sikap: item.data.catatan_sikap || null
                     };
                     
-                    console.log('🔍 Processed data structure:', JSON.stringify(result, null, 2));
+                    console.log('Processed data structure:', JSON.stringify(result, null, 2));
                     return result;
                 });
 
