@@ -40,9 +40,13 @@ exports.uploadCompleteData = async (req, res) => {
             if (!cache.siswa[nis]) cache.siswa[nis] = await db.Siswa.findOne({ where: { nis } });
             return cache.siswa[nis];
         };
-        const findMapel = async (kode_mapel) => {
-            if (!cache.mapel[kode_mapel]) cache.mapel[kode_mapel] = await db.MataPelajaran.findOne({ where: { kode_mapel } });
-            return cache.mapel[kode_mapel];
+        const findMapel = async (kode_mapel, jenis) => { // <-- Tambahkan parameter 'jenis'
+            const key = `${kode_mapel}-${jenis}`;
+            if (!cache.mapel[key]) {
+                // Tambahkan 'jenis' ke dalam query
+                cache.mapel[key] = await db.MataPelajaran.findOne({ where: { kode_mapel, jenis } });
+            }
+            return cache.mapel[key];
         };
         const findTahunAjaran = async (nama_ajaran, semester) => {
             const key = `${nama_ajaran}-${semester}`;
@@ -85,7 +89,7 @@ exports.uploadCompleteData = async (req, res) => {
                 const semester = getCellValue(nilaiWorksheet, i, 7);
 
                 const siswa = await findSiswa(nis);
-                const mapel = await findMapel(kode_mapel);
+                const mapel = await findMapel(kode_mapel, 'Ujian');
                 const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
 
                 if (siswa && mapel && tahunAjaran) {
@@ -96,7 +100,7 @@ exports.uploadCompleteData = async (req, res) => {
                         semester,
                         nilai_pengetahuan: parseFloat(getCellValue(nilaiWorksheet, i, 5)) || null,
                         nilai_keterampilan: parseFloat(getCellValue(nilaiWorksheet, i, 6)) || null,
-                        mapel_text: nama_mapel_text // Simpan teks historis
+                        mapel_text: mapel.nama_mapel
                     }, { transaction });
                     results.nilai_ujian.success++;
                 } else {
@@ -116,7 +120,7 @@ exports.uploadCompleteData = async (req, res) => {
                 const semester = getCellValue(hafalanWorksheet, i, 6);
 
                 const siswa = await findSiswa(nis);
-                const mapel = await findMapel(kode_mapel);
+                const mapel = await findMapel(kode_mapel, 'Hafalan');
                 const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
 
                 if (siswa && mapel && tahunAjaran) {
@@ -126,7 +130,7 @@ exports.uploadCompleteData = async (req, res) => {
                         tahun_ajaran_id: tahunAjaran.id,
                         semester,
                         nilai: parseFloat(getCellValue(hafalanWorksheet, i, 5)) || null,
-                        mapel_text: nama_mapel_text // Simpan teks historis
+                        mapel_text: mapel.nama_mapel
                     }, { transaction });
                     results.hafalan.success++;
                 } else {
@@ -636,7 +640,17 @@ exports.downloadCompleteTemplate = async (req, res) => {
     }
 
     const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
-    const mapelList = await db.MataPelajaran.findAll({ order: [['nama_mapel', 'ASC']] });
+    
+    // --- DEKLARASI VARIABEL YANG BENAR ---
+    const mapelUjianList = await db.MataPelajaran.findAll({ 
+        where: { jenis: 'Ujian' }, 
+        order: [['nama_mapel', 'ASC']] 
+    });
+    const mapelHafalanList = await db.MataPelajaran.findAll({ 
+        where: { jenis: 'Hafalan' }, 
+        order: [['nama_mapel', 'ASC']] 
+    });
+    
     const indikatorKehadiran = await db.IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
     const indikatorSpiritual = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' } });
     const indikatorSosial = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' } });
@@ -649,26 +663,28 @@ exports.downloadCompleteTemplate = async (req, res) => {
 
     // ========== HELPER FUNCTION UNTUK MERGE CELLS ==========
     const mergeCellsForStudent = (sheet, startRow, endRow, siswa) => {
-      if (endRow <= startRow) return;
-      
       try {
-        // Merge NIS (kolom A)
-        const nisRange = `A${startRow}:A${endRow}`;
-        sheet.mergeCells(nisRange);
+        // Selalu dapatkan sel pertama untuk diisi data
         const nisCell = sheet.getCell(`A${startRow}`);
-        nisCell.alignment = { vertical: 'middle', horizontal: 'center' };
-        nisCell.value = siswa.nis;
-        
-        // Merge Nama Siswa (kolom B)  
-        const namaRange = `B${startRow}:B${endRow}`;
-        sheet.mergeCells(namaRange);
         const namaCell = sheet.getCell(`B${startRow}`);
-        namaCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+        // 1. Selalu isi data NIS dan Nama di baris pertama
+        nisCell.value = siswa.nis;
         namaCell.value = siswa.nama;
+
+        // 2. Lakukan merge HANYA JIKA ada lebih dari satu baris
+        if (endRow > startRow) {
+          sheet.mergeCells(`A${startRow}:A${endRow}`);
+          sheet.mergeCells(`B${startRow}:B${endRow}`);
+        }
         
-        console.log(`✅ Merged cells untuk ${siswa.nama}: Baris ${startRow}-${endRow}`);
+        // 3. Terapkan alignment setelah semua proses selesai
+        nisCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        namaCell.alignment = { vertical: 'middle', horizontal: 'left' };
+        
+        console.log(`✅ Wrote student data for ${siswa.nama}: Baris ${startRow}-${endRow}`);
       } catch (error) {
-        console.error(`❌ Error merging cells untuk ${siswa.nama}:`, error.message);
+        console.error(`❌ Error writing student data for ${siswa.nama}:`, error.message);
       }
     };
 
@@ -717,11 +733,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     for (const siswa of siswaList) {
       const startRowUjian = currentRowUjian;
       
-      for (const mapel of mapelList) {
+      for (const mapel of mapelUjianList) {
         sheetUjian.addRow({ 
-          nis: '', // Kosongkan dulu, akan diisi saat merge
-          nama_siswa: '', // Kosongkan dulu, akan diisi saat merge
-          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`,
+          kode_mapel: mapel.kode_mapel,
           nama_mapel: mapel.nama_mapel, 
           semester, 
           tahun_ajaran 
@@ -732,7 +746,6 @@ exports.downloadCompleteTemplate = async (req, res) => {
       const endRowUjian = currentRowUjian - 1;
       mergeCellsForStudent(sheetUjian, startRowUjian, endRowUjian, siswa);
     }
-    
     applySheetStyling(sheetUjian);
     console.log(`✅ Sheet Nilai Ujian selesai dengan merge cells`);
 
@@ -752,11 +765,9 @@ exports.downloadCompleteTemplate = async (req, res) => {
     for (const siswa of siswaList) {
       const startRowHafalan = currentRowHafalan;
       
-      for (const mapel of mapelList) {
+      for (const mapel of mapelHafalanList) {
         sheetHafalan.addRow({ 
-          nis: '',
-          nama_siswa: '',
-          kode_mapel: mapel.kode_mapel || `MP${mapel.id}`,
+          kode_mapel: mapel.kode_mapel,
           nama_mapel: mapel.nama_mapel, 
           semester, 
           tahun_ajaran 
@@ -767,7 +778,6 @@ exports.downloadCompleteTemplate = async (req, res) => {
       const endRowHafalan = currentRowHafalan - 1;
       mergeCellsForStudent(sheetHafalan, startRowHafalan, endRowHafalan, siswa);
     }
-    
     applySheetStyling(sheetHafalan);
     console.log(`✅ Sheet Hafalan selesai dengan merge cells`);
 

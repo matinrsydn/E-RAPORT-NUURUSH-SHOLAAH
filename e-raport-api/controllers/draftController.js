@@ -510,7 +510,10 @@ exports.confirmAndSave = async (req, res) => {
             if (data.nilai_ujian && Array.isArray(data.nilai_ujian)) {
                 for (const nilai of data.nilai_ujian) {
                     const mapel = await db.MataPelajaran.findOne({ 
-                        where: { kode_mapel: nilai.kode_mapel } 
+                        where: { 
+                            kode_mapel: nilai.kode_mapel,
+                            jenis: 'Ujian' // <-- Tambahkan filter ini
+                        } 
                     });
                     if (mapel) {
                         await db.NilaiUjian.upsert({
@@ -519,7 +522,8 @@ exports.confirmAndSave = async (req, res) => {
                             pengetahuan_angka: nilai.pengetahuan_angka,
                             keterampilan_angka: nilai.keterampilan_angka,
                             semester,
-                            tahun_ajaran
+                            tahun_ajaran,
+                            mapel_text: mapel.nama_mapel
                         }, { transaction });
                         console.log(`✅ Nilai ujian: ${mapel.nama_mapel}`);
                     }
@@ -530,7 +534,10 @@ exports.confirmAndSave = async (req, res) => {
             if (data.nilai_hafalan && Array.isArray(data.nilai_hafalan)) {
                 for (const hafalan of data.nilai_hafalan) {
                     const mapel = await db.MataPelajaran.findOne({ 
-                        where: { kode_mapel: hafalan.kode_mapel } 
+                        where: { 
+                            kode_mapel: hafalan.kode_mapel,
+                            jenis: 'Hafalan' // <-- Tambahkan filter ini
+                        } 
                     });
                     if (mapel) {
                         await db.NilaiHafalan.upsert({
@@ -538,7 +545,8 @@ exports.confirmAndSave = async (req, res) => {
                             mapel_id: mapel.id,
                             nilai_angka: hafalan.nilai_angka,
                             semester,
-                            tahun_ajaran
+                            tahun_ajaran,
+                            mapel_text: mapel.nama_mapel
                         }, { transaction });
                         console.log(`✅ Nilai hafalan: ${mapel.nama_mapel}`);
                     }

@@ -49,6 +49,11 @@ module.exports = (sequelize, DataTypes) => {
     tahun_ajaran_id: {
       type: DataTypes.INTEGER,
       allowNull: false
+    },
+
+    mapel_text: {
+      type: DataTypes.STRING,
+      allowNull: true // Bisa null jika diperlukan
     }
   }, {
     sequelize,

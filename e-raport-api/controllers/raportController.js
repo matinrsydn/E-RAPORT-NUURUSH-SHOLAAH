@@ -45,8 +45,16 @@ exports.saveValidatedRaport = async (req, res) => {
             // 1. Proses Nilai Ujian
             if (item.nilaiUjian && Array.isArray(item.nilaiUjian)) {
                 for (const nilai of item.nilaiUjian) {
-                    const mapel = await db.MataPelajaran.findOne({ where: { kode_mapel: nilai.kode_mapel } });
-                    if (!mapel) continue;
+                    const mapel = await db.MataPelajaran.findOne({ 
+                        where: { 
+                            kode_mapel: nilai.kode_mapel,
+                            jenis: 'Ujian' // <-- Tambahkan filter ini
+                        } 
+                    });
+                    if (!mapel) {
+                        console.warn(`⚠️  Mapel Ujian dengan kode '${nilai.kode_mapel}' tidak ditemukan/tidak cocok. Data dilewati.`);
+                        continue;
+                    }
 
                     await db.NilaiUjian.upsert({
                         siswa_id: siswa.id,
@@ -55,7 +63,7 @@ exports.saveValidatedRaport = async (req, res) => {
                         semester: item.semester,
                         nilai_pengetahuan: nilai.pengetahuan_angka,
                         nilai_keterampilan: nilai.keterampilan_angka,
-                        mapel_text: nilai.nama_mapel
+                        mapel_text: mapel.nama_mapel
                     }, { transaction });
                 }
             }
@@ -63,8 +71,16 @@ exports.saveValidatedRaport = async (req, res) => {
             // 2. Proses Nilai Hafalan
             if (item.nilaiHafalan && Array.isArray(item.nilaiHafalan)) {
                 for (const hafalan of item.nilaiHafalan) {
-                    const mapel = await db.MataPelajaran.findOne({ where: { kode_mapel: hafalan.kode_mapel } });
-                    if (!mapel) continue;
+                    const mapel = await db.MataPelajaran.findOne({ 
+                        where: { 
+                            kode_mapel: hafalan.kode_mapel,
+                            jenis: 'Hafalan' // <-- Tambahkan filter ini
+                        } 
+                    });
+                    if (!mapel) {
+                        console.warn(`⚠️  Mapel Hafalan dengan kode '${hafalan.kode_mapel}' tidak ditemukan/tidak cocok. Data dilewati.`);
+                        continue;
+                    }
                     
                     await db.NilaiHafalan.upsert({
                         siswa_id: siswa.id,
@@ -72,7 +88,7 @@ exports.saveValidatedRaport = async (req, res) => {
                         tahun_ajaran_id: tahun_ajaran_id,
                         semester: item.semester,
                         nilai: hafalan.nilai_angka,
-                        mapel_text: hafalan.nama_mapel
+                        mapel_text: mapel.nama_mapel
                     }, { transaction });
                 }
             }
