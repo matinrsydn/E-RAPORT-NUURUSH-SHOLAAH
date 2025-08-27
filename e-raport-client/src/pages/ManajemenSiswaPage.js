@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Modal, Button, Form, Table, FormControl, InputGroup, Row, Col, Alert, Spinner } from 'react-bootstrap';
+import { Modal, Button, Form, Table, FormControl, InputGroup, Row, Col, Alert, Spinner, Dropdown, DropdownButton } from 'react-bootstrap';
 
 const ManajemenSiswaPage = () => {
     const [siswas, setSiswas] = useState([]);
@@ -218,45 +218,43 @@ const ManajemenSiswaPage = () => {
 
     // Ganti fungsi handleDownloadIdentitas yang kosong dengan ini:
     // Ganti fungsi handleDownloadIdentitas yang kosong dengan ini:
-    const handleDownloadIdentitas = async (siswa) => {
+    const handleDownloadIdentitas = async (siswa, format) => {
+        const downloadId = `${siswa.id}-${format}`;
+        setDownloadingIds(prev => new Set(prev).add(downloadId));
         try {
-            // Untuk download identitas, kita bisa menggunakan semester dan tahun ajaran default
-            // Atau bisa diminta input dari user melalui modal
-            const semester = '1'; // atau bisa dinamis
-            const tahunAjaran = '2024-2025'; // atau bisa dinamis
-            
-            console.log(`Downloading identitas untuk siswa: ${siswa.nama}`);
-            
             const response = await axios({
                 method: 'GET',
-                url: `http://localhost:5000/api/templates/generate-identitas/${siswa.id}`,
-                responseType: 'blob', // Important untuk download file
+                url: `http://localhost:5000/api/templates/generate-identitas/${siswa.id}?format=${format}`,
+                responseType: 'blob',
             });
             
-            // Buat blob dan download file
-            const blob = new Blob([response.data], {
-                type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            });
+            const contentType = format === 'pdf' 
+                ? 'application/pdf' 
+                : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            
+            const blob = new Blob([response.data], { type: contentType });
             
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Raport_${siswa.nama.replace(/\s+/g, '_')}_Identitas.docx`;
+            link.download = `Identitas_${siswa.nama.replace(/\s+/g, '_')}.${format}`;
             document.body.appendChild(link);
             link.click();
             
-            // Cleanup
             window.URL.revokeObjectURL(url);
             document.body.removeChild(link);
-            
-            console.log('Download identitas berhasil!');
         } catch (error) {
-            console.error('Error saat download identitas:', error);
-            alert('Gagal mengunduh file identitas. Pastikan template sudah diupload dan data siswa lengkap.');
+            console.error(`Error saat download identitas (format: ${format}):`, error);
+            alert(`Gagal mengunduh file identitas ${format.toUpperCase()}. Pastikan template sudah diupload dan data siswa lengkap.`);
+        } finally {
+            setDownloadingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(downloadId);
+                return newSet;
+            });
         }
     };
 
-    // Filter siswa berdasarkan search term
     const filteredSiswas = siswas.filter(s =>
         (s.nama && s.nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.nis && s.nis.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -292,6 +290,22 @@ const ManajemenSiswaPage = () => {
                                 <td>{siswa.kelas?.nama_kelas || 'N/A'}</td>
                                 <td>{siswa.kelas?.walikelas?.nama || 'N/A'}</td>
                                 <td>
+                                    <DropdownButton
+                                    id={`dropdown-cetak-${siswa.id}`}
+                                    title={
+                                        downloadingIds.has(`${siswa.id}-docx`) || downloadingIds.has(`${siswa.id}-pdf`) ? (
+                                            <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
+                                        ) : (
+                                            <><i className="bi bi-printer"></i> Cetak</>
+                                        )
+                                    }
+                                    variant="success"
+                                    size="sm"
+                                    className="d-inline-block me-1"
+                                >
+                                    <Dropdown.Item onClick={() => handleDownloadIdentitas(siswa, 'docx')}>Cetak DOCX</Dropdown.Item>
+                                    <Dropdown.Item onClick={() => handleDownloadIdentitas(siswa, 'pdf')}>Cetak PDF</Dropdown.Item>
+                                </DropdownButton>
                                 <Button variant="success" size="sm" className="me-1" onClick={() => handleDownloadIdentitas(siswa)}>
                                     <i className="bi bi-printer"></i> Cetak Identitas
                                 </Button>

@@ -5,6 +5,8 @@ const db = require('../models');
 const multer = require("multer");
 const fs = require("fs");
 const path = require('path');
+const libre = require('libreoffice-convert');
+const util = require('util');
 
 // --- Konfigurasi Multer (Tidak berubah) ---
 const templateStorage = multer.diskStorage({
@@ -303,8 +305,9 @@ exports.generateRaport = async (req, res) => {
 
 exports.generateIdentitas = async (req, res) => {
     const { siswaId } = req.params;
+    const { format = 'docx' } = req.query; // Ambil format dari query, default 'docx'
+
     try {
-        // Ambil data siswa dengan semua relasinya
         const siswa = await db.Siswa.findOne({
             where: { id: siswaId },
             include: [
@@ -323,12 +326,9 @@ exports.generateIdentitas = async (req, res) => {
             return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
         }
 
-        // Ambil data kepala pesantren
         const kepalaPesantren = await db.KepalaPesantren.findOne();
 
-        // Siapkan data template untuk identitas saja
         const templateData = {
-            // Data identitas siswa
             nama: siswa.nama || '-',
             no_induk: siswa.nis || '-',
             ttl: `${siswa.tempat_lahir || ''}, ${formatTanggal(siswa.tanggal_lahir)}`,
@@ -352,7 +352,6 @@ exports.generateIdentitas = async (req, res) => {
             kota_asal: siswa.kota_asal || '-'
         };
 
-        // Generate hanya template identitas
         const identitasTemplatePath = path.join(__dirname, '../uploads/templates/identitas.docx');
         
         if (!fs.existsSync(identitasTemplatePath)) {
@@ -370,10 +369,20 @@ exports.generateIdentitas = async (req, res) => {
         doc.render(templateData);
         const generatedBuffer = doc.getZip().generate({ type: 'nodebuffer' });
 
-        const namaFile = `Identitas_${siswa.nama.replace(/\s+/g, '_')}.docx`;
-        res.setHeader('Content-Disposition', `attachment; filename=${namaFile}`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.send(generatedBuffer);
+        if (format === 'pdf') {
+            const convert = util.promisify(libre.convert);
+            const pdfBuffer = await convert(generatedBuffer, '.pdf', undefined);
+
+            const namaFile = `Identitas_${siswa.nama.replace(/\s+/g, '_')}.pdf`;
+            res.setHeader('Content-Disposition', `attachment; filename=${namaFile}`);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.send(pdfBuffer);
+        } else {
+            const namaFile = `Identitas_${siswa.nama.replace(/\s+/g, '_')}.docx`;
+            res.setHeader('Content-Disposition', `attachment; filename=${namaFile}`);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.send(generatedBuffer);
+        }
 
     } catch (error) {
         console.error("Gagal membuat identitas:", error);

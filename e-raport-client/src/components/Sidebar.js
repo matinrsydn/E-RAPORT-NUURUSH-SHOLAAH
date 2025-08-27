@@ -59,7 +59,7 @@ const Sidebar = () => {
                 </ListGroup.Item>
                 
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kepala-pesantren" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <UserCog size={18} /> Kepala Pesantren
+                    <UserCog size={18} /> Pimpinan Pesantren
                 </ListGroup.Item>
             </ListGroup>
         </aside>
