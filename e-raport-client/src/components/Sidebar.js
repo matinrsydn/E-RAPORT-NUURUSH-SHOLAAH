@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { ListGroup } from 'react-bootstrap';
 import { 
     Users, UserCheck, Book, FileUp, UserCog, House, Layers, 
-    ClipboardList, Calendar, FileCheck, FilePlus, BookUser, CalendarCheck 
+    ClipboardList, Calendar, FileCheck, BookUser, CalendarCheck 
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -31,9 +31,7 @@ const Sidebar = () => {
                 <ListGroup.Item action as={NavLink} to="/manajemen-raport" className="d-flex align-items-center gap-3 rounded mb-1">
                     <BookUser size={18} /> Manajemen Raport
                 </ListGroup.Item>
-                <ListGroup.Item action as={NavLink} to="/generate-raport" className="d-flex align-items-center gap-3 rounded mb-1">
-                    <FilePlus size={18} /> Generate Raport
-                </ListGroup.Item>
+
 
                 {/* --- MENU MASTER DATA --- */}
                 <h3 className="px-3 py-2 mt-4" style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Master Data</h3>

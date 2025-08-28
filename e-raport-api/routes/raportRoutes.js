@@ -1,34 +1,25 @@
-// e-raport-api/routes/raportRoutes.js
-
 const express = require('express');
 const router = express.Router();
+
 const raportController = require('../controllers/raportController');
+const raportGeneratorController = require('../controllers/raportGeneratorController');
 
-// Debug: Pastikan semua fungsi controller ada
-console.log("RAPORT CONTROLLER METHODS:", Object.keys(raportController));
+// ==========================================================
+// === PERBAIKAN: Route yang lebih SPESIFIK diletakkan di ATAS ===
+// ==========================================================
+router.post('/save-validated', raportController.saveValidatedRaport);
+router.put('/update/ujian/:id', raportController.updateNilaiUjian);
+router.put('/update/hafalan/:id', raportController.updateNilaiHafalan);
+router.put('/update/kehadiran/:id', raportController.updateKehadiran);
 
-// Route untuk menyimpan data validasi (UTAMA - HARUS ADA!)
-// POST /api/raports/save-validated
-router.post('/save-validated', (req, res, next) => {
-  console.log("🚀 ROUTE /save-validated HIT");
-  console.log("📦 Body diterima:", JSON.stringify(req.body, null, 2));
-  next();
-}, raportController.saveValidatedRaport);
+// === Route untuk Generate Laporan/Dokumen ===
+router.get('/generate/nilai/:siswaId/:semester/:tahunAjaranId', raportGeneratorController.generateNilaiReport);
+router.get('/generate/sikap/:siswaId/:semester/:tahunAjaranId', raportGeneratorController.generateSikapReport);
+router.get('/generate/identitas/:siswaId', raportGeneratorController.generateIdentitas);
 
-// Route untuk mengambil data raport lengkap
-// GET /api/raports/:siswaId/:tahunAjaran/:semester
+// ==========================================================
+// Route yang lebih UMUM diletakkan di BAWAH
+// ==========================================================
 router.get('/:siswaId/:tahunAjaran/:semester', raportController.getRaportData);
-
-// Routes untuk mengupdate data
-// PUT /api/raports/nilai-ujian/:id
-router.put('/nilai-ujian/:id', raportController.updateNilaiUjian);
-
-// PUT /api/raports/nilai-hafalan/:id
-router.put('/nilai-hafalan/:id', raportController.updateNilaiHafalan);
-
-// PUT /api/raports/kehadiran/:id
-router.put('/kehadiran/:id', raportController.updateKehadiran);
-
-
 
 module.exports = router;

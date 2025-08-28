@@ -12,7 +12,6 @@ import ManajemenTahunAjaranPage from './pages/ManajemenAkademik/ManajemenTahunAj
 import ManajemenIndikatorSikapPage from './pages/ManajemenAkademik/ManajemenIndikatorSikapPage';
 import ManajemenKepalaPesantrenPage from './pages/ManajemenAkademik/KepalaPesantrenPage';
 import InputNilaiPage from './pages/InputNilaiPage';
-import GenerateRaportPage from './pages/GenerateRaportPage';
 import ValidasiRaportPage from './pages/ValidasiRaportPage';
 import DraftRaportPage from './pages/DraftRaportMainPage';
 import ManajemenRaportPage from './pages/ManajemenRaportPage';
@@ -31,7 +30,6 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/manajemen-siswa" element={<ManajemenSiswaPage />} />
             <Route path="/input-nilai" element={<InputNilaiPage />} />
-            <Route path="/generate-raport" element={<GenerateRaportPage />} />
 
             {/* --- SESUAIKAN SEMUA RUTE MASTER DATA DI SINI --- */}
             <Route path="/manajemen-akademik/tahun-ajaran" element={<ManajemenTahunAjaranPage />} />

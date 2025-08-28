@@ -234,7 +234,7 @@ exports.getRaportData = async (req, res) => {
             db.NilaiUjian.findAll({ 
                 where: { 
                     siswa_id: siswaId, 
-                    tahun_ajaran: tahunAjaranFormatted, 
+                    tahun_ajaran_id: tahunAjaran, 
                     semester: semester 
                 }, 
                 include: [{ 
