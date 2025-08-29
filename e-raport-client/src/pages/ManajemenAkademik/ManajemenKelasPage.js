@@ -11,7 +11,7 @@ const ManajemenKelasPage = () => {
     // Konfigurasi URL API
     const API_URL = 'http://localhost:5000/api/kelas';
     const WALI_KELAS_API_URL = 'http://localhost:5000/api/wali-kelas';
-
+    
     // Mengambil data saat komponen dimuat
     useEffect(() => {
         fetchKelas();

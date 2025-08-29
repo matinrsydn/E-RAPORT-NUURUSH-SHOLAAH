@@ -47,6 +47,7 @@ const templateRoutes = require('./routes/templateRoutes.js');
 const draftRoutes = require('./routes/draftRoutes');
 const raportRoutes = require('./routes/raportRoutes');
 const indikatorKehadiranRoutes = require('./routes/indikatorKehadiranRoutes');
+const kamarRoutes = require('./routes/kamarRoutes');
 
 app.use('/api/siswa', siswaRoutes);
 app.use('/api/wali-kelas', waliKelasRoutes);
@@ -63,6 +64,7 @@ app.use('/api/raports', raportRoutes); // <-- Ini sudah benar (raports)
 app.use('/api/templates', templateRoutes);
 app.use('/api/draft', draftRoutes);
 app.use('/api/indikator-kehadiran', indikatorKehadiranRoutes);
+app.use('/api/kamar', kamarRoutes);
 
 console.log("✓ All routes registered successfully");
 

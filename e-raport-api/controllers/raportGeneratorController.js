@@ -31,7 +31,17 @@ const formatTanggal = (tanggal) => {
 
 async function getFullRaportData(siswaId, semester, tahunAjaranId) {
     const siswa = await db.Siswa.findByPk(siswaId, {
-        include: [{ model: db.Kelas, as: 'kelas', include: [{ model: db.WaliKelas, as: 'walikelas' }] }]
+        include: [
+            { 
+                model: db.Kelas, 
+                as: 'kelas', 
+                include: [{ model: db.WaliKelas, as: 'walikelas' }] 
+            },
+            {
+                model: db.Kamar, // <-- TAMBAHKAN INI
+                as: 'infoKamar'  // <-- SESUAIKAN DENGAN ALIAS DI MODEL SISWA
+            }
+        ]
     });
     if (!siswa) throw new Error('Siswa tidak ditemukan');
 
@@ -42,7 +52,13 @@ async function getFullRaportData(siswaId, semester, tahunAjaranId) {
     const [nilaiUjians, nilaiHafalans, sikaps, kehadirans] = await Promise.all([
         db.NilaiUjian.findAll({ where: commonWhere, include: [{ model: db.MataPelajaran, as: 'mapel' }] }),
         db.NilaiHafalan.findAll({ where: commonWhere, include: [{ model: db.MataPelajaran, as: 'mapel' }] }),
-        db.Sikap.findAll({ where: commonWhere }),
+        db.Sikap.findAll({
+            where: commonWhere,
+            include: [{
+                model: db.IndikatorSikap,
+                as: 'indikator_sikap' // <-- TAMBAHKAN BARIS INI
+            }]
+        }),
         db.Kehadiran.findAll({ where: commonWhere })
     ]);
 
@@ -116,10 +132,13 @@ exports.generateNilaiReport = async (req, res) => {
         const templateData = {
             nama: data.siswa?.nama || 'N/A',
             no_induk: data.siswa?.nis || 'N/A',
-            kota_asal: data.siswa?.kota_asal || 'N/A',
+            kota_asal: data.siswa?.tempat_lahir || 'N/A',
             kelas: data.siswa?.kelas?.nama_kelas || 'N/A',
             wali_kelas: data.siswa?.kelas?.walikelas?.nama || 'N/A',
+            wali_kelas: data.siswa?.kelas?.walikelas?.nama || 'N/A', // <-- TAMBAHKAN JIKA PERLU NAMA
+            nip_wali_kelas: data.siswa?.kelas?.walikelas?.nip || 'N/A', // <-- TAMBAHKAN UNTUK NIP
             kepala_pesantren: data.kepalaPesantren?.nama || 'N/A',
+            nip_kepala_pesantren: data.kepalaPesantren?.nip || 'N/A',
             
             mapel: nilaiUjian.map((n, i) => ({
                 no: i + 1,
@@ -188,8 +207,8 @@ exports.generateSikapReport = async (req, res) => {
 
         const data = await getFullRaportData(siswaId, semester, tahunAjaranId);
         
-        const sikapSpiritual = data.sikaps.filter(s => s.jenis_sikap === 'Spiritual');
-        const sikapSosial = data.sikaps.filter(s => s.jenis_sikap === 'Sosial');
+        const sikapSpiritual = data.sikaps.filter(s => s.indikator_sikap?.jenis_sikap === 'Spiritual');
+        const sikapSosial = data.sikaps.filter(s => s.indikator_sikap?.jenis_sikap === 'Sosial');
         
         const rataSpiritual = calculateAverage(sikapSpiritual, 'nilai');
         const rataSosial = calculateAverage(sikapSosial, 'nilai');
@@ -199,24 +218,33 @@ exports.generateSikapReport = async (req, res) => {
             semester: data.tahunAjaran?.semester || 'N/A',
             thn_ajaran: data.tahunAjaran?.nama_ajaran || 'N/A',
             nama: data.siswa?.nama || 'N/A',
-            ttl: `${data.siswa?.tempat_lahir || ''}, ${data.siswa?.tanggal_lahir ? new Date(data.siswa.tanggal_lahir).toLocaleDateString('id-ID') : ''}`,
+            ttl: `${data.siswa?.tempat_lahir || ''}, ${formatTanggal(data.siswa?.tanggal_lahir)}`,
             no_induk: data.siswa?.nis || 'N/A',
-            kamar: data.siswa?.kamar || 'N/A',
-            kepala_pesantren: data.kepalaPesantren?.nama || 'N/A',
+            kamar: data.siswa?.infoKamar?.nama_kamar || 'N/A',
+            wali_kelas: data.siswa?.kelas?.walikelas?.nama || 'N/A', // <-- TAMBAHKAN JIKA PERLU NAMA
+            nip_wali_kelas: data.siswa?.kelas?.walikelas?.nip || 'N/A', // <-- TAMBAHKAN UNTUK NIP
+            kepala_pesantren: data.kepalaPesantren?.nama || 'N/A', 
+            nip_kepala_pesantren: data.kepalaPesantren?.nip || 'N/A',
+
+            // Loop untuk sikap spiritual
             sikap_s: sikapSpiritual.map((s, i) => ({
                 no: i + 1,
                 indikator: s.indikator_text,
                 angka: s.nilai,
                 predikat: getPredicate(s.nilai)
             })),
-            deskripsi_spiritual: sikapSpiritual.map(s => s.deskripsi).join('. '),
+            deskripsi_spiritual: sikapSpiritual.length > 0 ? sikapSpiritual[0].deskripsi : '-',
+
+            // Loop untuk sikap sosial
             sikap_o: sikapSosial.map((s, i) => ({
                 no: i + 1,
                 indikator: s.indikator_text,
                 angka: s.nilai,
                 predikat: getPredicate(s.nilai)
             })),
-            deskripsi_sosial: sikapSosial.map(s => s.deskripsi).join('. '),
+            deskripsi_sosial: sikapSosial.length > 0 ? sikapSosial[0].deskripsi : '-',
+
+            // Bagian Rata-rata dan Nilai Akhir
             rata_ss: rataSpiritual,
             pred_ss: getPredicate(rataSpiritual),
             rata_so: rataSosial,

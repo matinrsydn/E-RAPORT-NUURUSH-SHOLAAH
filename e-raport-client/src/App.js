@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ManajemenSiswaPage from './pages/ManajemenSiswaPage';
 import ManajemenKelasPage from './pages/ManajemenAkademik/ManajemenKelasPage';
 import ManajemenMapelPage from './pages/ManajemenAkademik/MataPelajaranPage';
+import ManajemenKamarPage from './pages/ManajemenAkademik/ManajemenKamarPage';
 import ManajemenWaliKelasPage from './pages/ManajemenAkademik/WaliKelasPage';
 import ManajemenTahunAjaranPage from './pages/ManajemenAkademik/ManajemenTahunAjaranPage';
 import ManajemenIndikatorSikapPage from './pages/ManajemenAkademik/ManajemenIndikatorSikapPage';
@@ -35,6 +36,7 @@ function App() {
             <Route path="/manajemen-akademik/tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
             <Route path="/manajemen-akademik/wali-kelas" element={<ManajemenWaliKelasPage />} />
             <Route path="/manajemen-akademik/kelas" element={<ManajemenKelasPage />} />
+            <Route path="/manajemen-akademik/kamar" element={<ManajemenKamarPage />} />
             <Route path="/manajemen-akademik/mata-pelajaran" element={<ManajemenMapelPage />} />
             <Route path="/manajemen-akademik/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
             <Route path="/manajemen-akademik/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />

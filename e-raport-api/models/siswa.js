@@ -4,6 +4,11 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
+
+      Siswa.belongsTo(models.Kamar, {
+        foreignKey: 'kamar_id',
+        as: 'infoKamar' // <-- UBAH MENJADI NAMA LAIN
+      });
       // Relasi ke Kelas
       Siswa.belongsTo(models.Kelas, {
         foreignKey: 'kelas_id',
@@ -66,7 +71,7 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     kamar: DataTypes.STRING,
-    kota_asal: DataTypes.STRING,
+    tempat_lahir: DataTypes.STRING,
     nama_ayah: DataTypes.STRING,
     pekerjaan_ayah: DataTypes.STRING,
     alamat_ayah: DataTypes.TEXT,

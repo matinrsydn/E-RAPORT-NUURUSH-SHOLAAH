@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { ListGroup } from 'react-bootstrap';
 import { 
     Users, UserCheck, Book, FileUp, UserCog, House, Layers, 
-    ClipboardList, Calendar, FileCheck, BookUser, CalendarCheck 
+    ClipboardList, Calendar, FileCheck, BookUser, CalendarCheck, DoorOpen 
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -43,6 +43,9 @@ const Sidebar = () => {
                 </ListGroup.Item>
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kelas" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Layers size={18} /> Manajemen Kelas
+                </ListGroup.Item>
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kamar" className="d-flex align-items-center gap-3 rounded mb-1"> {/* <-- 2. TAMBAHKAN MENU INI */}
+                    <DoorOpen size={18} /> Manajemen Kamar
                 </ListGroup.Item>
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/mata-pelajaran" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Book size={18} /> Mata Pelajaran

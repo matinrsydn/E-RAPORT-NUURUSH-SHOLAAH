@@ -8,6 +8,7 @@ const ManajemenSiswaPage = () => {
     const [waliKelasList, setWaliKelasList] = useState([]);
     const [kelasOptions, setKelasOptions] = useState([]);
     const [kepalaPesantren, setKepalaPesantren] = useState([]);
+    const [kamarOptions, setKamarOptions] = useState([]);
     const [show, setShow] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState(null);
@@ -32,18 +33,21 @@ const ManajemenSiswaPage = () => {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                const [resSiswa, resWali, resKelas, resTa, resKp] = await Promise.all([
+                // Modifikasi Promise.all untuk mengambil data kamar
+                const [resSiswa, resWali, resKelas, resTa, resKp, resKamar] = await Promise.all([ // <-- Tambah `resKamar`
                     axios.get('http://localhost:5000/api/siswa'),
                     axios.get('http://localhost:5000/api/wali-kelas'),
                     axios.get('http://localhost:5000/api/kelas'),
                     axios.get('http://localhost:5000/api/tahun-ajaran'),
-                    axios.get('http://localhost:5000/api/kepala-pesantren')
+                    axios.get('http://localhost:5000/api/kepala-pesantren'),
+                    axios.get('http://localhost:5000/api/kamar') // <-- TAMBAHKAN AXIOS GET UNTUK KAMAR
                 ]);
                 setSiswas(resSiswa.data);
                 setWaliKelasList(resWali.data);
                 setKelasOptions(resKelas.data);
                 setTahunAjaranOptions(resTa.data);
                 setKepalaPesantren(resKp.data);
+                setKamarOptions(resKamar.data); // <-- SET STATE BARU DENGAN DATA DARI API
             } catch (error) {
                 console.error("Gagal mengambil data awal:", error);
                 setError("Gagal memuat data. Silakan refresh halaman.");
@@ -293,22 +297,165 @@ const ManajemenSiswaPage = () => {
                 <Modal.Body>
                     {error && <Alert variant="danger">{error}</Alert>}
                     <Form>
-                        {/* FORM FIELDS HERE, e.g., */}
+                        <h5>Data Pribadi Siswa</h5>
                         <Row>
                             <Col md={6}>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Nama</Form.Label>
-                                    <Form.Control type="text" name="nama" value={currentSiswa.nama || ''} onChange={handleChange} />
+                                    <Form.Label>Nama Lengkap</Form.Label>
+                                    <Form.Control type="text" name="nama" value={currentSiswa.nama || ''} onChange={handleChange} required />
                                 </Form.Group>
                             </Col>
                             <Col md={6}>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>NIS</Form.Label>
-                                    <Form.Control type="text" name="nis" value={currentSiswa.nis || ''} onChange={handleChange} />
+                                    <Form.Label>NIS (Nomor Induk Siswa)</Form.Label>
+                                    <Form.Control type="text" name="nis" value={currentSiswa.nis || ''} onChange={handleChange} required />
                                 </Form.Group>
                             </Col>
                         </Row>
-                        {/* Add all other form rows and columns here as per your original file */}
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Tempat Lahir</Form.Label>
+                                    {/* PASTIKAN BAGIAN INI BENAR */}
+                                    <Form.Control 
+                                        type="text" 
+                                        name="tempat_lahir" 
+                                        value={currentSiswa.tempat_lahir || ''} 
+                                        onChange={handleChange} 
+                                    />
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Tanggal Lahir</Form.Label>
+                                    <Form.Control type="date" name="tanggal_lahir" value={currentSiswa.tanggal_lahir || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Jenis Kelamin</Form.Label>
+                                    <Form.Select name="jenis_kelamin" value={currentSiswa.jenis_kelamin || 'Laki-laki'} onChange={handleChange}>
+                                        <option value="Laki-laki">Laki-laki</option>
+                                        <option value="Perempuan">Perempuan</option>
+                                    </Form.Select>
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Agama</Form.Label>
+                                    <Form.Control type="text" name="agama" value={currentSiswa.agama || 'Islam'} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Alamat Siswa</Form.Label>
+                            <Form.Control as="textarea" rows={2} name="alamat" value={currentSiswa.alamat || ''} onChange={handleChange} />
+                        </Form.Group>
+
+                        <hr />
+                        <h5>Data Akademik & Domisili</h5>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Kelas</Form.Label>
+                                    <Form.Select name="kelas_id" value={currentSiswa.kelas_id || ''} onChange={handleChange}>
+                                        <option value="">-- Pilih Kelas --</option>
+                                        {kelasOptions.map(k => (
+                                            <option key={k.id} value={k.id}>{k.nama_kelas}</option>
+                                        ))}
+                                    </Form.Select>
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Kamar</Form.Label>
+                                    <Form.Select name="kamar_id" value={currentSiswa.kamar_id || ''} onChange={handleChange}>
+                                        <option value="">-- Pilih Kamar --</option>
+                                        {kamarOptions.map(k => {
+                                            const terisi = k.siswa?.length || 0;
+                                            const sisa = k.kapasitas - terisi;
+                                            return (
+                                                <option key={k.id} value={k.id} disabled={sisa <= 0}>
+                                                    {k.nama_kamar} (Sisa: {sisa})
+                                                </option>
+                                            );
+                                        })}
+                                    </Form.Select>
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Wali Kelas</Form.Label>
+                                    <Form.Select name="wali_kelas_id" value={currentSiswa.wali_kelas_id || ''} onChange={handleChange}>
+                                        <option value="">-- Pilih Wali Kelas --</option>
+                                        {waliKelasList.map(w => (
+                                            <option key={w.id} value={w.id}>{w.nama}</option>
+                                        ))}
+                                    </Form.Select>
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Kepala Pesantren</Form.Label>
+                                    <Form.Select name="kepala_pesantren_id" value={currentSiswa.kepala_pesantren_id || ''} onChange={handleChange}>
+                                        <option value="">-- Pilih Kepala Pesantren --</option>
+                                        {kepalaPesantren.map(kp => (
+                                            <option key={kp.id} value={kp.id}>{kp.nama}</option>
+                                        ))}
+                                    </Form.Select>
+                                </Form.Group>
+                            </Col>
+                        </Row>
+
+
+                        <hr />
+                        <h5>Data Orang Tua / Wali</h5>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Nama Ayah</Form.Label>
+                                    <Form.Control type="text" name="nama_ayah" value={currentSiswa.nama_ayah || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Pekerjaan Ayah</Form.Label>
+                                    <Form.Control type="text" name="pekerjaan_ayah" value={currentSiswa.pekerjaan_ayah || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Nama Ibu</Form.Label>
+                                    <Form.Control type="text" name="nama_ibu" value={currentSiswa.nama_ibu || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Pekerjaan Ibu</Form.Label>
+                                    <Form.Control type="text" name="pekerjaan_ibu" value={currentSiswa.pekerjaan_ibu || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Nama Wali</Form.Label>
+                                    <Form.Control type="text" name="nama_wali" value={currentSiswa.nama_wali || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Pekerjaan Wali</Form.Label>
+                                    <Form.Control type="text" name="pekerjaan_wali" value={currentSiswa.pekerjaan_wali || ''} onChange={handleChange} />
+                                </Form.Group>
+                            </Col>
+                        </Row>
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>
