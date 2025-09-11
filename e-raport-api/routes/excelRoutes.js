@@ -73,7 +73,7 @@ if (excelController) {
     router.get('/download-complete-template', (req, res) => {
         console.log('📥 Download complete template requested');
         console.log('Query params:', req.query);
-        
+
         try {
             excelController.downloadCompleteTemplate(req, res);
         } catch (error) {

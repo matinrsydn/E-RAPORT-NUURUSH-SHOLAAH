@@ -2,31 +2,29 @@ const db = require('../models');
 const NilaiUjian = db.NilaiUjian;
 const Siswa = db.Siswa;
 const MataPelajaran = db.MataPelajaran;
+const TahunAjaran = db.TahunAjaran;
 const { Op } = require("sequelize");
 
 // --- FUNGSI UNTUK MENYIMPAN BANYAK NILAI SEKALIGUS (BULK) ---
 exports.bulkUpdateOrInsertNilai = async (req, res) => {
     const nilaiBatch = req.body;
     const transaction = await db.sequelize.transaction();
-
     try {
         if (!Array.isArray(nilaiBatch) || nilaiBatch.length === 0) {
             return res.status(400).json({ message: "Data yang dikirim tidak valid." });
         }
 
         for (const nilai of nilaiBatch) {
-            // Hanya proses jika ada nilai yang diinput (tidak kosong)
-            if (nilai.pengetahuan_angka !== null || nilai.keterampilan_angka !== null) {
+            // proses hanya jika field nilai diberikan
+            if (nilai.nilai !== undefined) {
                 await NilaiUjian.upsert({
-                    siswa_id: nilai.siswa_id, // Gunakan siswa_id
-                    mapel_id: nilai.mapel_id, // Gunakan mapel_id
+                    siswa_id: nilai.siswa_id,
+                    mapel_id: nilai.mapel_id,
                     semester: nilai.semester,
                     tahun_ajaran: nilai.tahun_ajaran,
-                    pengetahuan_angka: nilai.pengetahuan_angka,
-                    keterampilan_angka: nilai.keterampilan_angka,
-                }, {
-                    transaction
-                });
+                    // Direct store single nilai
+                    nilai: nilai.nilai,
+                }, { transaction });
             }
         }
 
@@ -44,22 +42,41 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
 exports.getSiswaWithNilaiByFilter = async (req, res) => {
     const { kelas_id, mapel_id, semester, tahun_ajaran } = req.query;
 
+    // --- TAMBAHKAN LOG INI ---
+    console.log("➡️  Request diterima untuk filter nilai:");
+    console.log({ kelas_id, mapel_id, semester, tahun_ajaran });
+    // -------------------------
+
     if (!kelas_id || !mapel_id || !semester || !tahun_ajaran) {
         return res.status(400).json({ message: "Semua filter harus diisi." });
     }
 
     try {
-        const siswaList = await Siswa.findAll({
+        const tahunAjaranRecord = await db.TahunAjaran.findOne({
+            where: {
+                nama_ajaran: tahun_ajaran,
+                semester: semester
+            }
+        });
+
+        // --- TAMBAHKAN LOG INI ---
+        if (!tahunAjaranRecord) {
+            console.error("❌ GAGAL: Tidak ada Tahun Ajaran yang cocok ditemukan di database.");
+            return res.status(404).json({ message: `Kombinasi Tahun Ajaran ${tahun_ajaran} dan Semester ${semester} tidak ditemukan.` });
+        }
+        console.log("✅ SUKSES: Tahun Ajaran ditemukan, ID:", tahunAjaranRecord.id);
+        // -------------------------
+
+        const siswaList = await db.Siswa.findAll({
             where: { kelas_id: kelas_id },
             include: [{
-                model: NilaiUjian,
-                as: 'nilai_ujian',
+                model: db.NilaiUjian,
+                as: 'NilaiUjians',
                 where: {
-                    mapel_id: mapel_id, // Gunakan mapel_id
-                    semester: semester,
-                    tahun_ajaran: tahun_ajaran
+                    mapel_id: mapel_id,
+                    tahun_ajaran_id: tahunAjaranRecord.id
                 },
-                required: false // LEFT JOIN
+                required: false
             }],
             order: [['nama', 'ASC']]
         });
@@ -75,11 +92,21 @@ exports.getSiswaWithNilaiByFilter = async (req, res) => {
 // 1. Membuat satu entri nilai baru
 exports.createNilai = async (req, res) => {
     try {
-        const { siswa_id, mapel_id, semester, tahun_ajaran, pengetahuan_angka, keterampilan_angka } = req.body;
+        const { siswa_id, mapel_id, semester, tahun_ajaran, nilai } = req.body;
         if (!siswa_id || !mapel_id || !semester || !tahun_ajaran) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
-        const newNilai = await NilaiUjian.create(req.body);
+
+        const payload = {
+            siswa_id,
+            mapel_id,
+            semester,
+            tahun_ajaran,
+            // Direct store single nilai
+            nilai: nilai || null
+        };
+
+        const newNilai = await NilaiUjian.create(payload);
         res.status(201).json(newNilai);
     } catch (error) {
         console.error("Error membuat nilai:", error);
@@ -128,7 +155,10 @@ exports.getNilaiById = async (req, res) => {
 exports.updateNilai = async (req, res) => {
     try {
         const { id } = req.params;
-        const [updated] = await NilaiUjian.update(req.body, {
+        const { nilai, ...rest } = req.body;
+        const updatePayload = { ...rest, nilai: (nilai !== undefined ? nilai : null) };
+
+        const [updated] = await NilaiUjian.update(updatePayload, {
             where: { id: id }
         });
         if (updated) {

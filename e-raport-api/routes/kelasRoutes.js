@@ -22,4 +22,7 @@ router.put('/:id', kelasController.updateKelas);
 // Rute untuk menghapus kelas berdasarkan ID
 router.delete('/:id', kelasController.deleteKelas);
 
+// Rute untuk mempromosikan siswa ke kelas berikutnya
+router.post('/promosikan', kelasController.promosikanSiswa);
+
 module.exports = router;

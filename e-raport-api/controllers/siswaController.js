@@ -5,22 +5,34 @@ const db = require('../models');
 exports.getAllSiswa = async (req, res) => {
     try {
         const siswas = await db.Siswa.findAll({
+            order: [['nama', 'ASC']],
             include: [
                 {
                     model: db.Kelas,
                     as: 'kelas',
+                    attributes: ['nama_kelas'],
+                    required: false,
+                    // Lakukan join tambahan dari Kelas ke Guru untuk mendapatkan nama Wali Kelas
                     include: [{
-                        model: db.WaliKelas,
-                        as: 'walikelas'
+                        model: db.Guru,
+                        as: 'walikelas', // Alias ini berasal dari model Kelas
+                        attributes: ['nama'],
+                        required: false
                     }]
+                },
+                {
+                    model: db.Kamar,
+                    as: 'infoKamar',
+                    attributes: ['nama_kamar'],
+                    required: false
                 }
-            ],
-            order: [['nama', 'ASC']]
+            ]
         });
-        res.json(siswas);
+        res.status(200).json(siswas);
+
     } catch (error) {
         console.error("SERVER ERROR - GET /api/siswa:", error);
-        res.status(500).json({ message: "Gagal mengambil data siswa", error: error.message });
+        res.status(500).json({ message: "Gagal mengambil data siswa.", error: error.message });
     }
 };
 

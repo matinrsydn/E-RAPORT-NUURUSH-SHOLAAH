@@ -1,34 +1,36 @@
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class TahunAjaran extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
+      TahunAjaran.hasMany(models.Kurikulum, {
+        foreignKey: 'tahun_ajaran_id',
+        as: 'kurikulum'
+      });
     }
   }
   TahunAjaran.init({
-    nama_ajaran: DataTypes.STRING,
+    nama_ajaran: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
     semester: {
       type: DataTypes.ENUM('1', '2'),
-      allowNull: false,
-      defaultValue: '1'
+      allowNull: false
     },
     status: {
       type: DataTypes.ENUM('aktif', 'tidak-aktif'),
-      allowNull: false,
       defaultValue: 'tidak-aktif'
     }
   }, {
     sequelize,
     modelName: 'TahunAjaran',
+    indexes: [
+        {
+            unique: true,
+            fields: ['nama_ajaran', 'semester']
+        }
+    ]
   });
-
   return TahunAjaran;
 };

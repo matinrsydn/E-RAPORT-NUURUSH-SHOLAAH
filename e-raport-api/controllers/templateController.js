@@ -40,11 +40,14 @@ const formatTanggal = (tanggal) => {
 };
 
 const nilaiKePredikat = (angka) => {
-    if (angka === null || angka === undefined || isNaN(angka)) return '-';
-    if (angka >= 93) return 'Istimewa';
-    if (angka >= 85) return 'Baik Sekali';
-    if (angka >= 75) return 'Baik';
-    return 'Cukup';
+    if (angka === null || angka === undefined) return '-';
+    const n = parseFloat(angka);
+    if (isNaN(n)) return '-';
+    if (n === 100) return 'Sempurna';
+    if (n >= 90) return 'Sangat Baik';
+    if (n >= 80) return 'Baik';
+    if (n >= 70) return 'Cukup';
+    return 'Kurang';
 };
 
 const nilaiSikapKePredikat = (angka) => {
@@ -130,7 +133,8 @@ exports.generateRaport = async (req, res) => {
                 {
                     model: db.Sikap,
                     where: { semester, tahun_ajaran },
-                    required: false
+                    required: false,
+                    include: { model: db.IndikatorSikap, as: 'indikator_sikap' } // TAMBAHKAN INI
                 },
                 {
                     model: db.Kehadiran,
@@ -151,13 +155,9 @@ exports.generateRaport = async (req, res) => {
         const nilaiUjian = siswa.NilaiUjians || [];
         const jumlahMapel = nilaiUjian.length > 0 ? nilaiUjian.length : 1;
 
-        const jumlahPengetahuan = nilaiUjian.reduce((sum, m) => sum + (m.pengetahuan_angka || 0), 0);
-        const rataRataPengetahuan = (jumlahPengetahuan / jumlahMapel).toFixed(1);
-
-        const jumlahKeterampilan = nilaiUjian.reduce((sum, m) => sum + (m.keterampilan_angka || 0), 0);
-        const rataRataKeterampilan = (jumlahKeterampilan / jumlahMapel).toFixed(1);
-
-        const rataRataUjian = ((jumlahPengetahuan + jumlahKeterampilan) / (jumlahMapel * 2) || 0).toFixed(1);
+    // Gunakan single `nilai` untuk setiap mapel
+    const jumlahNilai = nilaiUjian.reduce((sum, m) => sum + (parseFloat(m.nilai) || 0), 0);
+    const rataRataUjian = (jumlahNilai / jumlahMapel || 0).toFixed(1);
         
         // NOTE: Peringkat dan total_siswa memerlukan query tambahan yang lebih kompleks.
         // Untuk sekarang kita gunakan placeholder.
@@ -165,8 +165,8 @@ exports.generateRaport = async (req, res) => {
 
         // Proses Nilai Sikap
         const semuaSikap = siswa.Sikaps || [];
-        const sikapSpiritualIndicators = semuaSikap.filter(s => s.jenis_sikap === 'spiritual');
-        const sikapSosialIndicators = semuaSikap.filter(s => s.jenis_sikap === 'sosial');
+        const sikapSpiritualIndicators = semuaSikap.filter(s => s.indikator_sikap?.jenis_sikap === 'Spiritual'); // PERBAIKI FILTER
+        const sikapSosialIndicators = semuaSikap.filter(s => s.indikator_sikap?.jenis_sikap === 'Sosial'); // PERBAIKI FILTER
 
         const rataSikapSpiritual = (sikapSpiritualIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSpiritualIndicators.length || 1)).toFixed(1);
         const rataSikapSosial = (sikapSosialIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSosialIndicators.length || 1)).toFixed(1);
@@ -197,33 +197,26 @@ exports.generateRaport = async (req, res) => {
             alamat_wali: siswa.alamat_wali || '-',
             
             // Akademik
-            kelas: siswa.Kela?.nama_kelas || '-',
+            kelas: siswa.Kelas?.nama_kelas || '-',
             semester: semester || '-',
             thn_ajaran: tahun_ajaran.replace('-', '/') || '-',
-            wali_kelas: siswa.Kela?.WaliKela?.nama || '-',
+            wali_kelas: siswa.Kelas?.WaliKelas?.nama || '-',
             kepsek: kepalaPesantren?.nama || '-',
             tgl_raport: formatTanggal(new Date()),
             kamar: siswa.kamar || '-',
             kota_asal: siswa.kota_asal || '-',
 
-            // Nilai Ujian
+            // Nilai Ujian (single nilai per mapel)
             mapel: nilaiUjian.map((m, i) => ({
                 no: i + 1,
                 nama_mapel: m.mapel?.nama_mapel || 'N/A',
                 kitab: m.mapel?.kitab || '-',
-                p_angka: m.pengetahuan_angka,
-                p_predikat: nilaiKePredikat(m.pengetahuan_angka),
-                k_angka: m.keterampilan_angka,
-                k_predikat: nilaiKePredikat(m.keterampilan_angka)
+                nilai: m.nilai,
+                predikat: nilaiKePredikat(m.nilai)
             })),
-            jml_p: jumlahPengetahuan,
-            jml_k: jumlahKeterampilan,
-            rata_p: rataRataPengetahuan,
-            pred_p: nilaiKePredikat(rataRataPengetahuan),
-            rata_k: rataRataKeterampilan,
-            pred_k: nilaiKePredikat(rataRataKeterampilan),
-            rata_akhir: rataRataUjian,
-            pred_akhir: nilaiKePredikat(rataRataUjian),
+            jml_n: jumlahNilai,
+            rata_n: rataRataUjian,
+            pred_n: nilaiKePredikat(rataRataUjian),
             peringkat: peringkatData.peringkat,
             total_siswa: peringkatData.total_siswa,
 
@@ -232,12 +225,12 @@ exports.generateRaport = async (req, res) => {
                 no: i + 1,
                 nama: h.mapel?.nama_mapel || 'N/A',
                 kitab: h.mapel?.kitab || '-',
-                nilai_angka: h.nilai_angka,
-                predikat: nilaiKePredikat(h.nilai_angka)
+                nilai_angka: h.nilai,
+                predikat: nilaiKePredikat(h.nilai)
             })),
             kehadiran: (siswa.Kehadirans || []).map((k, i) => ({
                 no: i + 1,
-                kegiatan: k.kegiatan,
+                kegiatan: k.indikator_text,
                 izin: k.izin || 0,
                 sakit: k.sakit || 0,
                 absen: k.absen || 0,
@@ -245,8 +238,8 @@ exports.generateRaport = async (req, res) => {
             })),
             
             // Sikap
-            sikap_s: sikapSpiritualIndicators.map((s, i) => ({ no: i + 1, indikator: s.indikator, angka: s.angka, predikat: nilaiSikapKePredikat(s.angka) })),
-            sikap_o: sikapSosialIndicators.map((s, i) => ({ no: i + 1, indikator: s.indikator, angka: s.angka, predikat: nilaiSikapKePredikat(s.angka) })),
+            sikap_s: sikapSpiritualIndicators.map((s, i) => ({ no: i + 1, indikator: s.indikator_text, angka: s.nilai, predikat: nilaiSikapKePredikat(s.nilai) })), // PERBAIKI PROPERTY
+            sikap_o: sikapSosialIndicators.map((s, i) => ({ no: i + 1, indikator: s.indikator_text, angka: s.nilai, predikat: nilaiSikapKePredikat(s.nilai) })), // PERBAIKI PROPERTY
             rata_ss: rataSikapSpiritual,
             pred_ss: nilaiSikapKePredikat(rataSikapSpiritual),
             rata_so: rataSikapSosial,

@@ -1,24 +1,15 @@
+// File: routes/indikatorKehadiranRoutes.js
 const express = require('express');
 const router = express.Router();
-const kehadiranController = require('../controllers/kehadiranController');
+const controller = require('../controllers/indikatorKehadiranController');
 
-// Rute untuk mendapatkan siswa beserta kehadiran berdasarkan filter
-router.get('/filter', kehadiranController.getSiswaWithKehadiranByFilter);
+router.get('/', controller.getAll);
+router.post('/', controller.create);
 
-// Rute untuk mendapatkan template kegiatan
-router.get('/template-kegiatan', kehadiranController.getTemplateKegiatan);
+// --- TAMBAHKAN RUTE UNTUK UPDATE DI SINI ---
+router.put('/:id', controller.update);
 
-// Rute untuk mendapatkan rangkuman kehadiran per siswa
-router.get('/rangkuman', kehadiranController.getRangkumanKehadiran);
-
-// Rute untuk menyimpan/memperbarui banyak data kehadiran sekaligus
-router.post('/bulk', kehadiranController.bulkUpdateOrInsertKehadiran);
-
-// Rute-rute CRUD standar
-router.post('/', kehadiranController.createKehadiran);
-router.get('/', kehadiranController.getAllKehadiran);
-router.get('/:id', kehadiranController.getKehadiranById);
-router.put('/:id', kehadiranController.updateKehadiran);
-router.delete('/:id', kehadiranController.deleteKehadiran);
+router.patch('/:id/deactivate', controller.deactivate);
+router.patch('/:id/activate', controller.activate);
 
 module.exports = router;

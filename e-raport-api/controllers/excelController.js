@@ -12,6 +12,21 @@ exports.uploadCompleteData = async (req, res) => {
         return res.status(400).json({ message: 'Tidak ada file yang diunggah.' });
     }
 
+    // Helper function to get cell value safely
+    function getCellValue(worksheet, row, col) {
+        const cell = worksheet.getRow(row).getCell(col);
+        if (!cell || cell.value === null || cell.value === undefined) {
+            return '';
+        }
+        if (typeof cell.value === 'object' && cell.value.richText) {
+            return cell.value.richText.map(rt => rt.text).join('').trim();
+        }
+        if (typeof cell.value === 'object' && cell.value.result) {
+            return String(cell.value.result).trim();
+        }
+        return String(cell.value).trim();
+    }
+
     const filePath = req.file.path;
     const transaction = await db.sequelize.transaction();
 
@@ -20,33 +35,23 @@ exports.uploadCompleteData = async (req, res) => {
         await workbook.xlsx.readFile(filePath);
 
         const results = {
-            nilai_ujian: { success: 0, errors: 0 },
-            hafalan: { success: 0, errors: 0 },
-            kehadiran: { success: 0, errors: 0 },
-            sikap: { success: 0, errors: 0 }
+            nilai_ujian: { success: 0, errors: 0, skipped: 0 },
+            hafalan: { success: 0, errors: 0, skipped: 0 },
+            kehadiran: { success: 0, errors: 0, skipped: 0 },
+            sikap: { success: 0, errors: 0, skipped: 0 }
         };
 
-        // Cache untuk optimasi pencarian ID
         const cache = {
             siswa: {},
-            mapel: {},
             tahunAjaran: {},
             indikatorKehadiran: {},
             indikatorSikap: {}
         };
 
-        // Helper untuk mencari ID dengan cache
+        // Cache helpers
         const findSiswa = async (nis) => {
             if (!cache.siswa[nis]) cache.siswa[nis] = await db.Siswa.findOne({ where: { nis } });
             return cache.siswa[nis];
-        };
-        const findMapel = async (kode_mapel, jenis) => { // <-- Tambahkan parameter 'jenis'
-            const key = `${kode_mapel}-${jenis}`;
-            if (!cache.mapel[key]) {
-                // Tambahkan 'jenis' ke dalam query
-                cache.mapel[key] = await db.MataPelajaran.findOne({ where: { kode_mapel, jenis } });
-            }
-            return cache.mapel[key];
         };
         const findTahunAjaran = async (nama_ajaran, semester) => {
             const key = `${nama_ajaran}-${semester}`;
@@ -60,67 +65,74 @@ exports.uploadCompleteData = async (req, res) => {
         const findIndikatorSikap = async (jenis_sikap, indikator) => {
             const key = `${jenis_sikap}-${indikator}`;
             if (!cache.indikatorSikap[key]) {
-                cache.indikatorSikap[key] = await db.IndikatorSikap.findOne({ 
-                    where: { 
-                        jenis_sikap: jenis_sikap, // Pastikan case-sensitive match
-                        indikator: indikator,
-                        is_active: 1
-                    } 
-                });
-                
-                // DEBUG: Log hasil pencarian
-                console.log(`🔍 Mencari indikator: jenis='${jenis_sikap}', indikator='${indikator}'`);
-                console.log(`📋 Hasil:`, cache.indikatorSikap[key] ? 'DITEMUKAN' : 'TIDAK DITEMUKAN');
-                if (cache.indikatorSikap[key]) {
-                    console.log(`   ID: ${cache.indikatorSikap[key].id}, Indikator: ${cache.indikatorSikap[key].indikator}`);
-                }
+                cache.indikatorSikap[key] = await db.IndikatorSikap.findOne({ where: { jenis_sikap, indikator, is_active: 1 } });
             }
             return cache.indikatorSikap[key];
         };
-
+        
         // ========== 1. PROSES SHEET NILAI UJIAN ==========
         const nilaiWorksheet = workbook.getWorksheet('Template Nilai Ujian');
-        if (nilaiWorksheet) {
+    if (nilaiWorksheet) {
+      const toNumberOrNull = (v) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      };
+      const computeFinalNilai = (p, k) => {
+        const a = toNumberOrNull(p);
+        const b = toNumberOrNull(k);
+        if (a !== null && b !== null) return (a + b) / 2;
+        if (a !== null) return a;
+        if (b !== null) return b;
+        return null;
+      };
+
             for (let i = 2; i <= nilaiWorksheet.rowCount; i++) {
-                const nis = getCellValue(nilaiWorksheet, i, 1);
-                const kode_mapel = getCellValue(nilaiWorksheet, i, 3);
-                const nama_mapel_text = getCellValue(nilaiWorksheet, i, 4); // Ambil nama mapel dari excel
-                const tahun_ajaran_str = getCellValue(nilaiWorksheet, i, 8);
-                const semester = getCellValue(nilaiWorksheet, i, 7);
+        const nis = getCellValue(nilaiWorksheet, i, 1);
+        const nama_mapel = getCellValue(nilaiWorksheet, i, 3); // Ambil NAMA MAPEL (kolom ke-3)
+        const tahun_ajaran_str = getCellValue(nilaiWorksheet, i, 7); // Kolom ke-7
+        const semester = getCellValue(nilaiWorksheet, i, 6); // Kolom ke-6
 
-                const siswa = await findSiswa(nis);
-                const mapel = await findMapel(kode_mapel, 'Ujian');
-                const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
+        if (!nis || !nama_mapel) { results.nilai_ujian.skipped++; continue; }
 
-                if (siswa && mapel && tahunAjaran) {
-                    await db.NilaiUjian.upsert({
-                        siswa_id: siswa.id,
-                        mapel_id: mapel.id,
-                        tahun_ajaran_id: tahunAjaran.id,
-                        semester,
-                        nilai_pengetahuan: parseFloat(getCellValue(nilaiWorksheet, i, 5)) || null,
-                        nilai_keterampilan: parseFloat(getCellValue(nilaiWorksheet, i, 6)) || null,
-                        mapel_text: mapel.nama_mapel
-                    }, { transaction });
-                    results.nilai_ujian.success++;
-                } else {
-                    results.nilai_ujian.errors++;
-                }
-            }
+        const siswa = await findSiswa(nis);
+        // Cari mapel berdasarkan NAMA dan JENIS
+        const mapel = await db.MataPelajaran.findOne({ where: { nama_mapel: nama_mapel, jenis: 'Ujian' } });
+        const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
+
+        if (siswa && mapel && tahunAjaran) {
+          // PERUBAHAN: baca satu kolom 'Nilai' dan simpan langsung
+          const finalNilai = toNumberOrNull(getCellValue(nilaiWorksheet, i, 4)); // Kolom ke-4 (Nilai)
+
+          await db.NilaiUjian.upsert({
+            siswa_id: siswa.id,
+            mapel_id: mapel.id,
+            tahun_ajaran_id: tahunAjaran.id,
+            semester,
+            nilai: finalNilai,
+            mapel_text: mapel.nama_mapel
+          }, { transaction });
+          results.nilai_ujian.success++;
+        } else {
+          results.nilai_ujian.errors++;
         }
+      }
+    }
 
         // ========== 2. PROSES SHEET HAFALAN ==========
         const hafalanWorksheet = workbook.getWorksheet('Template Hafalan');
         if (hafalanWorksheet) {
             for (let i = 2; i <= hafalanWorksheet.rowCount; i++) {
                 const nis = getCellValue(hafalanWorksheet, i, 1);
-                const kode_mapel = getCellValue(hafalanWorksheet, i, 3);
-                const nama_mapel_text = getCellValue(hafalanWorksheet, i, 4);
-                const tahun_ajaran_str = getCellValue(hafalanWorksheet, i, 7);
-                const semester = getCellValue(hafalanWorksheet, i, 6);
+                const nama_mapel = getCellValue(hafalanWorksheet, i, 3); // Ambil NAMA MAPEL (kolom ke-3)
+                const tahun_ajaran_str = getCellValue(hafalanWorksheet, i, 6); // Kolom ke-6
+                const semester = getCellValue(hafalanWorksheet, i, 5); // Kolom ke-5
+                
+                if (!nis || !nama_mapel) { results.hafalan.skipped++; continue; }
 
                 const siswa = await findSiswa(nis);
-                const mapel = await findMapel(kode_mapel, 'Hafalan');
+                // Cari mapel berdasarkan NAMA dan JENIS
+                const mapel = await db.MataPelajaran.findOne({ where: { nama_mapel: nama_mapel, jenis: 'Hafalan' } });
                 const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
 
                 if (siswa && mapel && tahunAjaran) {
@@ -129,7 +141,7 @@ exports.uploadCompleteData = async (req, res) => {
                         mapel_id: mapel.id,
                         tahun_ajaran_id: tahunAjaran.id,
                         semester,
-                        nilai: parseFloat(getCellValue(hafalanWorksheet, i, 5)) || null,
+                        nilai: parseFloat(getCellValue(hafalanWorksheet, i, 4)) || null, // Kolom ke-4
                         mapel_text: mapel.nama_mapel
                     }, { transaction });
                     results.hafalan.success++;
@@ -139,6 +151,7 @@ exports.uploadCompleteData = async (req, res) => {
             }
         }
         
+        // ... (Sisa fungsi untuk sheet Kehadiran dan Sikap tetap sama)
         // ========== 3. PROSES SHEET KEHADIRAN ==========
         const kehadiranWorksheet = workbook.getWorksheet('Template Kehadiran');
         if (kehadiranWorksheet) {
@@ -148,17 +161,19 @@ exports.uploadCompleteData = async (req, res) => {
                 const tahun_ajaran_str = getCellValue(kehadiranWorksheet, i, 8);
                 const semester = getCellValue(kehadiranWorksheet, i, 7);
 
+                if (!nis || !kegiatan_text) { results.kehadiran.skipped++; continue; }
+
                 const siswa = await findSiswa(nis);
                 const indikator = await findIndikatorKehadiran(kegiatan_text);
                 const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
                 
-                if (siswa && tahunAjaran && kegiatan_text) {
+                if (siswa && tahunAjaran) {
                     await db.Kehadiran.upsert({
                         siswa_id: siswa.id,
                         tahun_ajaran_id: tahunAjaran.id,
                         semester,
                         indikatorkehadirans_id: indikator ? indikator.id : null,
-                        indikator_text: kegiatan_text, // Selalu simpan teks historis
+                        indikator_text: kegiatan_text,
                         izin: parseInt(getCellValue(kehadiranWorksheet, i, 4), 10) || 0,
                         sakit: parseInt(getCellValue(kehadiranWorksheet, i, 5), 10) || 0,
                         absen: parseInt(getCellValue(kehadiranWorksheet, i, 6), 10) || 0,
@@ -170,89 +185,44 @@ exports.uploadCompleteData = async (req, res) => {
             }
         }
 
-        // ========== 4. PROSES SHEET SIKAP (DIPERBAIKI) ==========
+        // ========== 4. PROSES SHEET SIKAP ==========
         const sikapWorksheet = workbook.getWorksheet('Template Sikap');
         if (sikapWorksheet) {
             for (let i = 2; i <= sikapWorksheet.rowCount; i++) {
                 const nis = getCellValue(sikapWorksheet, i, 1);
                 const jenis_sikap = getCellValue(sikapWorksheet, i, 3);
-                const indikator_text_from_excel = getCellValue(sikapWorksheet, i, 4);
-                const nilai_from_excel = getCellValue(sikapWorksheet, i, 5); // PERBAIKAN: Ambil nilai dari kolom 5
-                const deskripsi_from_excel = getCellValue(sikapWorksheet, i, 6);
+                const indikator_text = getCellValue(sikapWorksheet, i, 4);
                 const tahun_ajaran_str = getCellValue(sikapWorksheet, i, 8);
                 const semester = getCellValue(sikapWorksheet, i, 7);
 
-                console.log(`\n📝 Memproses baris ${i}:`);
-                console.log(`   NIS: ${nis}`);
-                console.log(`   Jenis: ${jenis_sikap}`);
-                console.log(`   Indikator dari Excel: ${indikator_text_from_excel}`);
-                console.log(`   Nilai dari Excel: ${nilai_from_excel}`);
+                if (!nis || !indikator_text) { results.sikap.skipped++; continue; }
 
                 const siswa = await findSiswa(nis);
-                const indikator = await findIndikatorSikap(jenis_sikap, indikator_text_from_excel);
+                const indikator = await findIndikatorSikap(jenis_sikap, indikator_text);
                 const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
 
-                if (siswa && tahunAjaran && indikator_text_from_excel) {
-                    // PERBAIKAN LOGIC UTAMA:
-                    let final_indikator_sikap_id = null;
-                    const final_indikator_text = indikator_text_from_excel; 
-                    
-                    if (indikator) {
-                        // Jika ditemukan di master data
-                        final_indikator_sikap_id = indikator.id;
-                        console.log(`✅ Indikator ditemukan di master. ID: ${final_indikator_sikap_id}`);
-                        
-                        console.log(`✅ Indikator ditemukan di master:`)
-                        console.log(`   ID: ${final_indikator_sikap_id}`)
-                        console.log(`   Text dari master: ${final_indikator_text}`)
-                    } else {
-                        // Jika tidak ditemukan di master data
-                        console.log(`⚠️ Indikator tidak ditemukan di master, menggunakan text dari Excel`)
-                    }
-
-                    const finalNilai = (nilai_from_excel !== null && nilai_from_excel !== '' && !isNaN(parseFloat(nilai_from_excel)))
+                if (siswa && tahunAjaran) {
+                    const nilai_from_excel = getCellValue(sikapWorksheet, i, 5);
+                    const finalNilai = (nilai_from_excel !== '' && !isNaN(parseFloat(nilai_from_excel)))
                         ? parseFloat(nilai_from_excel) 
                         : null;
-
-                    console.log(`💯 Nilai final yang akan disimpan: ${finalNilai}`);
 
                     await db.Sikap.upsert({
                         siswa_id: siswa.id,
                         tahun_ajaran_id: tahunAjaran.id,
                         semester,
-                        indikator_sikap_id: final_indikator_sikap_id,
-                        indikator_text: final_indikator_text,
+                        indikator_sikap_id: indikator ? indikator.id : null,
+                        indikator_text: indikator_text,
                         nilai: finalNilai,
-                        deskripsi: deskripsi_from_excel || '',
+                        deskripsi: getCellValue(sikapWorksheet, i, 6) || '',
                     }, { transaction });
-                    
                     results.sikap.success++;
-                    console.log(`✅ Data sikap berhasil disimpan untuk ${siswa.nama}`);
                 } else {
                     results.sikap.errors++;
-                    console.log(`❌ Gagal memproses data sikap untuk NIS: ${nis}`);
-                    if (!siswa) console.log(`   - Siswa tidak ditemukan`);
-                    if (!tahunAjaran) console.log(`   - Tahun ajaran tidak ditemukan`);
-                    if (!indikator_text_from_excel) console.log(`   - Indikator text kosong`);
                 }
             }
         }
 
-        function getCellValue(worksheet, row, col) {
-            const cell = worksheet.getRow(row).getCell(col);
-            if (!cell || cell.value === null || cell.value === undefined) {
-                return '';
-            }
-            
-            // Handle different cell types
-            if (typeof cell.value === 'object' && cell.value.text) {
-                return String(cell.value.text).trim();
-            } else if (typeof cell.value === 'string') {
-                return cell.value.trim();
-            } else {
-                return String(cell.value).trim();
-            }
-        }
 
         await transaction.commit();
         res.status(200).json({ message: 'Data berhasil diimpor.', results });
@@ -267,7 +237,6 @@ exports.uploadCompleteData = async (req, res) => {
         }
     }
 };
-
 // ====================== NILAI UJIAN ======================
 exports.downloadTemplate = async (req, res) => {
   try {
@@ -290,8 +259,7 @@ exports.downloadTemplate = async (req, res) => {
       { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
       { header: 'Kode Mapel', key: 'kode_mapel', width: 15 },
       { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
-      { header: 'Pengetahuan (Angka)', key: 'pengetahuan', width: 20 },
-      { header: 'Keterampilan (Angka)', key: 'keterampilan', width: 20 },
+      { header: 'Nilai', key: 'nilai', width: 20 },
       { header: 'Semester', key: 'semester', width: 12 },
       { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
     ];
@@ -368,11 +336,29 @@ exports.uploadNilai = async (req, res) => {
       const mapel = await db.MataPelajaran.findOne({ where: { kode_mapel: row.getCell(3).value } });
 
       if (siswa && mapel) {
+        const toNumberOrNull = (v) => {
+          if (v === null || v === undefined || v === '') return null;
+          const n = parseFloat(v);
+          return isNaN(n) ? null : n;
+        };
+        const computeFinalNilai = (p, k) => {
+          const a = toNumberOrNull(p);
+          const b = toNumberOrNull(k);
+          if (a !== null && b !== null) return (a + b) / 2;
+          if (a !== null) return a;
+          if (b !== null) return b;
+          return null;
+        };
+
+        const p = toNumberOrNull(row.getCell(5).value);
+        const k = toNumberOrNull(row.getCell(6).value);
+        const finalNilai = computeFinalNilai(p, k);
+
         await db.NilaiUjian.upsert({
           siswa_id: siswa.id,
           mapel_id: mapel.id,
-          pengetahuan_angka: parseFloat(row.getCell(5).value) || null,
-          keterampilan_angka: parseFloat(row.getCell(6).value) || null,
+          // PERUBAHAN: simpan final gabungan ke kolom `nilai`
+          nilai: finalNilai,
           semester: row.getCell(7).value,
           tahun_ajaran: row.getCell(8).value
         });
@@ -630,287 +616,240 @@ exports.uploadSikap = async (req, res) => {
   }
 };
 
-// Perbaikan untuk fungsi downloadCompleteTemplate
-exports.downloadCompleteTemplate = async (req, res) => {
-  try {
-    const { kelas_id, tahun_ajaran, semester } = req.query;
 
-    if (!kelas_id || !tahun_ajaran || !semester) {
-      return res.status(400).json({ message: 'Parameter kelas_id, tahun_ajaran, semester wajib diisi.' });
+const applySheetStyling = (sheet) => {
+  // Styling untuk baris header
+  const headerRow = sheet.getRow(1);
+  headerRow.font = {
+    bold: true,
+    color: { argb: 'FFFFFFFF' } // Teks putih
+  };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF4F81BD' } // Latar belakang biru tua
+  };
+  headerRow.alignment = {
+    vertical: 'middle',
+    horizontal: 'center'
+  };
+
+  // Menambahkan border ke semua sel, termasuk yang kosong
+  sheet.eachRow({ includeEmpty: true }, function(row, rowNumber) { // PERUBAHAN: dari false menjadi true
+    // Hanya proses sampai baris terakhir yang digunakan
+    if (rowNumber > sheet.lastRow.number) {
+        return;
     }
-
-    const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
-    
-    // --- DEKLARASI VARIABEL YANG BENAR ---
-    const mapelUjianList = await db.MataPelajaran.findAll({ 
-        where: { jenis: 'Ujian' }, 
-        order: [['nama_mapel', 'ASC']] 
-    });
-    const mapelHafalanList = await db.MataPelajaran.findAll({ 
-        where: { jenis: 'Hafalan' }, 
-        order: [['nama_mapel', 'ASC']] 
-    });
-    
-    const indikatorKehadiran = await db.IndikatorKehadiran.findAll({ order: [['nama_kegiatan', 'ASC']] });
-    const indikatorSpiritual = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'spiritual' } });
-    const indikatorSosial = await db.IndikatorSikap.findAll({ where: { jenis_sikap: 'sosial' } });
-
-    if (siswaList.length === 0) {
-      return res.status(404).json({ message: 'Tidak ada siswa di kelas ini.' });
-    }
-
-    const workbook = new ExcelJS.Workbook();
-
-    // ========== HELPER FUNCTION UNTUK MERGE CELLS ==========
-    const mergeCellsForStudent = (sheet, startRow, endRow, siswa) => {
-      try {
-        // Selalu dapatkan sel pertama untuk diisi data
-        const nisCell = sheet.getCell(`A${startRow}`);
-        const namaCell = sheet.getCell(`B${startRow}`);
-
-        // 1. Selalu isi data NIS dan Nama di baris pertama
-        nisCell.value = siswa.nis;
-        namaCell.value = siswa.nama;
-
-        // 2. Lakukan merge HANYA JIKA ada lebih dari satu baris
-        if (endRow > startRow) {
-          sheet.mergeCells(`A${startRow}:A${endRow}`);
-          sheet.mergeCells(`B${startRow}:B${endRow}`);
+    row.eachCell({ includeEmpty: true }, function(cell, colNumber) { // PERUBAHAN: dari false menjadi true
+        // Hanya proses sampai kolom terakhir yang punya header
+        if (colNumber > sheet.columns.length) {
+            return;
         }
-        
-        // 3. Terapkan alignment setelah semua proses selesai
-        nisCell.alignment = { vertical: 'middle', horizontal: 'center' };
-        namaCell.alignment = { vertical: 'middle', horizontal: 'left' };
-        
-        console.log(`✅ Wrote student data for ${siswa.nama}: Baris ${startRow}-${endRow}`);
-      } catch (error) {
-        console.error(`❌ Error writing student data for ${siswa.nama}:`, error.message);
-      }
-    };
-
-    // HELPER FUNCTION UNTUK STYLING
-    const applySheetStyling = (sheet) => {
-      // Format header
-      const headerRow = sheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
       };
+    });
+  });
+};
 
-      // Apply border ke semua cells
-      for (let rowIndex = 1; rowIndex <= sheet.rowCount; rowIndex++) {
-        const row = sheet.getRow(rowIndex);
-        for (let colIndex = 1; colIndex <= sheet.columnCount; colIndex++) {
-          const cell = row.getCell(colIndex);
-          if (!cell.border) {
-            cell.border = {
-              top: { style: 'thin' },
-              left: { style: 'thin' },
-              bottom: { style: 'thin' },
-              right: { style: 'thin' }
-            };
-          }
+// Fungsi untuk merge cell (jika belum ada)
+const mergeCellsForStudent = (sheet, startRow, endRow, siswa) => {
+  if (startRow > endRow) return;
+
+  sheet.mergeCells(`A${startRow}:A${endRow}`);
+  sheet.mergeCells(`B${startRow}:B${endRow}`);
+
+  const nisCell = sheet.getCell(`A${startRow}`);
+  nisCell.value = siswa.nis;
+  nisCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+  const namaCell = sheet.getCell(`B${startRow}`);
+  namaCell.value = siswa.nama;
+  namaCell.alignment = { vertical: 'middle', horizontal: 'left' };
+};
+
+// Helper untuk membersihkan nama file (jika belum ada)
+const sanitizeFilename = (name) => {
+    if (!name) return 'file';
+    return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+};
+
+exports.downloadCompleteTemplate = async (req, res) => {
+    try {
+        const { kelas_id, tahun_ajaran_id } = req.query;
+
+        if (!kelas_id || !tahun_ajaran_id) {
+            return res.status(400).json({ message: 'Parameter kelas_id dan tahun_ajaran_id wajib diisi.' });
         }
-      }
-    };
 
-    // ========== Sheet Nilai Ujian dengan Merge Cells ==========
-    const sheetUjian = workbook.addWorksheet('Template Nilai Ujian');
-    sheetUjian.columns = [
-      { header: 'NIS', key: 'nis', width: 15 },
-      { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
-      { header: 'Kode Mapel', key: 'kode_mapel', width: 15 },
-      { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
-      { header: 'Pengetahuan (Angka)', key: 'pengetahuan', width: 20 },
-      { header: 'Keterampilan (Angka)', key: 'keterampilan', width: 20 },
-      { header: 'Semester', key: 'semester', width: 12 },
-      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
-    ];
+        // 1. Get Master Data
+        const siswaList = await db.Siswa.findAll({ where: { kelas_id }, order: [['nama', 'ASC']] });
+        if (siswaList.length === 0) {
+            return res.status(404).json({ message: 'Tidak ada siswa di kelas ini.' });
+        }
+        const kelasInfo = await db.Kelas.findByPk(kelas_id);
+        const tahunAjaranInfo = await db.TahunAjaran.findByPk(tahun_ajaran_id);
+        if (!tahunAjaranInfo) {
+            return res.status(404).json({ message: 'Data Tahun Ajaran tidak ditemukan.' });
+        }
 
-    let currentRowUjian = 2;
-    for (const siswa of siswaList) {
-      const startRowUjian = currentRowUjian;
-      
-      for (const mapel of mapelUjianList) {
-        sheetUjian.addRow({ 
-          kode_mapel: mapel.kode_mapel,
-          nama_mapel: mapel.nama_mapel, 
-          semester, 
-          tahun_ajaran 
+        // Ambil entri kurikulum, sekarang termasuk data Kitab
+        const kurikulumEntries = await db.Kurikulum.findAll({
+            where: {
+                kelas_id: kelas_id,
+                tahun_ajaran_id: tahun_ajaran_id,
+                semester: tahunAjaranInfo.semester
+            },
+            include: [ // --- PERUBAHAN ---: Sertakan model Kitab
+                { model: db.MataPelajaran, as: 'mapel' },
+                { model: db.Kitab, as: 'kitab' }
+            ],
+            order: [
+                [{ model: db.MataPelajaran, as: 'mapel' }, 'nama_mapel', 'ASC']
+            ]
         });
-        currentRowUjian++;
-      }
-      
-      const endRowUjian = currentRowUjian - 1;
-      mergeCellsForStudent(sheetUjian, startRowUjian, endRowUjian, siswa);
-    }
-    applySheetStyling(sheetUjian);
-    console.log(`✅ Sheet Nilai Ujian selesai dengan merge cells`);
+        
+        // --- PERUBAHAN ---: Pisahkan seluruh entri kurikulum, bukan hanya mapel-nya
+        const kurikulumUjian = kurikulumEntries.filter(k => k.mapel && k.mapel.jenis === 'Ujian');
+        const kurikulumHafalan = kurikulumEntries.filter(k => k.mapel && k.mapel.jenis === 'Hafalan');
+        
+        const indikatorKehadiran = await db.IndikatorKehadiran.findAll({ where: { is_active: true }, order: [['nama_kegiatan', 'ASC']] });
+        const indikatorSikap = await db.IndikatorSikap.findAll({ where: { is_active: true }, order: [['jenis_sikap', 'ASC'], ['indikator', 'ASC']] });
 
-    // ========== Sheet Hafalan dengan Merge Cells ==========
-    const sheetHafalan = workbook.addWorksheet('Template Hafalan');
-    sheetHafalan.columns = [
-      { header: 'NIS', key: 'nis', width: 15 },
-      { header: 'Nama Siswa', key: 'nama_siswa', width: 25 },
-      { header: 'Kode Mapel', key: 'kode_mapel', width: 15 },
-      { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
-      { header: 'Nilai Hafalan', key: 'nilai', width: 15 },
-      { header: 'Semester', key: 'semester', width: 12 },
-      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
-    ];
+        const workbook = new ExcelJS.Workbook();
 
-    let currentRowHafalan = 2;
-    for (const siswa of siswaList) {
-      const startRowHafalan = currentRowHafalan;
-      
-      for (const mapel of mapelHafalanList) {
-        sheetHafalan.addRow({ 
-          kode_mapel: mapel.kode_mapel,
-          nama_mapel: mapel.nama_mapel, 
-          semester, 
-          tahun_ajaran 
-        });
-        currentRowHafalan++;
-      }
-      
-      const endRowHafalan = currentRowHafalan - 1;
-      mergeCellsForStudent(sheetHafalan, startRowHafalan, endRowHafalan, siswa);
-    }
-    applySheetStyling(sheetHafalan);
-    console.log(`✅ Sheet Hafalan selesai dengan merge cells`);
-
-    // ========== Sheet Kehadiran dengan Merge Cells ==========
-    const sheetKehadiran = workbook.addWorksheet('Template Kehadiran');
-    sheetKehadiran.columns = [
+        // 2. Create "Template Nilai Ujian" Sheet
+        const sheetNilai = workbook.addWorksheet('Template Nilai Ujian');
+    sheetNilai.columns = [
       { header: 'NIS', key: 'nis', width: 15 },
       { header: 'Nama Siswa', key: 'nama', width: 25 },
-      { header: 'Kegiatan', key: 'kegiatan', width: 20 },
-      { header: 'Izin', key: 'izin', width: 10 },
-      { header: 'Sakit', key: 'sakit', width: 10 },
-      { header: 'Absen', key: 'absen', width: 10 },
+      { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
+      { header: 'Kitab', key: 'kitab', width: 20 }, // --- PERUBAHAN ---: Tambah kolom Kitab
+      { header: 'Nilai', key: 'nilai', width: 15 },
       { header: 'Semester', key: 'semester', width: 12 },
-      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
+      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 },
     ];
+        let currentRowNilai = 2;
+        siswaList.forEach(siswa => {
+            const startRow = currentRowNilai;
+            // --- PERUBAHAN ---: Loop melalui kurikulumUjian
+            kurikulumUjian.forEach(kurikulum => {
+                sheetNilai.addRow({
+                    nama_mapel: kurikulum.mapel.nama_mapel,
+                    kitab: kurikulum.kitab ? kurikulum.kitab.nama_kitab : '-', // --- PERUBAHAN ---: Isi nama kitab
+                    semester: tahunAjaranInfo.semester,
+                    tahun_ajaran: tahunAjaranInfo.nama_ajaran
+                });
+                currentRowNilai++;
+            });
+            mergeCellsForStudent(sheetNilai, startRow, currentRowNilai - 1, siswa);
+        });
+        applySheetStyling(sheetNilai);
 
-    let currentRowKehadiran = 2;
-    
-    // Gunakan data dari database atau default
-    const kegiatanList = indikatorKehadiran.length > 0 
-      ? indikatorKehadiran 
-      : [
-          { nama_kegiatan: 'Shalat Berjamaah' },
-          { nama_kegiatan: 'Mengaji' },
-          { nama_kegiatan: 'Piket' },
-          { nama_kegiatan: 'Tahfidz' },
-          { nama_kegiatan: 'Sekolah' }
+        // 3. Create "Template Hafalan" Sheet
+        const sheetHafalan = workbook.addWorksheet('Template Hafalan');
+        sheetHafalan.columns = [
+            { header: 'NIS', key: 'nis', width: 15 },
+            { header: 'Nama Siswa', key: 'nama', width: 25 },
+            { header: 'Nama Mapel', key: 'nama_mapel', width: 25 },
+            { header: 'Kitab', key: 'kitab', width: 20 }, // --- PERUBAHAN ---: Tambah kolom Kitab
+            { header: 'Nilai', key: 'nilai', width: 10 },
+            { header: 'Semester', key: 'semester', width: 12 },
+            { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 },
         ];
-
-    for (const siswa of siswaList) {
-      const startRowKehadiran = currentRowKehadiran;
-      
-      for (const kegiatan of kegiatanList) {
-        const namaKegiatan = kegiatan.nama_kegiatan || kegiatan;
-        sheetKehadiran.addRow({ 
-          nis: '',
-          nama: '',
-          kegiatan: namaKegiatan,
-          izin: 0, 
-          sakit: 0, 
-          absen: 0, 
-          semester, 
-          tahun_ajaran 
+        let currentRowHafalan = 2;
+        siswaList.forEach(siswa => {
+            const startRow = currentRowHafalan;
+            // --- PERUBAHAN ---: Loop melalui kurikulumHafalan
+            kurikulumHafalan.forEach(kurikulum => {
+                sheetHafalan.addRow({
+                    nama_mapel: kurikulum.mapel.nama_mapel,
+                    kitab: kurikulum.kitab ? kurikulum.kitab.nama_kitab : '-', // --- PERUBAHAN ---: Isi nama kitab
+                    semester: tahunAjaranInfo.semester,
+                    tahun_ajaran: tahunAjaranInfo.nama_ajaran
+                });
+                currentRowHafalan++;
+            });
+            mergeCellsForStudent(sheetHafalan, startRow, currentRowHafalan - 1, siswa);
         });
-        currentRowKehadiran++;
-      }
-      
-      const endRowKehadiran = currentRowKehadiran - 1;
-      mergeCellsForStudent(sheetKehadiran, startRowKehadiran, endRowKehadiran, siswa);
+        applySheetStyling(sheetHafalan);
+        
+        // ... (Sisa fungsi untuk sheet Kehadiran dan Sikap tetap sama)
+        // 4. Create "Template Kehadiran" Sheet
+        const sheetKehadiran = workbook.addWorksheet('Template Kehadiran');
+        sheetKehadiran.columns = [
+            { header: 'NIS', key: 'nis', width: 15 },
+            { header: 'Nama Siswa', key: 'nama', width: 25 },
+            { header: 'Kegiatan', key: 'kegiatan', width: 25 },
+            { header: 'Izin', key: 'izin', width: 10 },
+            { header: 'Sakit', key: 'sakit', width: 10 },
+            { header: 'Absen', key: 'absen', width: 10 },
+            { header: 'Semester', key: 'semester', width: 12 },
+            { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 },
+        ];
+        let currentRowKehadiran = 2;
+        siswaList.forEach(siswa => {
+            const startRow = currentRowKehadiran;
+            indikatorKehadiran.forEach(ind => {
+                sheetKehadiran.addRow({
+                    kegiatan: ind.nama_kegiatan,
+                    semester: tahunAjaranInfo.semester,
+                    tahun_ajaran: tahunAjaranInfo.nama_ajaran
+                });
+                currentRowKehadiran++;
+            });
+            mergeCellsForStudent(sheetKehadiran, startRow, currentRowKehadiran - 1, siswa);
+        });
+        applySheetStyling(sheetKehadiran);
+
+        // 5. Create "Template Sikap" Sheet
+        const sheetSikap = workbook.addWorksheet('Template Sikap');
+        sheetSikap.columns = [
+            { header: 'NIS', key: 'nis', width: 15 },
+            { header: 'Nama Siswa', key: 'nama', width: 25 },
+            { header: 'Jenis Sikap', key: 'jenis', width: 15 },
+            { header: 'Indikator', key: 'indikator', width: 30 },
+            { header: 'Nilai', key: 'nilai', width: 10 },
+            { header: 'Deskripsi (Catatan Wali Kelas)', key: 'deskripsi', width: 40 }, // Header diubah
+            { header: 'Semester', key: 'semester', width: 12 },
+            { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 },
+        ];
+        let currentRowSikap = 2;
+        siswaList.forEach(siswa => {
+            const startRow = currentRowSikap;
+            indikatorSikap.forEach(ind => {
+                sheetSikap.addRow({
+                    // Tidak ada deskripsi per baris lagi
+                    jenis: ind.jenis_sikap,
+                    indikator: ind.indikator,
+                    semester: tahunAjaranInfo.semester,
+                    tahun_ajaran: tahunAjaranInfo.nama_ajaran
+                });
+                currentRowSikap++;
+            });
+            const endRow = currentRowSikap - 1;
+            // Gabungkan sel NIS, Nama, dan Deskripsi
+            mergeCellsForStudent(sheetSikap, startRow, endRow, siswa);
+            if (startRow <= endRow) {
+                sheetSikap.mergeCells(`F${startRow}:F${endRow}`);
+                sheetSikap.getCell(`F${startRow}`).alignment = { vertical: 'top', horizontal: 'left' };
+            }
+        });
+        applySheetStyling(sheetSikap);
+
+        // 6. Send the file
+        const fileName = `Template-Lengkap-${sanitizeFilename(kelasInfo.nama_kelas)}-Semester-${tahunAjaranInfo.semester}-${sanitizeFilename(tahunAjaranInfo.nama_ajaran)}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (err) {
+        console.error('Error creating complete template:', err);
+        res.status(500).json({ message: 'Gagal membuat template lengkap', error: err.message });
     }
-    
-    applySheetStyling(sheetKehadiran);
-    console.log(`✅ Sheet Kehadiran selesai dengan merge cells`);
-
-    // ========== Sheet Sikap dengan Merge Cells (Termasuk Deskripsi) ==========
-    const sheetSikap = workbook.addWorksheet('Template Sikap');
-    sheetSikap.columns = [
-      { header: 'NIS', key: 'nis', width: 15 },
-      { header: 'Nama Siswa', key: 'nama', width: 25 },
-      { header: 'Jenis Sikap', key: 'jenis', width: 15 },
-      { header: 'Indikator', key: 'indikator', width: 30 },
-      { header: 'Nilai Angka', key: 'angka', width: 15 },
-      { header: 'Deskripsi', key: 'deskripsi', width: 40 },
-      { header: 'Semester', key: 'semester', width: 12 },
-      { header: 'Tahun Ajaran', key: 'tahun_ajaran', width: 15 }
-    ];
-
-    let currentRowSikap = 2;
-    for (const siswa of siswaList) {
-      const startRowSikap = currentRowSikap;
-      
-      // Tambahkan indikator spiritual
-      for (const ind of indikatorSpiritual) {
-        sheetSikap.addRow({ 
-          nis: '',
-          nama: '',
-          jenis: 'spiritual', 
-          indikator: ind.indikator, 
-          semester, 
-          tahun_ajaran 
-        });
-        currentRowSikap++;
-      }
-      
-      // Tambahkan indikator sosial
-      for (const ind of indikatorSosial) {
-        sheetSikap.addRow({ 
-          nis: '',
-          nama: '',
-          jenis: 'sosial', 
-          indikator: ind.indikator, 
-          semester, 
-          tahun_ajaran 
-        });
-        currentRowSikap++;
-      }
-      
-      const endRowSikap = currentRowSikap - 1;
-      
-      // Merge NIS dan Nama
-      mergeCellsForStudent(sheetSikap, startRowSikap, endRowSikap, siswa);
-      
-      // Merge Deskripsi (kolom F)
-      if (endRowSikap > startRowSikap) {
-        try {
-          const deskripsiRange = `F${startRowSikap}:F${endRowSikap}`;
-          sheetSikap.mergeCells(deskripsiRange);
-          const deskripsiCell = sheetSikap.getCell(`F${startRowSikap}`);
-          deskripsiCell.alignment = { 
-            vertical: 'top', 
-            horizontal: 'left',
-            wrapText: true 
-          };
-          console.log(`✅ Merged deskripsi untuk ${siswa.nama}: ${deskripsiRange}`);
-        } catch (error) {
-          console.error(`❌ Error merging deskripsi untuk ${siswa.nama}:`, error.message);
-        }
-      }
-    }
-    
-    applySheetStyling(sheetSikap);
-    console.log(`✅ Sheet Sikap selesai dengan merge cells untuk NIS, Nama, dan Deskripsi`);
-
-    // Response
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Template_Complete_with_MergeCells.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
-
-    console.log(`🎉 Template lengkap dengan merge cells berhasil dibuat untuk ${siswaList.length} siswa`);
-
-  } catch (err) {
-    console.error('Error creating complete template:', err);
-    res.status(500).json({ message: 'Gagal membuat template lengkap', error: err.message });
-  }
 };

@@ -26,15 +26,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    nilai_pengetahuan: {
-      type: DataTypes.DECIMAL(5,2),
-      allowNull: true,
-      validate: {
-        min: 0,
-        max: 100
-      }
-    },
-    nilai_keterampilan: {
+    nilai: {
       type: DataTypes.DECIMAL(5,2),
       allowNull: true,
       validate: {

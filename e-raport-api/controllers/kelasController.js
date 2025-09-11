@@ -7,13 +7,23 @@ exports.getAllKelas = async (req, res) => {
   try {
     const kelas = await db.Kelas.findAll({
       include: [
-        { model: db.WaliKelas, as: 'walikelas', attributes: ['nama'], required: false },
-        { model: db.Siswa, as: 'siswa', attributes: ['id', 'nama'], required: false }
+        // === PERUBAHAN DI SINI: Gunakan model 'Guru' ===
+        { 
+          model: db.Guru, // Menggunakan model Guru yang baru
+          as: 'walikelas',      // Alias 'walikelas' ini sudah benar sesuai models/kelas.js
+          attributes: ['nama'], 
+          required: false 
+        },
+        // ===============================================
+        { 
+          model: db.Siswa, 
+          as: 'siswa', 
+          attributes: ['id', 'nama'], 
+          required: false 
+        }
       ],
       order: [['nama_kelas', 'ASC']]
     });
-    // DEBUG: Kirim data ke browser
-    console.log("DATA DIKIRIM KE FRONTEND:", JSON.stringify(kelas, null, 2));
     res.json(kelas);
   } catch (error) {
     console.error('SERVER ERROR - GET /api/kelas:', error);
@@ -29,8 +39,20 @@ exports.getKelasById = async (req, res) => {
     
     const kelas = await db.Kelas.findByPk(id, {
       include: [
-        { model: db.WaliKelas, as: 'walikelas', attributes: ['nama'], required: false },
-        { model: db.Siswa, as: 'siswa', attributes: ['id', 'nama', 'nis'], required: false }
+        { model: db.Guru, as: 'walikelas', attributes: ['nama'], required: false },
+        { 
+          model: db.Siswa, 
+          as: 'siswa', 
+          attributes: ['id', 'nama', 'nis', 'jenis_kelamin', 'kamar'], // Tambahkan kolom yang relevan
+          required: false,
+          // 🔥 PERBAIKAN UTAMA: Tambahkan include untuk Kamar di sini
+          include: [{
+            model: db.Kamar,
+            as: 'infoKamar',
+            attributes: ['nama_kamar'],
+            required: false
+          }]
+        }
       ]
     });
 
@@ -98,5 +120,37 @@ exports.deleteKelas = async (req, res) => {
         }
     } catch (error) {
         res.status(500).json({ message: 'Error saat menghapus kelas', error: error.message });
+    }
+};
+
+exports.promosikanSiswa = async (req, res) => {
+    // Data yang kita harapkan dari frontend
+    const { ke_kelas_id, siswa_ids } = req.body;
+
+    if (!ke_kelas_id || !Array.isArray(siswa_ids) || siswa_ids.length === 0) {
+        return res.status(400).json({ message: "Input tidak lengkap: ID kelas tujuan dan daftar ID siswa wajib diisi." });
+    }
+
+    const transaction = await db.sequelize.transaction();
+    try {
+        const [updatedCount] = await db.Siswa.update(
+            { kelas_id: ke_kelas_id }, // Set kelas_id baru
+            {
+                where: {
+                    id: { [Op.in]: siswa_ids } // Hanya untuk siswa yang ID-nya ada di dalam array
+                },
+                transaction
+            }
+        );
+
+        await transaction.commit();
+        res.status(200).json({ 
+            message: `Berhasil mempromosikan ${updatedCount} siswa ke kelas baru.`,
+            count: updatedCount
+        });
+    } catch (error) {
+        await transaction.rollback();
+        console.error("Error saat promosi siswa:", error);
+        res.status(500).json({ message: "Terjadi kesalahan pada server saat memproses kenaikan kelas.", error: error.message });
     }
 };

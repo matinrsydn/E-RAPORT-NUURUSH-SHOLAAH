@@ -1,8 +1,16 @@
-const express_ks = require('express');
-const router_ks = express_ks.Router();
-const controller_ks = require('../controllers/kepalaPesantrenController');
-router_ks.get('/', controller_ks.getAll);
-router_ks.post('/', controller_ks.create);
-router_ks.put('/:id', controller_ks.update);
-router_ks.delete('/:id', controller_ks.delete);
-module.exports = router_ks;
+// file: routes/kepalaPesantrenRoutes.js
+const express = require('express');
+const router = express.Router();
+const controller = require('../controllers/kepalaPesantrenController');
+const uploadSignature = require('../middleware/uploadSignature');
+
+// Rute standar
+router.get('/', controller.getAll);
+router.post('/', controller.create);
+router.delete('/:id', controller.delete);
+
+// Rute untuk update, sekarang menyertakan middleware untuk unggah tanda tangan
+// Kode baru yang sudah benar
+router.put('/:id/:type', uploadSignature.single('tanda_tangan'), controller.update);
+
+module.exports = router;

@@ -59,11 +59,38 @@ exports.updateWaliKelas = async (req, res) => {
 
 // Menghapus data Wali Kelas
 exports.deleteWaliKelas = async (req, res) => {
+    const waliKelasId = req.params.id;
+    const transaction = await db.sequelize.transaction(); 
+
     try {
-        const deleted = await db.WaliKelas.destroy({ where: { id: req.params.id } });
-        if (deleted) return res.status(204).send();
-        throw new Error('Data tidak ditemukan');
+        // ====================================================================
+        // === PERUBAHAN UTAMA: Cek ke tabel Kelas, bukan Siswa ===
+        // ====================================================================
+        const kelasTerkait = await db.Kelas.findOne({
+            where: { wali_kelas_id: waliKelasId },
+            transaction
+        });
+
+        // JIKA ADA kelas yang terkait, batalkan operasi dan kirim pesan error
+        if (kelasTerkait) {
+            await transaction.rollback();
+            return res.status(409).json({
+                message: `Gagal menghapus. Wali kelas ini masih ditugaskan di ${kelasTerkait.nama_kelas}.`
+            });
+        }
+
+        // JIKA TIDAK ADA kelas terkait, lanjutkan proses penghapusan
+        await db.WaliKelas.destroy({
+            where: { id: waliKelasId },
+            transaction
+        });
+
+        await transaction.commit();
+        res.status(204).send();
+
     } catch (error) {
-        res.status(404).json({ message: 'Data tidak ditemukan', error: error.message });
+        await transaction.rollback();
+        console.error("SERVER ERROR - DELETE /api/wali-kelas:", error);
+        res.status(500).json({ message: 'Terjadi kegagalan di server', error: error.message });
     }
 };

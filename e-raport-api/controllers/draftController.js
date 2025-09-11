@@ -44,12 +44,9 @@ async function validateRow(rowData) {
         console.log(`INFO: Mata pelajaran baru otomatis dibuat: Kode='${rowData.kode_mapel}', Nama='${rowData.nama_mapel}'`);
     }
     
-    // Validasi nilai
-    if (rowData.pengetahuan_angka === null || isNaN(parseFloat(rowData.pengetahuan_angka))) {
-        errors.push(`Nilai Pengetahuan '${rowData.pengetahuan_angka}' bukan angka yang valid.`);
-    }
-    if (rowData.keterampilan_angka === null || isNaN(parseFloat(rowData.keterampilan_angka))) {
-        errors.push(`Nilai Keterampilan '${rowData.keterampilan_angka}' bukan angka yang valid.`);
+    // Validasi nilai (single field 'nilai')
+    if (rowData.nilai === null || rowData.nilai === undefined || isNaN(parseFloat(rowData.nilai))) {
+        errors.push(`Nilai '${rowData.nilai}' bukan angka yang valid.`);
     }
     
     // Validasi kehadiran
@@ -98,12 +95,10 @@ exports.uploadAndValidate = async (req, res) => {
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(req.file.path);
 
-        console.log('🔄 Memulai proses parsing Excel dengan kehadiran detail...');
+        console.log('🔄 Memulai proses parsing Excel...');
 
-        // 🔥 STRUKTUR BARU: Data gabungan per siswa
         const combinedData = {};
 
-        // Helper untuk memproses setiap baris dan menggabungkan data per siswa (NIS)
         const processSheet = async (sheetName, dataProcessor) => {
             const worksheet = workbook.getWorksheet(sheetName);
             if (!worksheet) {
@@ -112,217 +107,118 @@ exports.uploadAndValidate = async (req, res) => {
             }
 
             console.log(`📋 Memproses sheet: ${sheetName}`);
-            for (let i = 2; i <= worksheet.rowCount; i++) {
+            const actualRowCount = worksheet.actualRowCount;
+            for (let i = 2; i <= actualRowCount; i++) {
                 const row = worksheet.getRow(i);
-                const nis = getCellValue(row.getCell('A'));
+                const cellA = worksheet.getCell(`A${i}`);
+                const nis = cellA.isMerged ? getCellValue(worksheet.getCell(cellA.master.address)) : getCellValue(cellA);
+
                 if (!nis) continue;
+                
+                const cellB = worksheet.getCell(`B${i}`);
+                const nama_siswa = cellB.isMerged ? getCellValue(worksheet.getCell(cellB.master.address)) : getCellValue(cellB);
 
                 if (!combinedData[nis]) {
                     combinedData[nis] = {
                         nis: nis,
-                        nama_siswa: getCellValue(row.getCell('B')),
+                        nama_siswa: nama_siswa,
                         row_number: i,
                         nilai_ujian: [],
                         nilai_hafalan: [],
-                        kehadiran_detail: [], // 🔥 BARU: Array detail per kegiatan
-                        kehadiran_summary: { sakit: 0, izin: 0, alpha: 0 }, // 🔥 BARU: Total agregat
-                        sikap: [],
-                        catatan_walikelas: null,
+                        kehadiran_detail: [],
+                        kehadiran_summary: { sakit: 0, izin: 0, alpha: 0 },
+                        sikap: {
+                            catatan_walikelas: '',
+                            detail: []
+                        },
                         semester: null,
                         tahun_ajaran: null
                     };
                 }
-                await dataProcessor(row, combinedData[nis]);
+                // 🔥 PERUBAHAN 1: Kirim 'worksheet' sebagai parameter ke callback
+                await dataProcessor(row, combinedData[nis], worksheet);
             }
         };
-
-        // 1. Proses Sheet Nilai Ujian
+        
+        // --- Proses Sheet Nilai Ujian, Hafalan, Kehadiran ---
+        // Tidak perlu 'worksheet' di sini, jadi bisa diabaikan
         await processSheet('Template Nilai Ujian', async (row, siswaData) => {
+            // --- PERBAIKAN PEMBACAAN KOLOM ---
+            const semesterValue = getCellValue(row.getCell('G'));      // Kolom G = Semester
+            const tahunAjaranValue = getCellValue(row.getCell('H')); // Kolom H = Tahun Ajaran
+            
             const nilaiData = {
-                kode_mapel: getCellValue(row.getCell('C')),
-                nama_mapel: getCellValue(row.getCell('D')),
-                pengetahuan_angka: getCellValue(row.getCell('E')),
-                keterampilan_angka: getCellValue(row.getCell('F')),
-                semester: getCellValue(row.getCell('G')),
-                tahun_ajaran: getCellValue(row.getCell('H')),
+                nama_mapel: getCellValue(row.getCell('C')),
+                kitab: getCellValue(row.getCell('D')),
+                // PERUBAHAN: hanya satu kolom 'Nilai' di kolom E
+                nilai: getCellValue(row.getCell('E')),
+                semester: semesterValue,
+                tahun_ajaran: tahunAjaranValue,
             };
             siswaData.nilai_ujian.push(nilaiData);
-            
-            // Set semester dan tahun ajaran global
-            if (!siswaData.semester) siswaData.semester = nilaiData.semester;
-            if (!siswaData.tahun_ajaran) siswaData.tahun_ajaran = nilaiData.tahun_ajaran;
+
+            if (!siswaData.semester) siswaData.semester = semesterValue;
+            if (!siswaData.tahun_ajaran) siswaData.tahun_ajaran = tahunAjaranValue;
         });
 
-        // 2. Proses Sheet Nilai Hafalan
         await processSheet('Template Hafalan', async (row, siswaData) => {
+            // --- PERBAIKAN PEMBACAAN KOLOM ---
+            const semesterValue = getCellValue(row.getCell('F'));      // Kolom F = Semester
+            const tahunAjaranValue = getCellValue(row.getCell('G')); // Kolom G = Tahun Ajaran
             const hafalanData = {
-                kode_mapel: getCellValue(row.getCell('C')),
-                nama_mapel: getCellValue(row.getCell('D')),
-                nilai_angka: getCellValue(row.getCell('E')),
-                semester: getCellValue(row.getCell('F')),
-                tahun_ajaran: getCellValue(row.getCell('G')),
+                nama_mapel: getCellValue(row.getCell('C')),
+                kitab: getCellValue(row.getCell('D')),          // Kolom D = Kitab
+                nilai_angka: getCellValue(row.getCell('E')),      // Kolom E = Nilai
+                semester: semesterValue,
+                tahun_ajaran: tahunAjaranValue,
             };
             siswaData.nilai_hafalan.push(hafalanData);
-            
-            if (!siswaData.semester) siswaData.semester = hafalanData.semester;
-            if (!siswaData.tahun_ajaran) siswaData.tahun_ajaran = hafalanData.tahun_ajaran;
+            if (!siswaData.semester) siswaData.semester = semesterValue;
+            if (!siswaData.tahun_ajaran) siswaData.tahun_ajaran = tahunAjaranValue;
         });
-
-        // 3. 🔥 PERBAIKAN UTAMA: Proses Sheet Kehadiran dengan detail per kegiatan
+        
         await processSheet('Template Kehadiran', async (row, siswaData) => {
-            const nis = getCellValue(row.getCell('A'));
-            const nama = getCellValue(row.getCell('B'));
-            const kegiatan = getCellValue(row.getCell('C')); // Kolom C = Kegiatan
+            const kegiatan = (getCellValue(row.getCell('C')) || '').trim();
+            if (!kegiatan) return;
             const izin = parseInt(getCellValue(row.getCell('D')) || 0, 10);
             const sakit = parseInt(getCellValue(row.getCell('E')) || 0, 10);
             const absen = parseInt(getCellValue(row.getCell('F')) || 0, 10);
-            const semester = getCellValue(row.getCell('G'));
-            const tahun_ajaran = getCellValue(row.getCell('H'));
-            
-            console.log(`🔍 RAW EXCEL DATA - Row: NIS=${nis}, Nama="${nama}", Kegiatan="${kegiatan}", Izin=${izin}, Sakit=${sakit}, Absen=${absen}`);
-            
-            // 🔥 PERBAIKAN: Pastikan kegiatan tidak null atau undefined
-            if (!kegiatan || kegiatan === null || kegiatan === undefined || String(kegiatan).trim() === '') {
-                console.log(`❌ KEGIATAN KOSONG atau NULL untuk NIS ${nis}, row data:`, {
-                    raw_kegiatan: kegiatan,
-                    kegiatan_type: typeof kegiatan,
-                    cell_value: getCellValue(row.getCell('C')),
-                    raw_cell: row.getCell('C').value
-                });
-                return; // Skip baris ini
-            }
-            
-            // 🔥 PERBAIKAN: Trim dan clean kegiatan name
-            const cleanKegiatan = String(kegiatan).trim();
-            if (!cleanKegiatan) {
-                console.log(`❌ KEGIATAN KOSONG setelah trim untuk NIS ${nis}`);
-                return;
-            }
-            
-            // 🔥 VALIDASI: Pastikan ada nilai kehadiran yang tidak nol
-            if (izin === 0 && sakit === 0 && absen === 0) {
-                console.log(`⚠️ SEMUA NILAI NOL untuk ${nis} - ${cleanKegiatan}, tapi tetap disimpan sebagai record`);
-            }
-            
-            // 🔥 SIMPAN DETAIL PER KEGIATAN (bahkan jika nilai 0, tetap simpan untuk konsistensi)
-            const detailItem = {
-                kegiatan: cleanKegiatan,
-                izin,
-                sakit,
-                absen
-            };
-            
-            siswaData.kehadiran_detail.push(detailItem);
-            
-            console.log(`✅ DETAIL DITAMBAHKAN untuk ${nis}:`, detailItem);
-            console.log(`📊 Current kehadiran_detail length: ${siswaData.kehadiran_detail.length}`);
-            
-            // 🔥 UPDATE TOTAL AGREGAT
+            siswaData.kehadiran_detail.push({ kegiatan, izin, sakit, absen });
             siswaData.kehadiran_summary.izin += izin;
             siswaData.kehadiran_summary.sakit += sakit;
-            siswaData.kehadiran_summary.alpha += absen; // Ini tetap alpha untuk konsistensi internal
-            
-            console.log(`📈 UPDATED SUMMARY for ${nis}:`, siswaData.kehadiran_summary);
-            
-            // Set semester dan tahun ajaran
-            if (!siswaData.semester) siswaData.semester = semester;
-            if (!siswaData.tahun_ajaran) siswaData.tahun_ajaran = tahun_ajaran;
+            siswaData.kehadiran_summary.alpha += absen;
         });
 
-        // 🔥 TAMBAHAN: Log final check sebelum membuat draft entries
-        console.log('\n🔍 FINAL KEHADIRAN CHECK SEBELUM DRAFT:');
-        for (const nis in combinedData) {
-            const siswa = combinedData[nis];
-            console.log(`\n--- SISWA ${nis} (${siswa.nama_siswa}) ---`);
-            console.log(`Kehadiran Detail Count: ${siswa.kehadiran_detail?.length || 0}`);
-            if (siswa.kehadiran_detail && siswa.kehadiran_detail.length > 0) {
-                siswa.kehadiran_detail.forEach((detail, idx) => {
-                    console.log(`  ${idx + 1}. ${detail.kegiatan}: izin=${detail.izin}, sakit=${detail.sakit}, absen=${detail.absen}`);
-                });
-            } else {
-                console.log(`  ❌ TIDAK ADA KEHADIRAN DETAIL!`);
-            }
-            console.log(`Kehadiran Summary:`, siswa.kehadiran_summary);
-        }
-
-        // Setelah proses semua sheet, tambahkan ini sebelum membuat draftEntries:
-
-        // 🔥 FINAL VALIDATION: Cek struktur data sebelum disimpan
-        console.log('\n🔍 FINAL DATA STRUCTURE CHECK:');
-        for (const nis in combinedData) {
-            const siswa = combinedData[nis];
-            console.log(`\n--- SISWA ${nis} (${siswa.nama_siswa}) ---`);
-            console.log(`Kehadiran Detail Count: ${siswa.kehadiran_detail?.length || 0}`);
-            console.log(`Kehadiran Detail:`, JSON.stringify(siswa.kehadiran_detail, null, 2));
-            console.log(`Kehadiran Summary:`, JSON.stringify(siswa.kehadiran_summary, null, 2));
-            console.log(`Semester: ${siswa.semester}, Tahun: ${siswa.tahun_ajaran}`);
+        // --- 4. Proses Sheet Sikap ---
+        // 🔥 PERUBAHAN 2: Terima parameter 'worksheet' di sini
+        await processSheet('Template Sikap', async (row, siswaData, worksheet) => {
+            const jenis_sikap = getCellValue(row.getCell('C'));
+            const indikator = getCellValue(row.getCell('D'));
+            const nilai = getCellValue(row.getCell('E'));
             
-            // 🔥 VALIDASI: Pastikan struktur data ada
-            if (!siswa.kehadiran_detail) {
-                console.log(`❌ KEHADIRAN_DETAIL UNDEFINED untuk ${nis}!`);
-                siswa.kehadiran_detail = [];
-            }
-            if (!siswa.kehadiran_summary) {
-                console.log(`❌ KEHADIRAN_SUMMARY UNDEFINED untuk ${nis}!`);
-                siswa.kehadiran_summary = { izin: 0, sakit: 0, alpha: 0 };
-            }
-        }
+            const cellF = row.getCell('F');
+            const deskripsi = cellF.isMerged ? getCellValue(worksheet.getCell(cellF.master.address)) : getCellValue(cellF);
 
-        // 4. Proses Sheet Sikap
-        await processSheet('Template Sikap', async (row, siswaData) => {
-            const jenis_sikap = getCellValue(row.getCell('C')); // Kolom C = Jenis Sikap
-            const indikator = getCellValue(row.getCell('D'));   // Kolom D = Indikator
-            const nilai = getCellValue(row.getCell('E'));       // Kolom E = Nilai
-            const deskripsi = getCellValue(row.getCell('F'));   // Kolom F = Deskripsi
-            const semester = getCellValue(row.getCell('G'));    // Kolom G = Semester
-            const tahun_ajaran = getCellValue(row.getCell('H')); // Kolom H = Tahun Ajaran
-
-            console.log(`📝 Memproses sikap untuk ${siswaData.nis}:`);
-            console.log(`   Jenis: ${jenis_sikap}, Indikator: ${indikator}, Nilai: ${nilai}`);
-
-            // Pastikan ada data sikap yang valid
             if (jenis_sikap && indikator) {
-                const sikapData = {
-                    jenis_sikap: jenis_sikap,
-                    indikator: indikator,
-                    nilai: nilai ? parseFloat(nilai) : null,
-                    deskripsi: deskripsi || '',
-                    semester: semester,
-                    tahun_ajaran: tahun_ajaran
-                };
-                
-                siswaData.sikap.push(sikapData);
-                console.log(`✅ Data sikap ditambahkan:`, sikapData);
-            } else {
-                console.log(`⚠️ Data sikap tidak lengkap, dilewati`);
+                siswaData.sikap.detail.push({
+                    jenis_sikap,
+                    indikator,
+                    nilai: nilai ? parseFloat(nilai) : null
+                });
             }
-
-            // Set semester dan tahun ajaran global
-            if (!siswaData.semester && semester) siswaData.semester = semester;
-            if (!siswaData.tahun_ajaran && tahun_ajaran) siswaData.tahun_ajaran = tahun_ajaran;
+            if (deskripsi && !siswaData.sikap.catatan_walikelas) {
+                siswaData.sikap.catatan_walikelas = deskripsi;
+            }
         });
 
-        // 🔥 LOG DEBUGGING: Tampilkan hasil parsing
-        console.log('📋 HASIL PARSING KEHADIRAN:');
-        for (const nis in combinedData) {
-            const siswa = combinedData[nis];
-            console.log(`NIS ${nis} (${siswa.nama_siswa}):`);
-            console.log(`  - Total: izin=${siswa.kehadiran_summary.izin}, sakit=${siswa.kehadiran_summary.sakit}, alpha=${siswa.kehadiran_summary.alpha}`);
-            console.log(`  - Detail (${siswa.kehadiran_detail.length} kegiatan):`);
-            siswa.kehadiran_detail.forEach(detail => {
-                console.log(`    • ${detail.kegiatan}: izin=${detail.izin}, sakit=${detail.sakit}, absen=${detail.absen}`);
-            });
-        }
 
-        // 5. Buat draft entries dengan struktur baru
         const draftEntries = [];
         for (const nis in combinedData) {
             const siswaData = combinedData[nis];
             
-            // Validasi siswa
             const siswaDb = await db.Siswa.findOne({ 
                 where: { nis: siswaData.nis }, 
-                include: ['kelas', 'wali_kelas'] 
+                include: [{ model: db.Kelas, as: 'kelas', include: [{ model: db.Guru, as: 'walikelas' }] }] 
             });
 
             const validation = { isValid: true, errors: [] };
@@ -330,51 +226,35 @@ exports.uploadAndValidate = async (req, res) => {
                 validation.isValid = false;
                 validation.errors.push(`Siswa dengan NIS '${siswaData.nis}' tidak ditemukan.`);
             }
-
-            // 🔥 STRUKTUR DATA BARU dengan kehadiran detail
-            const rowData = {
-                nis: siswaData.nis,
-                nama_siswa: siswaData.nama_siswa,
-                semester: siswaData.semester,
-                tahun_ajaran: siswaData.tahun_ajaran,
-                nilai_ujian: siswaData.nilai_ujian,
-                nilai_hafalan: siswaData.nilai_hafalan,
-                kehadiran_detail: siswaData.kehadiran_detail,
-                kehadiran_summary: siswaData.kehadiran_summary,
-                sikap: siswaData.sikap, // 🔥 PERBAIKAN: Gunakan array sikap, bukan catatan_walikelas
-                catatan_sikap: siswaData.catatan_walikelas // Tetap simpan catatan umum jika ada
-            };
-
-            console.log(`💾 Data untuk NIS ${nis}:`, {
-                kehadiran_detail_count: rowData.kehadiran_detail.length,
-                kehadiran_summary: rowData.kehadiran_summary
-            });
+            if (!/^[12]$/.test(String(siswaData.semester))) {
+                validation.isValid = false;
+                validation.errors.push(`Semester '${siswaData.semester}' tidak valid. Harus '1' atau '2'.`);
+            }
+            if (!/^\d{4}\/\d{4}$/.test(String(siswaData.tahun_ajaran))) {
+                validation.isValid = false;
+                validation.errors.push(`Tahun Ajaran '${siswaData.tahun_ajaran}' tidak valid. Contoh: 2024/2025.`);
+            }
 
             draftEntries.push({
                 upload_batch_id,
                 row_number: siswaData.row_number,
-                data: rowData,
+                data: siswaData,
                 is_valid: validation.isValid,
                 validation_errors: validation.errors.length > 0 ? validation.errors : null,
                 processed_data: {
                     siswa_id: siswaDb ? siswaDb.id : null,
-                    kelas_id: siswaDb && siswaDb.kelas ? siswaDb.kelas.id : null,
-                    wali_kelas_id: siswaDb && siswaDb.wali_kelas ? siswaDb.wali_kelas.id : null
+                    kelas_id: siswaDb?.kelas ? siswaDb.kelas.id : null,
+                    wali_kelas_id: siswaDb?.kelas?.walikelas ? siswaDb.kelas.walikelas.id : null,
                 }
             });
         }
         
-        // Simpan ke database
         await db.DraftNilai.bulkCreate(draftEntries);
         fs.unlinkSync(req.file.path);
 
-        console.log(`✅ Berhasil membuat ${draftEntries.length} draft entries`);
-
         res.status(200).json({
-            message: 'File berhasil diunggah dan divalidasi dengan kehadiran detail.',
+            message: 'File berhasil diunggah dan divalidasi.',
             upload_batch_id: upload_batch_id,
-            total_entries: draftEntries.length,
-            valid_entries: draftEntries.filter(entry => entry.is_valid).length
         });
 
     } catch (error) {
@@ -382,10 +262,7 @@ exports.uploadAndValidate = async (req, res) => {
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
-        res.status(500).json({ 
-            message: 'Terjadi kesalahan pada server.', 
-            error: error.message 
-        });
+        res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: error.message });
     }
 };
 
@@ -476,192 +353,161 @@ exports.getRaportPreview = async (req, res) => {
  * 🔥 PERBAIKAN UTAMA: Konfirmasi dan simpan dengan kehadiran detail
  */
 exports.confirmAndSave = async (req, res) => {
-    const { batchId } = req.params;
+    const { validatedData } = req.body; // Ambil data dari body request
     const transaction = await db.sequelize.transaction();
+    const toNumberOrNull = (v) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+    };
+
+    // PERUBAHAN: gabungkan pengetahuan_angka & keterampilan_angka menjadi single `nilai`
+    const computeFinalNilai = (p, k) => {
+        const a = toNumberOrNull(p);
+        const b = toNumberOrNull(k);
+        if (a !== null && b !== null) return (a + b) / 2;
+        if (a !== null) return a;
+        if (b !== null) return b;
+        return null;
+    };
 
     try {
-        const validDrafts = await db.DraftNilai.findAll({
-            where: { upload_batch_id: batchId, is_valid: true },
-            transaction
-        });
-
-        if (validDrafts.length === 0) {
+        if (!validatedData || validatedData.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: 'Tidak ada data valid untuk disimpan.' });
         }
 
-        console.log(`🔄 Memproses ${validDrafts.length} draft valid...`);
+        console.log(`🔄 Memproses ${validatedData.length} data siswa valid...`);
 
-        for (const draft of validDrafts) {
-            const draftItem = draft.get({ plain: true });
-            const { data, processed_data } = draftItem;
+        for (const item of validatedData) {
+            // Dapatkan ID Tahun Ajaran yang aktif
+            const tahunAjaranDb = await db.TahunAjaran.findOne({
+                where: {
+                    nama_ajaran: item.tahun_ajaran,
+                    semester: item.semester,
+                    status: 'aktif'
+                }
+            });
 
-            if (!processed_data || !processed_data.siswa_id) {
-                console.warn(`⚠️ Melewati draft tanpa siswa_id: ${draftItem.id}`);
+            if (!tahunAjaranDb) {
+                // Jika tidak ditemukan, lewati data siswa ini atau batalkan semua
+                console.warn(`Tahun Ajaran aktif untuk ${item.tahun_ajaran} semester ${item.semester} tidak ditemukan. Melewati siswa NIS ${item.nis}.`);
+                continue; // Lanjut ke data siswa berikutnya
+            }
+            const tahun_ajaran_id = tahunAjaranDb.id;
+
+            // Dapatkan ID Siswa
+            const siswaDb = await db.Siswa.findOne({ where: { nis: item.nis } });
+            if (!siswaDb) {
+                console.warn(`Siswa dengan NIS ${item.nis} tidak ditemukan saat proses simpan. Melewati.`);
                 continue;
             }
+            const siswa_id = siswaDb.id;
 
-            const { siswa_id, kelas_id, wali_kelas_id } = processed_data;
-            const { semester, tahun_ajaran } = data;
-
-            console.log(`📝 Memproses siswa ID: ${siswa_id} (${data.nama_siswa})`);
+            console.log(`📝 Memproses siswa ID: ${siswa_id} (${item.nis})`);
 
             // 1. Simpan Nilai Ujian
-            if (data.nilai_ujian && Array.isArray(data.nilai_ujian)) {
-                for (const nilai of data.nilai_ujian) {
-                    const mapel = await db.MataPelajaran.findOne({ 
-                        where: { 
-                            kode_mapel: nilai.kode_mapel,
-                            jenis: 'Ujian' // <-- Tambahkan filter ini
-                        } 
+            if (item.nilaiUjian && Array.isArray(item.nilaiUjian)) {
+                for (const nilai of item.nilaiUjian) {
+                    // 🔥 PERBAIKAN: Cari berdasarkan nama_mapel
+                    const mapel = await db.MataPelajaran.findOne({
+                        where: {
+                            nama_mapel: nilai.nama_mapel,
+                            jenis: 'Ujian'
+                        }
                     });
                     if (mapel) {
+                        // PERUBAHAN: langsung gunakan nilai tunggal dari draft
+                        const finalNilai = nilai.nilai !== undefined ? (isNaN(parseFloat(nilai.nilai)) ? null : parseFloat(nilai.nilai)) : null;
                         await db.NilaiUjian.upsert({
                             siswa_id,
                             mapel_id: mapel.id,
-                            pengetahuan_angka: nilai.pengetahuan_angka,
-                            keterampilan_angka: nilai.keterampilan_angka,
-                            semester,
-                            tahun_ajaran,
+                            nilai: finalNilai,
+                            semester: item.semester,
+                            tahun_ajaran_id,
                             mapel_text: mapel.nama_mapel
                         }, { transaction });
-                        console.log(`✅ Nilai ujian: ${mapel.nama_mapel}`);
                     }
                 }
             }
             
             // 2. Simpan Nilai Hafalan
-            if (data.nilai_hafalan && Array.isArray(data.nilai_hafalan)) {
-                for (const hafalan of data.nilai_hafalan) {
-                    const mapel = await db.MataPelajaran.findOne({ 
-                        where: { 
-                            kode_mapel: hafalan.kode_mapel,
-                            jenis: 'Hafalan' // <-- Tambahkan filter ini
-                        } 
+            if (item.nilaiHafalan && Array.isArray(item.nilaiHafalan)) {
+                for (const hafalan of item.nilaiHafalan) {
+                    // 🔥 PERBAIKAN: Cari berdasarkan nama_mapel
+                    const mapel = await db.MataPelajaran.findOne({
+                        where: {
+                            nama_mapel: hafalan.nama_mapel,
+                            jenis: 'Hafalan'
+                        }
                     });
                     if (mapel) {
                         await db.NilaiHafalan.upsert({
                             siswa_id,
                             mapel_id: mapel.id,
-                            nilai_angka: hafalan.nilai_angka,
-                            semester,
-                            tahun_ajaran,
+                            nilai: hafalan.nilai_angka,
+                            semester: item.semester,
+                            tahun_ajaran_id,
                             mapel_text: mapel.nama_mapel
                         }, { transaction });
-                        console.log(`✅ Nilai hafalan: ${mapel.nama_mapel}`);
                     }
                 }
             }
 
-            // 3. 🔥 PERBAIKAN UTAMA: Simpan Kehadiran Detail per Kegiatan
-            if (data.kehadiran_detail && Array.isArray(data.kehadiran_detail)) {
-                console.log(`📋 Menyimpan ${data.kehadiran_detail.length} kegiatan kehadiran...`);
-                
-                for (const kegiatan of data.kehadiran_detail) {
+            // 3. Simpan Kehadiran Detail
+            if (item.kehadiran_detail && Array.isArray(item.kehadiran_detail)) {
+                for (const kegiatan of item.kehadiran_detail) {
+                    const indikator = await db.IndikatorKehadiran.findOne({ where: { nama_kegiatan: kegiatan.kegiatan } });
                     await db.Kehadiran.upsert({
                         siswa_id,
-                        kegiatan: kegiatan.kegiatan,
+                        indikatorkehadirans_id: indikator ? indikator.id : null,
+                        indikator_text: kegiatan.kegiatan,
                         izin: kegiatan.izin,
                         sakit: kegiatan.sakit,
                         absen: kegiatan.absen,
-                        semester,
-                        tahun_ajaran
+                        semester: item.semester,
+                        tahun_ajaran_id
                     }, { transaction });
-                    
-                    console.log(`✅ Kehadiran: ${kegiatan.kegiatan} (izin:${kegiatan.izin}, sakit:${kegiatan.sakit}, absen:${kegiatan.absen})`);
                 }
             }
 
             // 4. Simpan Sikap
-            if (data.sikap && Array.isArray(data.sikap)) {
-                console.log(`📝 Menyimpan ${data.sikap.length} data sikap...`);
-                
-                for (const sikapDetail of data.sikap) {
-                    // Cari indikator di master data
-                    const indikator = await db.IndikatorSikap.findOne({
-                        where: {
-                            jenis_sikap: sikapDetail.jenis_sikap,
-                            indikator: sikapDetail.indikator,
-                            is_active: 1
-                        }
-                    });
-
-                    let final_indikator_sikap_id = null;
-                    const final_indikator_text = sikapDetail.indikator;
-                    
-                    if (indikator) {
-                        final_indikator_sikap_id = indikator.id;
-                        console.log(`✅ Indikator ditemukan di master: ID=${indikator.id}`);
-                    } else {
-                        console.log(`⚠️ Indikator '${sikapDetail.indikator}' tidak ditemukan di master, ID akan diisi NULL.`);
-                    }
-
-                    const finalNilai = (sikapDetail.nilai !== null && sikapDetail.nilai !== undefined && !isNaN(parseFloat(sikapDetail.nilai)))
-                        ? parseFloat(sikapDetail.nilai)
-                        : null;
-
-                    // Cari tahun ajaran ID
-                    const tahunAjaranDb = await db.TahunAjaran.findOne({
-                        where: { 
-                            nama_ajaran: tahun_ajaran, 
-                            semester: semester,
-                            status: 'aktif' 
-                        }
-                    });
-
-                    if (tahunAjaranDb) {
+            if (item.sikap && typeof item.sikap === 'object') {
+                // Simpan detail sikap
+                if(item.sikap.detail && Array.isArray(item.sikap.detail)) {
+                    for (const sikapDetail of item.sikap.detail) {
+                        const indikator = await db.IndikatorSikap.findOne({
+                            where: { indikator: sikapDetail.indikator, is_active: 1 }
+                        });
                         await db.Sikap.upsert({
                             siswa_id,
-                            tahun_ajaran_id: tahunAjaranDb.id,
-                            semester,
-                            indikator_sikap_id: final_indikator_sikap_id,
-                            indikator_text: final_indikator_text,
-                            nilai: sikapDetail.nilai,
-                            deskripsi: sikapDetail.deskripsi
+                            tahun_ajaran_id,
+                            semester: item.semester,
+                            indikator_sikap_id: indikator ? indikator.id : null,
+                            indikator_text: sikapDetail.indikator,
+                            nilai: sikapDetail.nilai
                         }, { transaction });
-                        
-                        console.log(`✅ Sikap disimpan: ${sikapDetail.jenis_sikap} - ${final_indikator_text}`);
-                    } else {
-                        console.log(`❌ TahunAjaran tidak ditemukan: ${tahun_ajaran} semester ${semester}`);
                     }
                 }
-            }
-            if (data.catatan_sikap) {
-                const tahunAjaranDb = await db.TahunAjaran.findOne({
-                    where: { 
-                        nama_ajaran: tahun_ajaran, 
-                        semester: semester,
-                        status: 'aktif' 
-                    }
-                });
-
-                if (tahunAjaranDb) {
-                    await db.Sikap.upsert({
+                // Simpan catatan wali kelas
+                if (item.sikap.catatan_walikelas) {
+                     await db.Sikap.upsert({
                         siswa_id,
-                        tahun_ajaran_id: tahunAjaranDb.id,
-                        semester,
-                        indikator_sikap_id: null,
+                        tahun_ajaran_id,
+                        semester: item.semester,
                         indikator_text: 'Catatan Wali Kelas',
-                        nilai: finalNilai,
-                        deskripsi: data.catatan_sikap
+                        deskripsi: item.sikap.catatan_walikelas
                     }, { transaction });
-                    console.log(`✅ Catatan sikap umum disimpan`);
                 }
             }
         }
         
-        // Hapus draft setelah berhasil
-        await db.DraftNilai.destroy({ 
-            where: { upload_batch_id: batchId }, 
-            transaction 
-        });
-        
         await transaction.commit();
         
-        console.log(`🎉 Berhasil menyimpan semua data untuk batch: ${batchId}`);
+        console.log(`🎉 Berhasil menyimpan semua data valid.`);
         res.status(200).json({ 
-            message: 'Data raport berhasil disimpan dengan kehadiran detail per kegiatan.',
-            processed_count: validDrafts.length
+            message: 'Data raport berhasil disimpan.',
+            processed_count: validatedData.length
         });
 
     } catch (error) {

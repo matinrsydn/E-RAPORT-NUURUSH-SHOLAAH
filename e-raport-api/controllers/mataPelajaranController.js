@@ -1,38 +1,49 @@
-const db_mp = require('../models');
-const MataPelajaran = db_mp.MataPelajaran;
+const db = require('../models');
 
-// DIMODIFIKASI: Ambil data berdasarkan jenis (Ujian/Hafalan)
+// Mengambil semua data master mata pelajaran
 exports.getAllMapel = async (req, res) => {
-    const { jenis } = req.query; // Ambil 'jenis' dari query parameter (?jenis=Ujian)
-    let whereClause = {};
-    if (jenis) {
-        whereClause.jenis = jenis;
-    }
     try {
-        const mapel = await MataPelajaran.findAll({ where: whereClause });
+        // Query sederhana tanpa menyebutkan nama kolom secara spesifik
+        const mapel = await db.MataPelajaran.findAll({ order: [['nama_mapel', 'ASC']] });
         res.json(mapel);
     } catch (error) {
-        res.status(500).json({ message: "Gagal mengambil data", error: error.message });
+        res.status(500).json({ message: "Gagal mengambil data mata pelajaran.", error: error.message });
     }
 };
 
-// DIMODIFIKASI: Pastikan 'jenis' disertakan saat membuat data baru
+// Membuat mata pelajaran baru
 exports.createMapel = async (req, res) => {
     try {
-        // Pastikan frontend mengirimkan 'jenis' di dalam req.body
-        const newMapel = await MataPelajaran.create(req.body);
+        const newMapel = await db.MataPelajaran.create(req.body);
         res.status(201).json(newMapel);
     } catch (error) {
-        res.status(400).json({ message: "Gagal membuat data, pastikan semua field terisi.", error: error.message });
+        res.status(400).json({ message: "Gagal membuat mata pelajaran.", error: error.message });
     }
 };
 
-// Fungsi update dan delete tidak perlu diubah secara signifikan
+// Memperbarui mata pelajaran
 exports.updateMapel = async (req, res) => {
-    await MataPelajaran.update(req.body, { where: { id: req.params.id } });
-    res.json({ message: 'Update successful' });
+    try {
+        const [updated] = await db.MataPelajaran.update(req.body, { where: { id: req.params.id } });
+        if (updated) {
+            const updatedData = await db.MataPelajaran.findByPk(req.params.id);
+            return res.status(200).json(updatedData);
+        }
+        throw new Error('Mata pelajaran tidak ditemukan');
+    } catch (error) {
+        res.status(404).json({ message: 'Mata pelajaran tidak ditemukan.', error: error.message });
+    }
 };
+
+// Menghapus mata pelajaran
 exports.deleteMapel = async (req, res) => {
-    await MataPelajaran.destroy({ where: { id: req.params.id } });
-    res.json({ message: 'Delete successful' });
+    try {
+        // PERHATIAN: Menghapus master mapel akan menghapus entri kurikulum terkait
+        // karena aturan ON DELETE CASCADE di database.
+        const deleted = await db.MataPelajaran.destroy({ where: { id: req.params.id } });
+        if (deleted) return res.status(204).send();
+        throw new Error('Mata pelajaran tidak ditemukan');
+    } catch (error) {
+        res.status(500).json({ message: 'Gagal menghapus mata pelajaran.', error: error.message });
+    }
 };

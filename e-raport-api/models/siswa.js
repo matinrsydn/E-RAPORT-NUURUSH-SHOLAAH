@@ -4,44 +4,18 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Siswa extends Model {
     static associate(models) {
-
-      Siswa.belongsTo(models.Kamar, {
-        foreignKey: 'kamar_id',
-        as: 'infoKamar' // <-- UBAH MENJADI NAMA LAIN
-      });
-      // Relasi ke Kelas
       Siswa.belongsTo(models.Kelas, {
         foreignKey: 'kelas_id',
         as: 'kelas'
       });
-
-      // --- INI BAGIAN YANG HILANG ---
-      // Tambahkan relasi ke WaliKelas di sini
-      Siswa.belongsTo(models.WaliKelas, {
-        foreignKey: 'wali_kelas_id',
-        as: 'wali_kelas'
+      Siswa.belongsTo(models.Kamar, {
+        foreignKey: 'kamar_id',
+        as: 'infoKamar'
       });
-      // -----------------------------
-
-      // Relasi ke tabel nilai dan lainnya
-      Siswa.hasMany(models.NilaiUjian, {
-        foreignKey: 'siswa_id',
-        as: 'NilaiUjians'
-      });
-      Siswa.hasMany(models.NilaiHafalan, {
-        foreignKey: 'siswa_id',
-        as: 'NilaiHafalans'
-      });
-      Siswa.hasMany(models.Sikap, {
-        foreignKey: 'siswa_id',
-        as: 'Sikaps',
-        onDelete: 'CASCADE'
-      });
-      Siswa.hasMany(models.Kehadiran, {
-        foreignKey: 'siswa_id',
-        as: 'Kehadirans',
-        onDelete: 'CASCADE'
-      });
+      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'NilaiUjians' });
+      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswa_id', as: 'NilaiHafalans' });
+      Siswa.hasMany(models.Sikap, { foreignKey: 'siswa_id', as: 'Sikaps', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswa_id', as: 'Kehadirans', onDelete: 'CASCADE' });
     }
   }
   Siswa.init({
@@ -56,22 +30,14 @@ module.exports = (sequelize, DataTypes) => {
     jenis_kelamin: DataTypes.STRING,
     agama: DataTypes.STRING,
     alamat: DataTypes.TEXT,
-    kelas_id: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'Kelas', // Nama tabel, bukan model
-        key: 'id'
-      }
-    },
-    wali_kelas_id: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'WaliKelas', // Nama tabel, bukan model
-        key: 'id'
-      }
-    },
+    kelas_id: DataTypes.INTEGER,
+    kamar_id: DataTypes.INTEGER,
     kamar: DataTypes.STRING,
-    tempat_lahir: DataTypes.STRING,
+    
+    // === TAMBAHKAN BARIS INI ===
+    kota_asal: DataTypes.STRING, 
+    // ===========================
+
     nama_ayah: DataTypes.STRING,
     pekerjaan_ayah: DataTypes.STRING,
     alamat_ayah: DataTypes.TEXT,

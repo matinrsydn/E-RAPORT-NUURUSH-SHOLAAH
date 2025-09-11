@@ -1,58 +1,53 @@
-// e-raport-api/controllers/tahunAjaranController.js
-
 const db = require('../models');
 
+// Mengambil semua data tahun ajaran
 exports.getAll = async (req, res) => {
-    try {
-        const tahunAjaran = await db.TahunAjaran.findAll({
-            order: [['nama_ajaran', 'DESC'], ['semester', 'ASC']]
-        });
-        res.json(tahunAjaran);
-    } catch (error) {
-        console.error('Error get tahun ajaran:', error);
-        res.status(500).json({ message: 'Error mengambil tahun ajaran', error: error.message });
-    }
+  try {
+    const tahunAjarans = await db.TahunAjaran.findAll({
+      order: [['nama_ajaran', 'DESC'], ['semester', 'ASC']]
+    });
+    res.json(tahunAjarans);
+  } catch (error) {
+    res.status(500).json({ message: "Gagal mengambil data tahun ajaran.", error: error.message });
+  }
 };
 
+// Membuat tahun ajaran baru
 exports.create = async (req, res) => {
     try {
+        // Langsung teruskan semua data dari body request
         const newTahunAjaran = await db.TahunAjaran.create(req.body);
         res.status(201).json(newTahunAjaran);
     } catch (error) {
-        console.error('Error create tahun ajaran:', error);
-        res.status(500).json({ message: 'Error membuat tahun ajaran', error: error.message });
+        // Tangani error jika ada, misalnya karena duplikasi
+        res.status(400).json({ message: 'Gagal membuat data. Pastikan kombinasi Tahun Ajaran dan Semester unik.', error: error.message });
     }
 };
 
+// Memperbarui tahun ajaran
 exports.update = async (req, res) => {
     try {
-        const { id } = req.params;
-        const [updated] = await db.TahunAjaran.update(req.body, {
-            where: { id }
-        });
-        if (updated) {
-            const updatedTahunAjaran = await db.TahunAjaran.findByPk(id);
-            res.json(updatedTahunAjaran);
-        } else {
-            res.status(404).json({ message: 'Tahun ajaran tidak ditemukan' });
-        }
+        await db.TahunAjaran.update(req.body, { where: { id: req.params.id } });
+        const updatedData = await db.TahunAjaran.findByPk(req.params.id);
+        res.status(200).json(updatedData);
     } catch (error) {
-        console.error('Error update tahun ajaran:', error);
-        res.status(500).json({ message: 'Error update tahun ajaran', error: error.message });
+        res.status(500).json({ message: 'Gagal memperbarui data.', error: error.message });
     }
 };
 
+// Menghapus tahun ajaran
 exports.delete = async (req, res) => {
+    const tahunAjaranId = req.params.id;
     try {
-        const { id } = req.params;
-        const deleted = await db.TahunAjaran.destroy({ where: { id } });
-        if (deleted) {
-            res.status(204).send();
-        } else {
-            res.status(404).json({ message: 'Tahun ajaran tidak ditemukan' });
+        const kurikulumTerkait = await db.Kurikulum.findOne({ where: { tahun_ajaran_id: tahunAjaranId } });
+        if (kurikulumTerkait) {
+            return res.status(409).json({
+                message: 'Gagal menghapus. Tahun Ajaran ini masih digunakan dalam data Kurikulum.'
+            });
         }
+        await db.TahunAjaran.destroy({ where: { id: tahunAjaranId } });
+        res.status(204).send();
     } catch (error) {
-        console.error('Error delete tahun ajaran:', error);
-        res.status(500).json({ message: 'Error hapus tahun ajaran', error: error.message });
+        res.status(500).json({ message: 'Gagal menghapus data.', error: error.message });
     }
 };

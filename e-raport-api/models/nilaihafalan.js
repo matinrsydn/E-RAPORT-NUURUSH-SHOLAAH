@@ -17,13 +17,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    nilai: {
-      type: DataTypes.DECIMAL(5,2),
-      allowNull: true,
-      validate: {
-        min: 0,
-        max: 100
-      }
+    // Struktur baru untuk nilai hafalan: menyimpan metadata hafalan
+    nama_mapel_hafalan: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    nama_kitab: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    batas: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    predikat: {
+      type: DataTypes.ENUM('Tercapai', 'Tidak Tercapai'),
+      allowNull: true
     },
     semester: {
       type: DataTypes.ENUM('1', '2'),

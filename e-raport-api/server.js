@@ -20,10 +20,10 @@ app.use((req, res, next) => {
 // Middleware untuk menyajikan file statis dari direktori 'uploads'
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Sinkronisasi database
-db.sequelize.sync()
+// Sinkronisasi database (gunakan alter untuk menjaga konsistensi schema dari models)
+db.sequelize.sync({ alter: true })
   .then(() => {
-    console.log("Database tersinkronisasi.");
+    console.log("Database tersinkronisasi (alter: true).");
   })
   .catch((err) => {
     console.log("Gagal sinkronisasi database: " + err.message);
@@ -48,6 +48,10 @@ const draftRoutes = require('./routes/draftRoutes');
 const raportRoutes = require('./routes/raportRoutes');
 const indikatorKehadiranRoutes = require('./routes/indikatorKehadiranRoutes');
 const kamarRoutes = require('./routes/kamarRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const kitabRoutes = require('./routes/kitabRoutes');
+const kurikulumRoutes = require('./routes/kurikulumRoutes');
+const guruRoutes = require('./routes/guruRoutes');
 
 app.use('/api/siswa', siswaRoutes);
 app.use('/api/wali-kelas', waliKelasRoutes);
@@ -60,11 +64,15 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/kelas', kelasRoutes);
 app.use('/api/indikator-sikap', indikatorSikapRoutes);
 app.use('/api/tahun-ajaran', tahunAjaranRoutes);
-app.use('/api/raports', raportRoutes); // <-- Ini sudah benar (raports)
+app.use('/api/raports', raportRoutes); 
 app.use('/api/templates', templateRoutes);
 app.use('/api/draft', draftRoutes);
 app.use('/api/indikator-kehadiran', indikatorKehadiranRoutes);
 app.use('/api/kamar', kamarRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/kitab', kitabRoutes);
+app.use('/api/kurikulum', kurikulumRoutes);
+app.use('/api/guru', guruRoutes);
 
 console.log("✓ All routes registered successfully");
 
