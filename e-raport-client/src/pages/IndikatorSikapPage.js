@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import API_BASE from '../api';
 import { Modal, Button, Form, Table, Alert } from 'react-bootstrap';
 
 const ManajemenIndikatorSikapPage = () => {
@@ -16,7 +17,7 @@ const ManajemenIndikatorSikapPage = () => {
     }, []);
 
     const fetchIndikator = async () => {
-        const res = await axios.get('http://localhost:5000/api/indikator-sikap');
+        const res = await axios.get(`${API_BASE}/indikator-sikap`);
         setIndikator(res.data);
     };
 
@@ -42,9 +43,9 @@ const ManajemenIndikatorSikapPage = () => {
         setError(null);
         try {
             if (isEditing) {
-                await axios.put(`http://localhost:5000/api/indikator-sikap/${currentData.id}`, currentData);
+                await axios.put(`${API_BASE}/indikator-sikap/${currentData.id}`, currentData);
             } else {
-                await axios.post('http://localhost:5000/api/indikator-sikap', currentData);
+                await axios.post(`${API_BASE}/indikator-sikap`, currentData);
             }
             fetchIndikator();
             handleClose();
@@ -55,7 +56,7 @@ const ManajemenIndikatorSikapPage = () => {
 
     const handleDelete = async (id) => {
         if (window.confirm('Apakah Anda yakin ingin menghapus indikator ini?')) {
-            await axios.delete(`http://localhost:5000/api/indikator-sikap/${id}`);
+            await axios.delete(`${API_BASE}/indikator-sikap/${id}`);
             fetchIndikator();
         }
     };

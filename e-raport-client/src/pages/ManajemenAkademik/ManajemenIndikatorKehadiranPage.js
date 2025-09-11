@@ -1,24 +1,24 @@
+// File: pages/ManajemenIndikatorKehadiranPage.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Table, Button, Modal, Form, Spinner, Alert } from 'react-bootstrap';
+import { Table, Button, Modal, Form, Spinner, Alert, ButtonGroup } from 'react-bootstrap';
+import API_BASE from '../../api';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { Edit, Trash2, Check, Ban } from 'lucide-react'; // Import ikon
 
 const ManajemenIndikatorKehadiranPage = () => {
     const [indikatorList, setIndikatorList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // State untuk modal (tambah/edit)
     const [showModal, setShowModal] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
     const [namaKegiatan, setNamaKegiatan] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
-    // API Endpoint
-    const API_URL = 'http://localhost:5000/api/indikator-kehadiran';
+    const API_URL = `${API_BASE}/indikator-kehadiran`;
 
-    // Fetch data saat komponen pertama kali dimuat
     useEffect(() => {
         fetchData();
     }, []);
@@ -37,7 +37,6 @@ const ManajemenIndikatorKehadiranPage = () => {
         }
     };
 
-    // --- Fungsi untuk Modal ---
     const handleShowModal = (item = null) => {
         setCurrentItem(item);
         setNamaKegiatan(item ? item.nama_kegiatan : '');
@@ -50,7 +49,6 @@ const ManajemenIndikatorKehadiranPage = () => {
         setNamaKegiatan('');
     };
 
-    // --- Fungsi CRUD ---
     const handleSave = async () => {
         if (!namaKegiatan.trim()) {
             toast.warn('Nama kegiatan tidak boleh kosong.');
@@ -70,7 +68,7 @@ const ManajemenIndikatorKehadiranPage = () => {
                 await axios.post(API_URL, data);
                 toast.success('Indikator baru berhasil ditambahkan!');
             }
-            fetchData(); // Muat ulang data
+            fetchData();
             handleCloseModal();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Gagal menyimpan data.');
@@ -79,17 +77,18 @@ const ManajemenIndikatorKehadiranPage = () => {
         }
     };
 
-    // const handleDelete = async (id) => {
-    //     if (window.confirm('Apakah Anda yakin ingin menghapus indikator ini?')) {
-    //         try {
-    //             await axios.delete(`${API_URL}/${id}`);
-    //             toast.success('Indikator berhasil dihapus.');
-    //             fetchData(); // Muat ulang data
-    //         } catch (err) {
-    //             toast.error(err.response?.data?.message || 'Gagal menghapus data.');
-    //         }
-    //     }
-    // };
+    // --- FUNGSI HAPUS BARU ---
+    const handleDelete = async (id) => {
+        if (window.confirm('Apakah Anda yakin ingin menghapus permanen indikator ini? Aksi ini tidak bisa dibatalkan.')) {
+            try {
+                await axios.delete(`${API_URL}/${id}`);
+                toast.success('Indikator berhasil dihapus.');
+                fetchData();
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Gagal menghapus data.');
+            }
+        }
+    };
 
     const handleDeactivate = async (id) => {
         if (window.confirm('Yakin ingin menonaktifkan indikator ini?')) {
@@ -115,7 +114,6 @@ const ManajemenIndikatorKehadiranPage = () => {
         }
     };
 
-
     return (
         <div>
             <ToastContainer position="top-right" />
@@ -137,39 +135,41 @@ const ManajemenIndikatorKehadiranPage = () => {
                             <th>#</th>
                             <th>Nama Kegiatan</th>
                             <th>Status</th> 
-                            <th style={{ width: '150px' }}>Aksi</th>
+                            <th style={{ width: '250px' }}>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {indikatorList.map((item, index) => (
                             <tr key={item.id}>
-                            <td>{index + 1}</td>
-                            <td>{item.nama_kegiatan}</td>
-                            <td>{item.is_active ? 'Aktif' : 'Nonaktif'}</td>
-                            <td>
-                                {item.is_active ? (
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => handleDeactivate(item.id)}
-                                    className="me-2"
-                                >
-                                    <i className="fas fa-ban"></i> Nonaktifkan
-                                </Button>
-                                ) : (
-                                <Button
-                                    variant="success"
-                                    size="sm"
-                                    onClick={() => handleActivate(item.id)}
-                                    className="me-2"
-                                >
-                                    <i className="fas fa-check"></i> Aktifkan
-                                </Button>
-                                )}
-                            </td>
+                                <td>{index + 1}</td>
+                                <td>{item.nama_kegiatan}</td>
+                                <td>
+                                    <span className={`badge bg-${item.is_active ? 'success' : 'secondary'}`}>
+                                        {item.is_active ? 'Aktif' : 'Nonaktif'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <ButtonGroup>
+                                        <Button variant="info" size="sm" onClick={() => handleShowModal(item)}>
+                                            <Edit size={16} /> Edit
+                                        </Button>
+                                        {item.is_active ? (
+                                            <Button variant="secondary" size="sm" onClick={() => handleDeactivate(item.id)}>
+                                                <Ban size={16} /> Nonaktifkan
+                                            </Button>
+                                        ) : (
+                                            <Button variant="success" size="sm" onClick={() => handleActivate(item.id)}>
+                                                <Check size={16} /> Aktifkan
+                                            </Button>
+                                        )}
+                                        <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>
+                                            <Trash2 size={16} /> Hapus
+                                        </Button>
+                                    </ButtonGroup>
+                                </td>
                             </tr>
                         ))}
-                        </tbody>
+                    </tbody>
                 </Table>
             )}
 

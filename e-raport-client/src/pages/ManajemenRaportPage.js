@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import API_BASE from '../api';
 import { Container, Row, Col, Card, Form, Button, Spinner, Alert, Table } from 'react-bootstrap';
 import { Edit, Save, X, Eye, FileText } from 'lucide-react';
 
@@ -67,8 +68,8 @@ const ManajemenRaportPage = () => {
         const fetchFilters = async () => {
             try {
                 const [tahunRes, kelasRes] = await Promise.all([
-                    axios.get('http://localhost:5000/api/tahun-ajaran'),
-                    axios.get('http://localhost:5000/api/kelas')
+                    axios.get(`${API_BASE}/tahun-ajaran`),
+                    axios.get(`${API_BASE}/kelas`)
                 ]);
                 
                 console.log("DATA TAHUN AJARAN DARI API:", tahunRes.data);
@@ -97,12 +98,12 @@ const ManajemenRaportPage = () => {
         setKelasData(null);
         
         try {
-            // Ambil data kelas beserta siswa-siswanya
-            const kelasResponse = await axios.get(`http://localhost:5000/api/kelas/${selectedKelas}`);
-            const siswaResponse = await axios.get(`http://localhost:5000/api/siswa?kelasId=${selectedKelas}`);
+            // Cukup satu panggilan API untuk mendapatkan semua data
+            const response = await axios.get(`${API_BASE}/kelas/${selectedKelas}`);
             
-            setKelasData(kelasResponse.data);
-            setSiswaList(siswaResponse.data);
+            setKelasData(response.data);
+            // Data siswa sekarang ada di dalam response.data.siswa
+            setSiswaList(response.data.siswa || []); 
             
         } catch (err) {
             setError('Gagal mengambil data kelas dan siswa.');
@@ -125,16 +126,20 @@ const ManajemenRaportPage = () => {
         setSelectedSiswaForDetail(siswa);
 
         try {
-            // Parse tahun ajaran dari dropdown
-            const selectedTahunAjaranData = tahunAjaranList.find(ta => ta.id === selectedTahunAjaran);
+            // 🔥 PERBAIKAN DI SINI: Ubah selectedTahunAjaran menjadi angka saat membandingkan
+            const selectedTahunAjaranData = tahunAjaranList.find(
+                ta => ta.id === parseInt(selectedTahunAjaran, 10)
+            );
+            
             if (!selectedTahunAjaranData) {
+                // Error ini akan muncul jika perbandingan gagal
                 throw new Error("Data tahun ajaran tidak ditemukan.");
             }
 
             const tahunAwal = selectedTahunAjaranData.nama_ajaran.split('/')[0];
             const semester = selectedTahunAjaranData.semester;
 
-            const response = await axios.get(`http://localhost:5000/api/raports/${siswa.id}/${tahunAwal}/${semester}`);
+            const response = await axios.get(`${API_BASE}/raports/${siswa.id}/${tahunAwal}/${semester}`);
             setRaportData(response.data);
             
         } catch (err) {
@@ -147,17 +152,42 @@ const ManajemenRaportPage = () => {
     
     // --- FUNGSI UNTUK MENYIMPAN PERUBAHAN (UPDATE) ---
     const handleSave = async (type, data) => {
+        // Tentukan URL endpoint berdasarkan tipe data
+        let endpoint = '';
+        switch (type) {
+                case 'nilai-ujian':
+                endpoint = `${API_BASE}/raports/nilai-ujian/${data.id}`;
+                break;
+            case 'nilai-hafalan':
+                endpoint = `${API_BASE}/raports/nilai-hafalan/${data.id}`;
+                break;
+            case 'kehadiran':
+                endpoint = `${API_BASE}/raports/kehadiran/${data.id}`; // Asumsi endpoint ini ada
+                break;
+            case 'sikap':
+                endpoint = `${API_BASE}/raports/sikap/${data.id}`; // Endpoint baru
+                break;
+            case 'catatan':
+                endpoint = `${API_BASE}/raports/catatan/${data.id}`; // Endpoint baru
+                break;
+            default:
+                alert('Tipe data tidak dikenal!');
+                return;
+        }
+
         try {
-            await axios.put(`http://localhost:5000/api/raports/${type}/${data.id}`, data);
+            await axios.put(endpoint, data);
             alert('Data berhasil diperbarui!');
             setEditingId(null);
             setEditingType('');
             
+            // Refresh data setelah menyimpan
             if (selectedSiswaForDetail) {
                 await handleViewRaportDetail(selectedSiswaForDetail);
             }
         } catch (err) {
             alert('Gagal memperbarui data.');
+            console.error("Save error:", err);
         }
     };
     
@@ -168,7 +198,7 @@ const ManajemenRaportPage = () => {
         }
         try {
             const { id, sakit, izin, alpha } = raportData.kehadiran;
-            await axios.put(`http://localhost:5000/api/raports/kehadiran/${id}`, { sakit, izin, alpha });
+            await axios.put(`${API_BASE}/raports/kehadiran/${id}`, { sakit, izin, alpha });
             alert('Data kehadiran berhasil diperbarui!');
             
             // Refresh data
@@ -301,7 +331,7 @@ const ManajemenRaportPage = () => {
                                         <td>{siswa.nis}</td>
                                         <td>{siswa.nama}</td>
                                         <td>{siswa.jenis_kelamin}</td>
-                                        <td>{siswa.kamar || '-'}</td>
+                                        <td>{siswa.infoKamar?.nama_kamar || '-'}</td>
                                         <td>
                                             <Button 
                                                 variant="primary" 
@@ -349,15 +379,15 @@ const ManajemenRaportPage = () => {
                                     <Card.Body>
                                         <Table striped bordered hover responsive>
                                             <thead>
-                                                <tr>
-                                                    <th>Mata Pelajaran</th>
-                                                    <th>Pengetahuan</th>
-                                                    <th>Keterampilan</th>
-                                                    <th>Aksi</th>
-                                                </tr>
+                                                        <tr>
+                                                            <th>Mata Pelajaran</th>
+                                                            <th>Nilai</th>
+                                                            <th>Predikat</th>
+                                                            <th>Aksi</th>
+                                                        </tr>
                                             </thead>
                                             <tbody>
-                                                {raportData.nilaiUjian.map(item =>
+                                                {raportData.nilaiUjian.map(item => (
                                                     editingId === item.id && editingType === 'ujian' ? (
                                                         <EditableRow
                                                             key={item.id}
@@ -366,15 +396,15 @@ const ManajemenRaportPage = () => {
                                                             onCancel={() => setEditingId(null)}
                                                             fields={[
                                                                 { key: 'nama_mapel', editable: false },
-                                                                { key: 'pengetahuan_angka', editable: true, type: 'number' },
-                                                                { key: 'keterampilan_angka', editable: true, type: 'number' },
+                                                                { key: 'nilai', editable: true, type: 'number' },
+                                                                { key: 'predikat', editable: false },
                                                             ]}
                                                         />
                                                     ) : (
                                                         <tr key={item.id}>
                                                             <td>{item.nama_mapel}</td>
-                                                            <td>{item.pengetahuan_angka || '-'}</td>
-                                                            <td>{item.keterampilan_angka || '-'}</td>
+                                                            <td>{item.nilai || '-'}</td>
+                                                            <td>{item.predikat || '-'}</td>
                                                             <td>
                                                                 <Button 
                                                                     variant="outline-primary" 
@@ -386,7 +416,7 @@ const ManajemenRaportPage = () => {
                                                             </td>
                                                         </tr>
                                                     )
-                                                )}
+                                                ))}
                                             </tbody>
                                         </Table>
                                     </Card.Body>
@@ -444,84 +474,124 @@ const ManajemenRaportPage = () => {
 
                         {/* --- Kolom Kanan: Kehadiran & Sikap --- */}
                         <Col lg={4}>
-                            {/* Kehadiran */}
-                            <Card className="mb-4">
-                                <Card.Header><Card.Title>Kehadiran</Card.Title></Card.Header>
-                                <Card.Body>
-                                    {raportData.kehadiran ? (
-                                        <>
-                                            <Form.Group as={Row} className="mb-3">
-                                                <Form.Label column sm="4">Sakit</Form.Label>
-                                                <Col sm="8">
-                                                    <Form.Control 
-                                                        type="number" 
-                                                        name="sakit" 
-                                                        value={raportData.kehadiran.sakit || 0} 
-                                                        onChange={handleKehadiranChange} 
+                        {/* Kehadiran Detail */}
+                        <Card className="mb-4">
+                            <Card.Header><Card.Title>Kehadiran per Kegiatan</Card.Title></Card.Header>
+                            <Card.Body>
+                                {raportData.kehadiranDetail && raportData.kehadiranDetail.length > 0 ? (
+                                    <Table striped bordered hover responsive size="sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Kegiatan</th>
+                                                <th>S</th>
+                                                <th>I</th>
+                                                <th>A</th>
+                                                <th>Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {raportData.kehadiranDetail.map(item =>
+                                                editingId === item.id && editingType === 'kehadiran' ? (
+                                                    <EditableRow
+                                                        key={item.id}
+                                                        item={item}
+                                                        onSave={(data) => handleSave('kehadiran', data)}
+                                                        onCancel={() => setEditingId(null)}
+                                                        fields={[
+                                                            { key: 'kegiatan', editable: false },
+                                                            { key: 'sakit', editable: true, type: 'number' },
+                                                            { key: 'izin', editable: true, type: 'number' },
+                                                            { key: 'absen', editable: true, type: 'number' },
+                                                        ]}
                                                     />
-                                                </Col>
-                                            </Form.Group>
-                                            <Form.Group as={Row} className="mb-3">
-                                                <Form.Label column sm="4">Izin</Form.Label>
-                                                <Col sm="8">
-                                                    <Form.Control 
-                                                        type="number" 
-                                                        name="izin" 
-                                                        value={raportData.kehadiran.izin || 0} 
-                                                        onChange={handleKehadiranChange} 
+                                                ) : (
+                                                    <tr key={item.id}>
+                                                        <td>{item.kegiatan}</td>
+                                                        <td>{item.sakit}</td>
+                                                        <td>{item.izin}</td>
+                                                        <td>{item.absen}</td>
+                                                        <td>
+                                                            <Button variant="outline-primary" size="sm" onClick={() => { setEditingId(item.id); setEditingType('kehadiran'); }}>
+                                                                <Edit size={16} />
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            )}
+                                        </tbody>
+                                    </Table>
+                                ) : <p className="text-muted">Data kehadiran belum tersedia.</p>}
+                            </Card.Body>
+                        </Card>
+
+                        {/* Sikap Detail */}
+                        <Card className="mb-4">
+                            <Card.Header><Card.Title>Penilaian Sikap</Card.Title></Card.Header>
+                            <Card.Body>
+                                {raportData.sikapDetail && raportData.sikapDetail.length > 0 ? (
+                                    <Table striped bordered hover responsive size="sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Indikator</th>
+                                                <th>Nilai</th>
+                                                <th>Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {raportData.sikapDetail.map(item =>
+                                                editingId === item.id && editingType === 'sikap' ? (
+                                                    <EditableRow
+                                                        key={item.id}
+                                                        item={item}
+                                                        onSave={(data) => handleSave('sikap', data)}
+                                                        onCancel={() => setEditingId(null)}
+                                                        fields={[
+                                                            { key: 'indikator', editable: false },
+                                                            { key: 'nilai', editable: true, type: 'number' },
+                                                        ]}
                                                     />
-                                                </Col>
-                                            </Form.Group>
-                                            <Form.Group as={Row} className="mb-3">
-                                                <Form.Label column sm="4">Alpha</Form.Label>
-                                                <Col sm="8">
-                                                    <Form.Control 
-                                                        type="number" 
-                                                        name="alpha" 
-                                                        value={raportData.kehadiran.alpha || raportData.kehadiran.absen || 0} 
-                                                        onChange={handleKehadiranChange} 
-                                                    />
-                                                </Col>
-                                            </Form.Group>
-                                            <Button className="w-100" onClick={handleSaveKehadiran}>
-                                                Simpan Perubahan Kehadiran
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <p className="text-muted">Data kehadiran belum tersedia.</p>
-                                    )}
-                                </Card.Body>
-                            </Card>
-                            
-                            {/* Sikap */}
-                            <Card>
-                                <Card.Header><Card.Title>Sikap & Catatan</Card.Title></Card.Header>
-                                <Card.Body>
-                                    {Object.keys(groupedSikap).length > 0 ? (
-                                        Object.keys(groupedSikap).map(jenisSikap => (
-                                            <div key={jenisSikap} className="mb-3">
-                                                <h6 className="text-capitalize"><strong>Sikap {jenisSikap}</strong></h6>
-                                                <ul className="list-unstyled ps-3">
-                                                    {groupedSikap[jenisSikap].indicators.map((item, index) => (
-                                                        <li key={index}>
-                                                            {item.indikator}: <span className="badge bg-secondary">{item.angka}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                                <p className="mb-0 mt-2">
-                                                    <strong>Catatan:</strong> 
-                                                    <br/>
-                                                    <em>{groupedSikap[jenisSikap].deskripsi}</em>
-                                                </p>
-                                                {Object.keys(groupedSikap).length > 1 && <hr/>}
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p className="text-muted">Data sikap dan catatan belum tersedia.</p>
-                                    )}
-                                </Card.Body>
-                            </Card>
-                        </Col>
+                                                ) : (
+                                                    <tr key={item.id}>
+                                                        <td>{item.indikator}</td>
+                                                        <td>{item.nilai}</td>
+                                                        <td>
+                                                            <Button variant="outline-primary" size="sm" onClick={() => { setEditingId(item.id); setEditingType('sikap'); }}>
+                                                                <Edit size={16} />
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            )}
+                                        </tbody>
+                                    </Table>
+                                ) : <p className="text-muted">Data penilaian sikap belum tersedia.</p>}
+                            </Card.Body>
+                        </Card>
+                        
+                        {/* Catatan Wali Kelas */}
+                        <Card>
+                            <Card.Header><Card.Title>Catatan Wali Kelas</Card.Title></Card.Header>
+                            <Card.Body>
+                                {raportData.catatanWaliKelas ? (
+                                    <Form.Group>
+                                        <Form.Control
+                                            as="textarea"
+                                            rows={3}
+                                            name="deskripsi"
+                                            value={raportData.catatanWaliKelas.deskripsi || ''}
+                                            onChange={(e) => setRaportData(prev => ({
+                                                ...prev,
+                                                catatanWaliKelas: { ...prev.catatanWaliKelas, deskripsi: e.target.value }
+                                            }))}
+                                        />
+                                    </Form.Group>
+                                ) : <p className="text-muted">Tidak ada catatan.</p>}
+                                <Button className="w-100 mt-2" onClick={() => handleSave('catatan', raportData.catatanWaliKelas)}>
+                                    Simpan Catatan
+                                </Button>
+                            </Card.Body>
+                        </Card>
+                    </Col>
                     </Row>
                 </>
             )}

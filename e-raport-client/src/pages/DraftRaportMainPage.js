@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE from '../api';
 import { Card, Table, Button, Badge, Spinner, Alert } from 'react-bootstrap';
 import { Eye, Trash2 } from 'lucide-react';
 
@@ -16,7 +17,7 @@ const DraftRaportMainPage = () => {
 
     const fetchDraftBatches = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/draft/batches');
+        const response = await axios.get(`${API_BASE}/draft/batches`);
             setDraftBatches(response.data);
         } catch (err) {
             setError('Gagal memuat data draft batches.');
@@ -33,7 +34,7 @@ const DraftRaportMainPage = () => {
     const handleDeleteBatch = async (batchId) => {
         if (window.confirm('Apakah Anda yakin ingin menghapus batch ini?')) {
             try {
-                await axios.delete(`http://localhost:5000/api/draft/batch/${batchId}`);
+                await axios.delete(`${API_BASE}/draft/batch/${batchId}`);
                 fetchDraftBatches(); // Refresh data
             } catch (err) {
                 alert('Gagal menghapus batch: ' + err.response?.data?.message);

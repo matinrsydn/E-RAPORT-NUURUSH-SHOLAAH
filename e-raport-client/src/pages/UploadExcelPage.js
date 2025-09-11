@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import API_BASE from '../api';
 
-const API_URL = 'http://localhost:5000/api/excel';
+const API_URL = `${API_BASE}/excel`;
 
 function UploadExcelPage() {
     const [file, setFile] = useState(null);
@@ -56,7 +57,7 @@ function UploadExcelPage() {
             <div className="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-md">
                 <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-700">
                     <h3 className="font-bold">Petunjuk</h3>
-                    <p className="text-sm">Pastikan file Excel Anda memiliki kolom dengan header: <code className="bg-gray-200 p-1 rounded">nis</code>, <code className="bg-gray-200 p-1 rounded">kode_mapel</code>, <code className="bg-gray-200 p-1 rounded">pengetahuan_angka</code>, <code className="bg-gray-200 p-1 rounded">keterampilan_angka</code>, <code className="bg-gray-200 p-1 rounded">semester</code>, dan <code className="bg-gray-200 p-1 rounded">tahun_ajaran</code>.</p>
+                    <p className="text-sm">Pastikan file Excel Anda memiliki kolom dengan header: <code className="bg-gray-200 p-1 rounded">nis</code>, <code className="bg-gray-200 p-1 rounded">kode_mapel</code>, <code className="bg-gray-200 p-1 rounded">nilai</code>, <code className="bg-gray-200 p-1 rounded">semester</code>, dan <code className="bg-gray-200 p-1 rounded">tahun_ajaran</code>.</p>
                 </div>
 
                 {message && <div className="mb-4 text-center p-3 bg-green-100 text-green-800 rounded-md">{message}</div>}

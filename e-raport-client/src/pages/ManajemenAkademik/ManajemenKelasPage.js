@@ -1,135 +1,210 @@
+// src/pages/ManajemenKelasPage.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Modal, Button, Form, Table, Alert, Spinner } from 'react-bootstrap';
+import API_BASE from '../../api';
 
 const ManajemenKelasPage = () => {
+    // State untuk data utama dan UI
     const [kelas, setKelas] = useState([]);
-    const [waliKelasOptions, setWaliKelasOptions] = useState([]);
-    const [formData, setFormData] = useState({ nama_kelas: '', kapasitas: '', wali_kelas_id: '' });
-    const [isEditing, setIsEditing] = useState(false);
-    const [currentId, setCurrentId] = useState(null);
-
-    // Konfigurasi URL API
-    const API_URL = 'http://localhost:5000/api/kelas';
-    const WALI_KELAS_API_URL = 'http://localhost:5000/api/wali-kelas';
+    // Mengganti nama state agar lebih jelas dan menunjuk ke data Guru
+    const [guruOptions, setGuruOptions] = useState([]); 
     
-    // Mengambil data saat komponen dimuat
+    // State untuk Modal dan Form
+    const [show, setShow] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentKelas, setCurrentKelas] = useState({ id: null, nama_kelas: '', kapasitas: '', wali_kelas_id: '' });
+
+    // State untuk feedback pengguna
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    // URL API
+    const API_URL = `${API_BASE}/kelas`;
+    const GURU_API_URL = `${API_BASE}/guru`;
+
+    // Mengambil data saat komponen pertama kali dimuat
     useEffect(() => {
-        fetchKelas();
-        fetchWaliKelas();
+        const fetchData = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                // Mengambil data kelas dan guru secara bersamaan untuk efisiensi
+                const [resKelas, resGuru] = await Promise.all([
+                    axios.get(API_URL),
+                    axios.get(GURU_API_URL)
+                ]);
+
+                setKelas(resKelas.data);
+
+                // --- SOLUSI UNTUK DUPLICATE KEY ---
+                // Saring data duplikat berdasarkan ID sebelum disimpan ke state
+                const uniqueGurus = Array.from(new Map(resGuru.data.map(guru => [guru.id, guru])).values());
+                setGuruOptions(uniqueGurus);
+                // ------------------------------------
+
+            } catch (err) {
+                setError("Gagal memuat data awal. Pastikan server berjalan.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
-    // Fungsi untuk mengambil data kelas dari server
+    // Fungsi untuk me-refresh data kelas saja (setelah save/delete)
     const fetchKelas = async () => {
         try {
-            const response = await axios.get(API_URL);
-            setKelas(response.data);
-        } catch (error) {
-            console.error("Error fetching kelas:", error);
+            const res = await axios.get(API_URL);
+            setKelas(res.data);
+        } catch (err) {
+            console.error("Gagal refresh data kelas:", err);
+            setError("Gagal menyegarkan data kelas.");
         }
     };
 
-    // Fungsi untuk mengambil data wali kelas (untuk dropdown)
-    const fetchWaliKelas = async () => {
+    // Handler untuk menutup modal
+    const handleClose = () => {
+        setShow(false);
+        setCurrentKelas({ id: null, nama_kelas: '', kapasitas: '', wali_kelas_id: '' });
+    };
+
+    // Handler untuk menampilkan modal
+    const handleShow = (kelasItem = null) => {
+        setError(null);
+        setIsEditing(!!kelasItem);
+        setCurrentKelas(kelasItem 
+            ? { ...kelasItem, wali_kelas_id: kelasItem.wali_kelas_id || '' } 
+            : { nama_kelas: '', kapasitas: '', wali_kelas_id: '' }
+        );
+        setShow(true);
+    };
+
+    // Handler untuk perubahan pada input form
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setCurrentKelas(prev => ({ ...prev, [name]: value }));
+    };
+
+    // Handler untuk menyimpan data
+    const handleSave = async () => {
+        if (!currentKelas.nama_kelas || !currentKelas.kapasitas) {
+            setError("Nama kelas dan kapasitas harus diisi.");
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        const dataToSave = { ...currentKelas, wali_kelas_id: currentKelas.wali_kelas_id || null };
+
         try {
-            const response = await axios.get(WALI_KELAS_API_URL);
-
-            // filter supaya wali kelas unik berdasarkan id
-            const uniqueWaliKelas = response.data.filter(
-            (wk, index, self) => index === self.findIndex(t => t.id === wk.id)
-            );
-
-            setWaliKelasOptions(uniqueWaliKelas);
-        } catch (error) {
-            console.error("Error fetching wali kelas:", error);
+            if (isEditing) {
+                await axios.put(`${API_URL}/${dataToSave.id}`, dataToSave);
+            } else {
+                await axios.post(API_URL, dataToSave);
+            }
+            await fetchKelas();
+            handleClose();
+        } catch (err) {
+            setError(err.response?.data?.message || "Gagal menyimpan data.");
+        } finally {
+            setLoading(false);
         }
     };
 
-
-    // Menangani perubahan input pada form
-    const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    // Menangani submit form (tambah atau update)
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (isEditing) {
-            await axios.put(`${API_URL}/${currentId}`, formData);
-        } else {
-            await axios.post(API_URL, formData);
-        }
-        fetchKelas(); // Muat ulang data setelah submit
-        resetForm();
-    };
-
-    // Menyiapkan form untuk mode edit
-    const handleEdit = (data) => {
-        setFormData({ nama_kelas: data.nama_kelas, kapasitas: data.kapasitas, wali_kelas_id: data.wali_kelas_id || '' });
-        setIsEditing(true);
-        setCurrentId(data.id);
-    };
-
-    // Menghapus data kelas
+    // Handler untuk menghapus data
     const handleDelete = async (id) => {
-        if (window.confirm('Apakah Anda yakin ingin menghapus kelas ini?')) {
-            await axios.delete(`${API_URL}/${id}`);
-            fetchKelas();
+        if (window.confirm('Anda yakin ingin menghapus kelas ini?')) {
+            setLoading(true);
+            setError(null);
+            try {
+                await axios.delete(`${API_URL}/${id}`);
+                await fetchKelas();
+            } catch (err) {
+                setError(err.response?.data?.message || "Gagal menghapus data kelas.");
+            } finally {
+                setLoading(false);
+            }
         }
-    };
-    
-    // Mereset form ke kondisi awal
-    const resetForm = () => {
-        setFormData({ nama_kelas: '', kapasitas: '', wali_kelas_id: '' });
-        setIsEditing(false);
-        setCurrentId(null);
     };
 
     return (
-        <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">Manajemen Kelas</h1>
-            
-            {/* Form untuk Tambah/Edit Kelas */}
-            <form onSubmit={handleSubmit} className="mb-6 p-4 border rounded shadow-md bg-white">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input type="text" name="nama_kelas" value={formData.nama_kelas} onChange={handleInputChange} placeholder="Nama Kelas" className="p-2 border rounded" required />
-                    <input type="number" name="kapasitas" value={formData.kapasitas} onChange={handleInputChange} placeholder="Kapasitas" className="p-2 border rounded" required />
-                    <select name="wali_kelas_id" value={formData.wali_kelas_id} onChange={handleInputChange} className="p-2 border rounded">
-                        <option value="">Pilih Wali Kelas</option>
-                        {waliKelasOptions.map((wk, index) => 
-                        <option key={`${wk.id}-${index}`} value={wk.id}>{wk.nama}</option>
-                        )}
-                    </select>
-                </div>
-                <div className="mt-4">
-                    <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded mr-2 hover:bg-blue-600">{isEditing ? 'Update' : 'Tambah Kelas'}</button>
-                    {isEditing && <button type="button" onClick={resetForm} className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Batal</button>}
-                </div>
-            </form>
+        <div className="container mt-4">
+            <h2>Manajemen Kelas</h2>
+            {error && <Alert variant="danger" onClose={() => setError(null)} dismissible>{error}</Alert>}
+            <Button variant="primary" className="mb-3" onClick={() => handleShow()}>
+                Tambah Kelas
+            </Button>
 
-            {/* Tabel untuk Menampilkan Data Kelas */}
-            <table className="min-w-full bg-white border">
-                <thead className="bg-gray-200">
-                    <tr>
-                        <th className="py-2 px-4 border-b">Nama Kelas</th>
-                        <th className="py-2 px-4 border-b">Kapasitas</th>
-                        <th className="py-2 px-4 border-b">Wali Kelas</th>
-                        <th className="py-2 px-4 border-b">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {kelas.map(k => (
-                        <tr key={k.id}>
-                            <td className="py-2 px-4 border-b text-center">{k.nama_kelas}</td>
-                            <td className="py-2 px-4 border-b text-center">{k.kapasitas}</td>
-                            <td className="py-2 px-4 border-b text-center">{k.walikelas?.nama || 'N/A'}</td>
-                            <td className="py-2 px-4 border-b text-center">
-                                <button onClick={() => handleEdit(k)} className="bg-yellow-500 text-white px-2 py-1 rounded mr-2 hover:bg-yellow-600">Edit</button>
-                                <button onClick={() => handleDelete(k.id)} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Hapus</button>
-                            </td>
+            {loading ? (
+                <div className="text-center"><Spinner animation="border" /></div>
+            ) : (
+                <Table striped bordered hover responsive>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Nama Kelas</th>
+                            <th>Kapasitas</th>
+                            <th>Wali Kelas</th>
+                            <th>Jumlah Siswa</th>
+                            <th>Aksi</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {kelas.map((item, index) => (
+                            <tr key={item.id}>
+                                <td>{index + 1}</td>
+                                <td>{item.nama_kelas}</td>
+                                <td>{item.kapasitas}</td>
+                                <td>{item.walikelas?.nama || <span className="text-muted">- Belum Ada -</span>}</td>
+                                <td>{item.siswa?.length || 0}</td>
+                                <td>
+                                    <Button variant="info" size="sm" className="me-1" onClick={() => handleShow(item)}>Edit</Button>
+                                    <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>Hapus</Button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            )}
+
+            <Modal show={show} onHide={handleClose}>
+                <Modal.Header closeButton>
+                    <Modal.Title>{isEditing ? 'Edit Kelas' : 'Tambah Kelas'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Nama Kelas</Form.Label>
+                            <Form.Control type="text" name="nama_kelas" value={currentKelas.nama_kelas} onChange={handleChange} required />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Kapasitas</Form.Label>
+                            <Form.Control type="number" name="kapasitas" value={currentKelas.kapasitas} onChange={handleChange} required />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Wali Kelas</Form.Label>
+                            <Form.Select name="wali_kelas_id" value={currentKelas.wali_kelas_id} onChange={handleChange}>
+                                <option value="">-- Tidak Ada Wali Kelas --</option>
+                                {guruOptions.map(guru => {
+                                    const isAlreadyWali = guru.kelas_asuhan && guru.kelas_asuhan.id !== currentKelas.id;
+                                    return (
+                                        <option key={guru.id} value={guru.id} disabled={isAlreadyWali}>
+                                            {guru.nama} {isAlreadyWali ? `(Wali ${guru.kelas_asuhan.nama_kelas})` : ''}
+                                        </option>
+                                    );
+                                })}
+                            </Form.Select>
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleClose}>Batal</Button>
+                    <Button variant="primary" onClick={handleSave} disabled={loading}>
+                        {loading ? 'Menyimpan...' : 'Simpan'}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

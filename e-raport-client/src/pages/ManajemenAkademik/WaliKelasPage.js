@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Modal, Button, Form, Table, Alert } from 'react-bootstrap';
+import API_BASE from '../../api';
 
 const WaliKelasPage = () => {
     const [waliKelas, setWaliKelas] = useState([]);
@@ -11,8 +12,8 @@ const WaliKelasPage = () => {
     const initialState = { nama: '', nip: '' };
     const [currentData, setCurrentData] = useState(initialState);
 
-    // REVISI: Pastikan URL API benar -> '/api/wali-kelas'
-    const API_URL = 'http://localhost:5000/api/wali-kelas';
+    // Use dynamic API base
+    const API_URL = `${API_BASE}/wali-kelas`;
 
     useEffect(() => {
         fetchWaliKelas();
@@ -61,15 +62,24 @@ const WaliKelasPage = () => {
     };
 
     const handleDelete = async (id) => {
+        setError(null); // Bersihkan pesan error lama
         if (window.confirm('Apakah Anda yakin ingin menghapus data wali kelas ini?')) {
             try {
                 await axios.delete(`${API_URL}/${id}`);
                 fetchWaliKelas();
             } catch (err) {
                 console.error("Gagal menghapus data:", err);
+                // Cek jika ada respons dari server dan ambil pesannya
+                if (err.response && err.response.data && err.response.data.message) {
+                    setError(err.response.data.message);
+                } else {
+                    // Jika error-nya bukan dari server (misal, jaringan putus)
+                    setError("Terjadi kesalahan saat mencoba menghapus data.");
+                }
             }
         }
     };
+
 
     return (
         <div className="container mt-4">
@@ -77,6 +87,11 @@ const WaliKelasPage = () => {
             <Button variant="primary" className="mb-3" onClick={() => handleShow(null)}>
                 Tambah Wali Kelas
             </Button>
+            {error && (
+                <Alert variant="danger" onClose={() => setError(null)} dismissible>
+                    {error}
+                </Alert>
+            )}
             <Table striped bordered hover responsive>
                 <thead>
                     <tr>
@@ -109,7 +124,7 @@ const WaliKelasPage = () => {
                 <Modal.Title>{isEditing ? 'Edit Wali Kelas' : 'Tambah Wali Kelas'}</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                {error && <Alert variant="danger">{error}</Alert>}
+                {/* Kita pindahkan alert error ke luar modal agar lebih terlihat */}
                 <Form>
                 <Form.Group className="mb-3">
                     <Form.Label>Nama Wali Kelas</Form.Label>
@@ -120,8 +135,6 @@ const WaliKelasPage = () => {
                     onChange={handleChange}
                     />
                 </Form.Group>
-
-                {/* Tambahkan field NIP di sini */}
                 <Form.Group className="mb-3">
                     <Form.Label>NIP</Form.Label>
                     <Form.Control

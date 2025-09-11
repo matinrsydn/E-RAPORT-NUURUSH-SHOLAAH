@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE from '../api';
 import { Table, Button, Alert, Spinner, Badge } from 'react-bootstrap';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -18,7 +19,7 @@ const ValidasiRaportPage = () => {
     useEffect(() => {
         const fetchDraftData = async () => {
             try {
-                const response = await axios.get(`http://localhost:5000/api/draft/${batchId}`);
+                const response = await axios.get(`${API_BASE}/draft/${batchId}`);
                 setDraftData(response.data);
             } catch (err) {
                 setError('Gagal memuat data draft.');
@@ -79,7 +80,7 @@ const ValidasiRaportPage = () => {
                     return result;
                 });
 
-            const response = await axios.post(`http://localhost:5000/api/raports/save-validated`, {
+            const response = await axios.post(`${API_BASE}/raports/save-validated`, {
                 validatedData: validDataToSend
             });
             
@@ -135,7 +136,8 @@ const ValidasiRaportPage = () => {
                         <th>Status</th>
                         <th>NIS</th>
                         <th>Kode Mapel</th>
-                        <th>Nilai P/K</th>
+                        <th>Nilai</th>
+                        <th>Predikat</th>
                         <th>Kesalahan</th>
                         <th>Aksi</th>
                     </tr>
@@ -151,8 +153,9 @@ const ValidasiRaportPage = () => {
                                 }
                             </td>
                             <td>{item.data.nis}</td>
-                            <td>{item.data.nilai_ujian?.map(n => n.kode_mapel).join(', ')}</td>
-                            <td>{item.data.nilai_ujian?.map(n => `${n.pengetahuan_angka}/${n.keterampilan_angka}`).join('; ')}</td>
+                            <td>{item.data.nilai_ujian?.map(n => n.nama_mapel).join(', ')}</td>
+                            <td>{item.data.nilai_ujian?.map(n => n.nilai).join('; ')}</td>
+                            <td>{item.data.nilai_ujian?.map(n => n.predikat || '-').join('; ')}</td>
                             <td>{item.validation_errors?.join(', ')}</td>
                             <td>
                                 <Button size="sm" variant="info" onClick={() => handlePreview(item)} disabled={!item.is_valid}>

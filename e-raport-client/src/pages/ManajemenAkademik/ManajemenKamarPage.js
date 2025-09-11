@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Modal, Button, Form, Table, Alert, Spinner, Row, Col } from 'react-bootstrap';
+import API_BASE from '../../api';
 
 const ManajemenKamarPage = () => {
     const [kamars, setKamars] = useState([]);
@@ -14,7 +15,7 @@ const ManajemenKamarPage = () => {
     const fetchKamars = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('http://localhost:5000/api/kamar');
+            const res = await axios.get(`${API_BASE}/kamar`);
             setKamars(res.data);
         } catch (err) {
             setError("Gagal memuat data kamar.");
@@ -52,10 +53,10 @@ const ManajemenKamarPage = () => {
         }
         setLoading(true);
         try {
-            if (isEditing) {
-                await axios.put(`http://localhost:5000/api/kamar/${currentKamar.id}`, currentKamar);
+                if (isEditing) {
+                await axios.put(`${API_BASE}/kamar/${currentKamar.id}`, currentKamar);
             } else {
-                await axios.post('http://localhost:5000/api/kamar', currentKamar);
+                await axios.post(`${API_BASE}/kamar`, currentKamar);
             }
             fetchKamars();
             handleClose();
@@ -70,7 +71,7 @@ const ManajemenKamarPage = () => {
         if (window.confirm('Yakin ingin menghapus kamar ini?')) {
             setLoading(true);
             try {
-                await axios.delete(`http://localhost:5000/api/kamar/${id}`);
+                await axios.delete(`${API_BASE}/kamar/${id}`);
                 fetchKamars();
             } catch (err) {
                 setError("Gagal menghapus data.");

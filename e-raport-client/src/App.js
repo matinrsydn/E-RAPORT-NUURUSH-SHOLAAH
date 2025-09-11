@@ -17,6 +17,9 @@ import ValidasiRaportPage from './pages/ValidasiRaportPage';
 import DraftRaportPage from './pages/DraftRaportMainPage';
 import ManajemenRaportPage from './pages/ManajemenRaportPage';
 import ManajemenIndikatorKehadiranPage from './pages/ManajemenAkademik/ManajemenIndikatorKehadiranPage'; 
+import ManajemenTemplatePage from './pages/ManajemenTemplatePage';
+import ManajemenGuruPage from './pages/ManajemenGuruPage';
+import PromosiKelasPage from './pages/PromosiKelasPage';
 
 
 
@@ -35,6 +38,7 @@ function App() {
             {/* --- SESUAIKAN SEMUA RUTE MASTER DATA DI SINI --- */}
             <Route path="/manajemen-akademik/tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
             <Route path="/manajemen-akademik/wali-kelas" element={<ManajemenWaliKelasPage />} />
+            <Route path="/manajemen-akademik/promosi-kelas" element={<PromosiKelasPage />} />
             <Route path="/manajemen-akademik/kelas" element={<ManajemenKelasPage />} />
             <Route path="/manajemen-akademik/kamar" element={<ManajemenKamarPage />} />
             <Route path="/manajemen-akademik/mata-pelajaran" element={<ManajemenMapelPage />} />
@@ -42,6 +46,9 @@ function App() {
             <Route path="/manajemen-akademik/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
             <Route path="/manajemen-raport" element={<ManajemenRaportPage />} />
             <Route path="/manajemen-akademik/indikator-kehadiran" element={<ManajemenIndikatorKehadiranPage />} />
+            <Route path="/manajemen-template" element={<ManajemenTemplatePage />} />
+            <Route path="/manajemen-guru" element={<ManajemenGuruPage />} />
+
             {/* Rute untuk validasi dan draft raport (ini sudah benar) */}
             <Route path="/validasi-raport/:batchId" element={<ValidasiRaportPage />} />
             <Route path="/draft-raport" element={<DraftRaportPage />} /> 

@@ -1,104 +1,198 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Modal, Button, Form, Table, Alert, Card, Spinner } from 'react-bootstrap';
+import API_BASE from '../../api';
 
 const ManajemenIndikatorSikapPage = () => {
     const [indikator, setIndikator] = useState([]);
-    const [formData, setFormData] = useState({ jenis_sikap: 'spiritual', indikator: '' });
+    const [show, setShow] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [currentId, setCurrentId] = useState(null);
+    
+    // State untuk error di dalam modal
+    const [modalError, setModalError] = useState(null);
+    
+    // State untuk loading dan error di halaman utama
+    const [loading, setLoading] = useState(true);
+    const [pageError, setPageError] = useState(null);
 
-    const API_URL = 'http://localhost:5000/api/indikator-sikap';
+    const initialState = { jenis_sikap: 'spiritual', indikator: '' };
+    const [currentData, setCurrentData] = useState(initialState);
 
     useEffect(() => {
         fetchIndikator();
     }, []);
 
-    // Mengambil data indikator dari server
     const fetchIndikator = async () => {
-        const response = await axios.get(API_URL);
-        setIndikator(response.data);
-    };
-
-    // Menangani perubahan input pada form
-    const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    // Menangani submit form (tambah atau update)
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (isEditing) {
-            await axios.put(`${API_URL}/${currentId}`, formData);
-        } else {
-            await axios.post(API_URL, formData);
+        setLoading(true);
+        setPageError(null);
+        try {
+            const res = await axios.get(`${API_BASE}/indikator-sikap`);
+            setIndikator(res.data);
+        } catch (err) {
+            setPageError("Gagal memuat data. Silakan coba lagi nanti.");
+            console.error(err);
+        } finally {
+            setLoading(false);
         }
-        fetchIndikator();
-        resetForm();
     };
 
-    // Menyiapkan form untuk mode edit
-    const handleEdit = (data) => {
-        setFormData({ jenis_sikap: data.jenis_sikap, indikator: data.indikator });
-        setIsEditing(true);
-        setCurrentId(data.id);
+    const handleClose = () => {
+        setShow(false);
+        setModalError(null);
+        setCurrentData(initialState);
+        setIsEditing(false);
     };
 
-    // Menghapus data indikator
+    const handleShow = (data = null) => {
+        setModalError(null);
+        if (data) {
+            setIsEditing(true);
+            setCurrentData(data);
+        } else {
+            setIsEditing(false);
+            setCurrentData(initialState);
+        }
+        setShow(true);
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setCurrentData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSave = async () => {
+        if (!currentData.indikator.trim()) {
+            setModalError("Field indikator tidak boleh kosong.");
+            return;
+        }
+        setModalError(null);
+
+        try {
+                if (isEditing) {
+                await axios.put(`${API_BASE}/indikator-sikap/${currentData.id}`, currentData);
+            } else {
+                await axios.post(`${API_BASE}/indikator-sikap`, currentData);
+            }
+            fetchIndikator();
+            handleClose();
+        } catch (err) {
+            setModalError("Gagal menyimpan data. Pastikan semua field terisi dengan benar.");
+            console.error(err);
+        }
+    };
+
     const handleDelete = async (id) => {
         if (window.confirm('Apakah Anda yakin ingin menghapus indikator ini?')) {
-            await axios.delete(`${API_URL}/${id}`);
-            fetchIndikator();
+            try {
+                await axios.delete(`${API_BASE}/indikator-sikap/${id}`);
+                fetchIndikator();
+            } catch (err) {
+                // Bisa ditambahkan notifikasi error jika diperlukan
+                console.error("Gagal menghapus data:", err);
+            }
         }
     };
 
-    // Mereset form ke kondisi awal
-    const resetForm = () => {
-        setFormData({ jenis_sikap: 'spiritual', indikator: '' });
-        setIsEditing(false);
-        setCurrentId(null);
-    };
-
-    return (
-        <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">Manajemen Indikator Sikap</h1>
-            
-            {/* Form untuk Tambah/Edit Indikator */}
-            <form onSubmit={handleSubmit} className="mb-6 p-4 border rounded shadow-md bg-white">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <select name="jenis_sikap" value={formData.jenis_sikap} onChange={handleInputChange} className="p-2 border rounded">
-                        <option value="spiritual">Spiritual</option>
-                        <option value="sosial">Sosial</option>
-                    </select>
-                    <input type="text" name="indikator" value={formData.indikator} onChange={handleInputChange} placeholder="Tulis Indikator di sini" className="p-2 border rounded" required />
+    const renderContent = () => {
+        if (loading) {
+            return (
+                <div className="text-center p-5">
+                    <Spinner animation="border" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </Spinner>
                 </div>
-                <div className="mt-4">
-                    <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded mr-2 hover:bg-blue-600">{isEditing ? 'Update' : 'Tambah Indikator'}</button>
-                    {isEditing && <button type="button" onClick={resetForm} className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Batal</button>}
-                </div>
-            </form>
+            );
+        }
 
-            {/* Tabel untuk Menampilkan Data Indikator */}
-            <table className="min-w-full bg-white border">
-                <thead className="bg-gray-200">
+        if (pageError) {
+            return <Alert variant="danger">{pageError}</Alert>;
+        }
+
+        return (
+            <Table striped bordered hover responsive>
+                <thead className="table-dark">
                     <tr>
-                        <th className="py-2 px-4 border-b">Jenis Sikap</th>
-                        <th className="py-2 px-4 border-b">Indikator</th>
-                        <th className="py-2 px-4 border-b">Aksi</th>
+                        <th style={{ width: '5%' }}>#</th>
+                        <th style={{ width: '20%' }}>Jenis Sikap</th>
+                        <th>Indikator</th>
+                        <th style={{ width: '15%' }} className="text-center">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {indikator.map(item => (
-                        <tr key={item.id}>
-                            <td className="py-2 px-4 border-b capitalize text-center">{item.jenis_sikap}</td>
-                            <td className="py-2 px-4 border-b">{item.indikator}</td>
-                            <td className="py-2 px-4 border-b text-center">
-                                <button onClick={() => handleEdit(item)} className="bg-yellow-500 text-white px-2 py-1 rounded mr-2 hover:bg-yellow-600">Edit</button>
-                                <button onClick={() => handleDelete(item.id)} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Hapus</button>
+                    {indikator.length > 0 ? (
+                        indikator.map((item, index) => (
+                            <tr key={item.id}>
+                                <td className="text-center">{index + 1}</td>
+                                <td className="text-capitalize">{item.jenis_sikap}</td>
+                                <td>{item.indikator}</td>
+                                <td className="text-center">
+                                    <Button variant="info" size="sm" className="me-2" onClick={() => handleShow(item)}>
+                                        Edit
+                                    </Button>
+                                    <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)}>
+                                        Hapus
+                                    </Button>
+                                </td>
+                            </tr>
+                        ))
+                    ) : (
+                        <tr>
+                            <td colSpan="4" className="text-center p-3">
+                                Tidak ada data indikator yang tersedia.
                             </td>
                         </tr>
-                    ))}
+                    )}
                 </tbody>
-            </table>
+            </Table>
+        );
+    };
+
+    return (
+        <div className="container mt-4">
+            <Card>
+                <Card.Header className="d-flex justify-content-between align-items-center">
+                    <h4 className="mb-0">Manajemen Indikator Sikap</h4>
+                    <Button variant="primary" onClick={() => handleShow()}>
+                        Tambah Indikator
+                    </Button>
+                </Card.Header>
+                <Card.Body>
+                    {renderContent()}
+                </Card.Body>
+            </Card>
+
+            <Modal show={show} onHide={handleClose} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>{isEditing ? 'Edit Indikator' : 'Tambah Indikator'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {modalError && <Alert variant="danger">{modalError}</Alert>}
+                    <Form>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Jenis Sikap</Form.Label>
+                            <Form.Select name="jenis_sikap" value={currentData.jenis_sikap} onChange={handleChange}>
+                                <option value="spiritual">Spiritual</option>
+                                <option value="sosial">Sosial</option>
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Indikator</Form.Label>
+                            <Form.Control 
+                                as="textarea" 
+                                rows={4} 
+                                name="indikator" 
+                                value={currentData.indikator} 
+                                onChange={handleChange} 
+                                placeholder="Masukkan deskripsi indikator..."
+                            />
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleClose}>Batal</Button>
+                    <Button variant="primary" onClick={handleSave}>Simpan</Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };
