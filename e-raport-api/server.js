@@ -88,6 +88,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const kitabRoutes = require('./routes/kitabRoutes');
 const kurikulumRoutes = require('./routes/kurikulumRoutes');
 const guruRoutes = require('./routes/guruRoutes');
+const kenaikanRoutes = require('./routes/kenaikanRoutes');
 
 app.use('/api/siswa', siswaRoutes);
 console.log("Registered route: /api/siswa -> ./routes/siswaRoutes.js");
@@ -113,6 +114,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/kitab', kitabRoutes);
 app.use('/api/kurikulum', kurikulumRoutes);
 app.use('/api/guru', guruRoutes);
+app.use('/api/kenaikan', kenaikanRoutes);
 
 console.log("✓ All routes registered successfully");
 console.log("\u2713 All routes registered successfully");

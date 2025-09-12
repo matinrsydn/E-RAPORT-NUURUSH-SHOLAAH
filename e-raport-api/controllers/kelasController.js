@@ -87,11 +87,14 @@ exports.updateKelas = async (req, res) => {
     console.log("DATA DITERIMA DARI FRONTEND (req.body):", req.body);
     console.log("===================================");
 
-    const { nama_kelas, wali_kelas_id } = req.body;
-    const dataToUpdate = {
-      nama_kelas,
-      wali_kelas_id,
-    };
+    const { nama_kelas, wali_kelas_id, next_kelas_id } = req.body;
+    // Build update payload only with provided fields so we don't overwrite unintentionally
+    const dataToUpdate = {};
+    if (typeof nama_kelas !== 'undefined') dataToUpdate.nama_kelas = nama_kelas;
+    if (typeof wali_kelas_id !== 'undefined') dataToUpdate.wali_kelas_id = wali_kelas_id;
+    if (typeof next_kelas_id !== 'undefined') dataToUpdate.next_kelas_id = next_kelas_id;
+
+    console.log(`Attempting to update Kelas id=${req.params.id} with:`, dataToUpdate);
 
     const [updated] = await db.Kelas.update(dataToUpdate, {
       where: { id: req.params.id }
@@ -101,7 +104,17 @@ exports.updateKelas = async (req, res) => {
       const updatedKelas = await db.Kelas.findByPk(req.params.id);
       return res.status(200).json(updatedKelas);
     }
-    return res.status(404).json({ message: "Kelas tidak ditemukan" });
+
+    // If we reach here, no rows were updated. Log current kelas for debugging.
+    const existing = await db.Kelas.findByPk(req.params.id);
+    if (!existing) {
+      console.warn(`Update failed: Kelas id=${req.params.id} not found`);
+      return res.status(404).json({ message: "Kelas tidak ditemukan" });
+    }
+
+    // If the record exists but update returned 0, something else prevented update
+    console.warn(`Update did not modify Kelas id=${req.params.id} (no changes or constraint)`);
+    return res.status(200).json(existing);
   } catch (error) {
     console.error(`SERVER ERROR - PUT /api/kelas/${req.params.id}:`, error);
     res.status(500).json({ message: "Gagal memperbarui kelas", error: error.message });

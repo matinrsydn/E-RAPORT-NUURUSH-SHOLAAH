@@ -19,7 +19,8 @@ module.exports = (sequelize, DataTypes) => {
   Kelas.init({
     nama_kelas: DataTypes.STRING,
     kapasitas: DataTypes.INTEGER,
-    wali_kelas_id: DataTypes.INTEGER
+    wali_kelas_id: DataTypes.INTEGER,
+    next_kelas_id: DataTypes.INTEGER
   }, {
     sequelize,
     modelName: 'Kelas',
