@@ -50,13 +50,9 @@ const Sidebar = () => {
                     <Calendar size={18} /> Tahun Ajaran
                 </ListGroup.Item>
                 
-                {/* ====================================================== */}
-                {/* === PERUBAHAN UTAMA ADA DI SINI === */}
-                {/* ====================================================== */}
                 <ListGroup.Item action as={NavLink} to="/manajemen-guru" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Users size={18} /> Manajemen Guru
                 </ListGroup.Item>
-                {/* ====================================================== */}
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/promosi-kelas" className="d-flex align-items-center gap-3 rounded mb-1">
                     <CheckSquare size={18} /> Kenaikan Kelas
                 </ListGroup.Item>
@@ -69,6 +65,15 @@ const Sidebar = () => {
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/mata-pelajaran" className="d-flex align-items-center gap-3 rounded mb-1">
                     <Book size={18} /> Mata Pelajaran
                 </ListGroup.Item>
+
+                {/* ====================================================== */}
+                {/* === PENAMBAHAN MENU MANAJEMEN KITAB === */}
+                {/* ====================================================== */}
+                <ListGroup.Item action as={NavLink} to="/manajemen-akademik/kitab" className="d-flex align-items-center gap-3 rounded mb-1">
+                    <Book size={18} /> Manajemen Kitab
+                </ListGroup.Item>
+                {/* ====================================================== */}
+
                 <ListGroup.Item action as={NavLink} to="/manajemen-akademik/indikator-sikap" className="d-flex align-items-center gap-3 rounded mb-1">
                     <ClipboardList size={18} /> Indikator Sikap
                 </ListGroup.Item>

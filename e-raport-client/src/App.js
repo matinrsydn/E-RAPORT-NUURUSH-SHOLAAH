@@ -1,61 +1,84 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
-import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import ManajemenSiswaPage from './pages/ManajemenSiswaPage';
-import ManajemenKelasPage from './pages/ManajemenAkademik/ManajemenKelasPage';
-import ManajemenMapelPage from './pages/ManajemenAkademik/MataPelajaranPage';
-import ManajemenKamarPage from './pages/ManajemenAkademik/ManajemenKamarPage';
-import ManajemenWaliKelasPage from './pages/ManajemenAkademik/WaliKelasPage';
-import ManajemenTahunAjaranPage from './pages/ManajemenAkademik/ManajemenTahunAjaranPage';
-import ManajemenIndikatorSikapPage from './pages/ManajemenAkademik/ManajemenIndikatorSikapPage';
-import ManajemenKepalaPesantrenPage from './pages/ManajemenAkademik/KepalaPesantrenPage';
-import InputNilaiPage from './pages/InputNilaiPage';
-import ValidasiRaportPage from './pages/ValidasiRaportPage';
-import DraftRaportPage from './pages/DraftRaportMainPage';
-import ManajemenRaportPage from './pages/ManajemenRaportPage';
-import ManajemenIndikatorKehadiranPage from './pages/ManajemenAkademik/ManajemenIndikatorKehadiranPage'; 
-import ManajemenTemplatePage from './pages/ManajemenTemplatePage';
-import ManajemenGuruPage from './pages/ManajemenGuruPage';
-import PromosiKelasPage from './pages/PromosiKelasPage';
+import ToastProvider from './components/ui/toast'
+import Dashboard from './dashboard/page'
+import ManajemenSiswaPage from './dashboard/manajemen-siswa/page'
+import ManajemenKelasPage from './dashboard/manajemen-kelas/page'
+import ManajemenMapelPage from './dashboard/manajemen-mapel/page'
+import ManajemenKamarPage from './dashboard/manajemen-kamar/page'
+// use the new dashboard-styled pages instead of legacy pages
+import ManajemenTahunAjaranPage from './dashboard/manajemen-tahun-ajaran/page'
+import ManajemenIndikatorSikapPage from './dashboard/manajemen-indikator-sikap/page';
+import ManajemenKepalaPesantrenPage from './dashboard/manajemen-kepala-pesantren/page';
+import ManajemenIndikatorKehadiranPage from './dashboard/manajemen-indikator-kehadiran/page';
+// fall back to legacy page if dashboard-styled page not present
+import ManajemenTemplatePage from './dashboard/manajemen-template/page';
+import ManajemenGuruPage from './dashboard/manajemen-guru/page';
+import InputNilaiDashboardPage from './dashboard/input-nilai/page'
+import ManajemenRaportDashboardPage from './dashboard/manajemen-raport/page'
+// import PromosiKelasPage from './dashboard/PromosiKelasPage';
+import ManajemenMapelDashboardPage from './dashboard/manajemen-mapel/page'
+import ManajemenKelasDashboardPage from './dashboard/manajemen-kelas/page'
+import ManajemenKamarDashboardPage from './dashboard/manajemen-kamar/page'
+import ManajemenKurikulumPage from './dashboard/manajemen-kurikulum/page'
+import ManajemenNilaiUjianPage from './dashboard/manajemen-nilai-ujian/page'
+import ManajemenNilaiHafalanPage from './dashboard/manajemen-nilai-hafalan/page'
+import ManajemenDraftNilaiPage from './dashboard/manajemen-draft-nilai/page'
+import ManajemenKitabPage from './dashboard/manajemen-kitab/page'; 
 
 
 
 
 function App() {
   return (
-    <Router>
-      <div className="d-flex">
-        <Sidebar />
-        <main className="flex-grow-1 p-4" style={{ backgroundColor: '#f8f9fa' }}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/manajemen-siswa" element={<ManajemenSiswaPage />} />
-            <Route path="/input-nilai" element={<InputNilaiPage />} />
+  <ToastProvider>
+  <Router>
+      <Routes>
+        {/* dashboard root */}
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* --- SESUAIKAN SEMUA RUTE MASTER DATA DI SINI --- */}
-            <Route path="/manajemen-akademik/tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
-            <Route path="/manajemen-akademik/wali-kelas" element={<ManajemenWaliKelasPage />} />
-            <Route path="/manajemen-akademik/promosi-kelas" element={<PromosiKelasPage />} />
-            <Route path="/manajemen-akademik/kelas" element={<ManajemenKelasPage />} />
-            <Route path="/manajemen-akademik/kamar" element={<ManajemenKamarPage />} />
-            <Route path="/manajemen-akademik/mata-pelajaran" element={<ManajemenMapelPage />} />
-            <Route path="/manajemen-akademik/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
-            <Route path="/manajemen-akademik/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
-            <Route path="/manajemen-raport" element={<ManajemenRaportPage />} />
-            <Route path="/manajemen-akademik/indikator-kehadiran" element={<ManajemenIndikatorKehadiranPage />} />
-            <Route path="/manajemen-template" element={<ManajemenTemplatePage />} />
-            <Route path="/manajemen-guru" element={<ManajemenGuruPage />} />
+        {/* dashboard pages (new) */}
+        <Route path="/dashboard/manajemen-siswa" element={<ManajemenSiswaPage />} />
+        <Route path="/dashboard/manajemen-guru" element={<ManajemenGuruPage />} />
+        <Route path="/dashboard/manajemen-kelas" element={<ManajemenKelasDashboardPage />} />
+        <Route path="/dashboard/manajemen-kamar" element={<ManajemenKamarDashboardPage />} />
+        <Route path="/dashboard/manajemen-mapel" element={<ManajemenMapelDashboardPage />} />
+        <Route path="/dashboard/manajemen-tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
+        <Route path="/dashboard/input-nilai" element={<InputNilaiDashboardPage />} />
+        <Route path="/dashboard/manajemen-raport" element={<ManajemenRaportDashboardPage />} />
+        <Route path="/dashboard/manajemen-template" element={<ManajemenTemplatePage />} />
+        {/* <Route path="/dashboard/promosi-kelas" element={<PromosiKelasPage />} /> */}
+        <Route path="/dashboard/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
+        <Route path="/dashboard/indikator-kehadiran" element={<ManajemenIndikatorKehadiranPage />} />
+        <Route path="/dashboard/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
+        <Route path="/dashboard/manajemen-kurikulum" element={<ManajemenKurikulumPage />} />
+        <Route path="/dashboard/manajemen-nilai-ujian" element={<ManajemenNilaiUjianPage />} />
+        <Route path="/dashboard/manajemen-nilai-hafalan" element={<ManajemenNilaiHafalanPage />} />
+        <Route path="/dashboard/manajemen-draft-nilai" element={<ManajemenDraftNilaiPage />} />
+        <Route path="/dashboard/manajemen-kitab" element={<ManajemenKitabPage />} />
 
-            {/* Rute untuk validasi dan draft raport (ini sudah benar) */}
-            <Route path="/validasi-raport/:batchId" element={<ValidasiRaportPage />} />
-            <Route path="/draft-raport" element={<DraftRaportPage />} /> 
-          </Routes>
-        </main>
-      </div>
-    </Router>
+        {/* legacy routes: redirect to dashboard equivalents */}
+        <Route path="/manajemen-siswa" element={<Navigate to="/dashboard/manajemen-siswa" replace />} />
+        <Route path="/manajemen-guru" element={<Navigate to="/dashboard/manajemen-guru" replace />} />
+        <Route path="/manajemen-akademik/kelas" element={<Navigate to="/dashboard/manajemen-kelas" replace />} />
+        <Route path="/manajemen-akademik/kamar" element={<Navigate to="/dashboard/manajemen-kamar" replace />} />
+        <Route path="/manajemen-akademik/mata-pelajaran" element={<Navigate to="/dashboard/manajemen-mapel" replace />} />
+        <Route path="/input-nilai" element={<Navigate to="/dashboard/input-nilai" replace />} />
+        <Route path="/manajemen-raport" element={<Navigate to="/dashboard/manajemen-raport" replace />} />
+        <Route path="/manajemen-template" element={<Navigate to="/dashboard/manajemen-template" replace />} />
+        <Route path="/manajemen-akademik/promosi-kelas" element={<Navigate to="/dashboard/promosi-kelas" replace />} />
+        <Route path="/manajemen-akademik/indikator-sikap" element={<Navigate to="/dashboard/indikator-sikap" replace />} />
+        <Route path="/manajemen-akademik/indikator-kehadiran" element={<Navigate to="/dashboard/indikator-kehadiran" replace />} />
+        <Route path="/manajemen-akademik/kepala-pesantren" element={<Navigate to="/dashboard/kepala-pesantren" replace />} />
+
+        {/* keep specific legacy pages (validate/draft) redirect if needed */}
+        <Route path="/validasi-raport/:batchId" element={<Navigate to="/dashboard/manajemen-raport" replace />} />
+        <Route path="/draft-raport" element={<Navigate to="/dashboard/manajemen-draft-nilai" replace />} />
+      </Routes>
+  </Router>
+  </ToastProvider>
   );
 }
 
