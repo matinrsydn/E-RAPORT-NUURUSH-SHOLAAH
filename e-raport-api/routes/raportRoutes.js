@@ -12,6 +12,9 @@ const raportController = require('../controllers/raportController');
 // Rute untuk menyimpan data dari halaman validasi
 router.post('/save-validated', raportController.saveValidatedRaport);
 
+// Rute dasar: kembalikan daftar batch raport (agar frontend yang memanggil GET /api/raport tidak 404)
+router.get('/', raportController.getRaportList);
+
 // RUTE GENERATE RAPORT (DIPINDAHKAN KE ATAS)
 router.get('/generate/nilai/:siswaId/:tahunAjaranId/:semester', raportGeneratorController.generateNilaiReport);
 router.get('/generate/sikap/:siswaId/:tahunAjaranId/:semester', raportGeneratorController.generateSikapReport);

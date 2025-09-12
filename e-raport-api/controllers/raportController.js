@@ -163,6 +163,36 @@ exports.saveValidatedRaport = async (req, res) => {
     }
 };
 
+// --- NEW: Return a list of raport batches / summary for management UI ---
+exports.getRaportList = async (req, res) => {
+    try {
+        // We use DraftNilai entries as the source of batch information
+        const batches = await db.DraftNilai.findAll({
+            attributes: [
+                'upload_batch_id',
+                [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'total_rows'],
+                [db.sequelize.fn('SUM', db.sequelize.literal('CASE WHEN is_valid = true THEN 1 ELSE 0 END')), 'valid_rows'],
+                [db.sequelize.fn('MIN', db.sequelize.col('createdAt')), 'uploaded_at']
+            ],
+            group: ['upload_batch_id'],
+            order: [[db.sequelize.fn('MIN', db.sequelize.col('createdAt')), 'DESC']]
+        });
+
+        // Map to a simple shape expected by frontend
+        const result = batches.map(b => ({
+            id: b.upload_batch_id,
+            total_rows: b.get('total_rows'),
+            valid_rows: b.get('valid_rows'),
+            uploaded_at: b.get('uploaded_at')
+        }));
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('ERROR in getRaportList:', error);
+        res.status(500).json({ message: 'Gagal mengambil daftar raport.', error: error.message });
+    }
+};
+
 
 // ==========================================================================================
 // FUNGSI-FUNGSI LAMA (TETAP DIPERTAHANKAN)

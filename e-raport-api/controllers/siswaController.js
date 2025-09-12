@@ -1,6 +1,18 @@
 // e-raport-api/controllers/siswaController.js
 const db = require('../models');
 
+// Helper: parse a date-like value into a JS Date or return null for empty/invalid
+function parseValidDate(value) {
+    if (value === undefined || value === null || value === '') return null;
+    // If already a Date
+    if (value instanceof Date) {
+        return isNaN(value.getTime()) ? null : value;
+    }
+    // Try to parse string/number
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 // Mengambil SEMUA siswa dengan data kelas dan wali kelas yang benar
 exports.getAllSiswa = async (req, res) => {
     try {
@@ -39,15 +51,29 @@ exports.getAllSiswa = async (req, res) => {
 // Mengambil SATU siswa dengan data yang sama (untuk cetak)
 exports.getSiswaById = async (req, res) => {
     try {
+        console.log(`➡️ Controller getSiswaById called with id=${req.params.id}`);
+        // Mirror the includes used in getAllSiswa to avoid invalid include entries
         const siswa = await db.Siswa.findByPk(req.params.id, {
             include: [
                 {
                     model: db.Kelas,
                     as: 'kelas',
-                    include: [{
-                        model: db.WaliKelas,
-                        as: 'walikelas'
-                    }]
+                    attributes: ['nama_kelas'],
+                    required: false,
+                    include: [
+                        {
+                            model: db.Guru,
+                            as: 'walikelas',
+                            attributes: ['nama'],
+                            required: false,
+                        },
+                    ],
+                },
+                {
+                    model: db.Kamar,
+                    as: 'infoKamar',
+                    attributes: ['nama_kamar'],
+                    required: false,
                 },
             ],
         });
@@ -63,22 +89,48 @@ exports.getSiswaById = async (req, res) => {
 
 exports.createSiswa = async (req, res) => {
     try {
-        const newSiswa = await db.Siswa.create(req.body);
+        // Sanitize payload to avoid passing invalid datetime strings to MySQL
+        const payload = { ...req.body };
+        if ('tanggal_lahir' in payload) {
+            const parsed = parseValidDate(payload.tanggal_lahir);
+            if (payload.tanggal_lahir && !parsed) {
+                return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: `Invalid value: ${payload.tanggal_lahir}` });
+            }
+            payload.tanggal_lahir = parsed; // null or Date
+        }
+
+        const newSiswa = await db.Siswa.create(payload);
         res.status(201).json(newSiswa);
     } catch (error) {
+        console.error('SERVER ERROR - POST /api/siswa:', error);
         res.status(400).json({ message: "Gagal membuat siswa", error: error.message });
     }
 };
 
 exports.updateSiswa = async (req, res) => {
     try {
-        const [updated] = await db.Siswa.update(req.body, { where: { id: req.params.id } });
+        // Sanitize payload to avoid database datetime errors
+        const payload = { ...req.body };
+        if ('tanggal_lahir' in payload) {
+            const parsed = parseValidDate(payload.tanggal_lahir);
+            if (payload.tanggal_lahir && !parsed) {
+                return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: `Invalid value: ${payload.tanggal_lahir}` });
+            }
+            payload.tanggal_lahir = parsed; // null or Date
+        }
+
+        const [updated] = await db.Siswa.update(payload, { where: { id: req.params.id } });
         if (updated) {
             const updatedSiswa = await db.Siswa.findByPk(req.params.id);
             return res.status(200).json(updatedSiswa);
         }
         throw new Error('Siswa tidak ditemukan');
     } catch (error) {
+        console.error(`SERVER ERROR - PUT /api/siswa/${req.params.id}:`, error);
+        // If it's a validation/DB error, respond 400, otherwise 404 when not found
+        if (error.message && /datetime|Invalid date|Incorrect datetime/i.test(error.message)) {
+            return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: error.message });
+        }
         res.status(404).json({ message: "Siswa tidak ditemukan", error: error.message });
     }
 };

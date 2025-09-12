@@ -1,5 +1,6 @@
 'use strict';
 const { Model } = require('sequelize');
+
 module.exports = (sequelize, DataTypes) => {
   class NilaiHafalan extends Model {
     static associate(models) {
@@ -17,34 +18,25 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    // Struktur baru untuk nilai hafalan: menyimpan metadata hafalan
-    nama_mapel_hafalan: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    nama_kitab: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    batas: {
+    tahun_ajaran_id: {
       type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    semester: {
+      type: DataTypes.ENUM('1', '2'),
+      allowNull: false
+    },
+    nilai: {
+      type: DataTypes.DECIMAL(5, 2),
       allowNull: true
     },
     predikat: {
       type: DataTypes.ENUM('Tercapai', 'Tidak Tercapai'),
       allowNull: true
     },
-    semester: {
-      type: DataTypes.ENUM('1', '2'),
-      allowNull: false
-    },
-    tahun_ajaran_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false
-    },
     mapel_text: {
       type: DataTypes.STRING,
-      allowNull: true // Bisa null jika diperlukan
+      allowNull: true
     }
   }, {
     sequelize,
@@ -59,3 +51,4 @@ module.exports = (sequelize, DataTypes) => {
   });
   return NilaiHafalan;
 };
+

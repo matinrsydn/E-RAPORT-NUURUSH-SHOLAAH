@@ -6,7 +6,29 @@ const db = require('./models');
 const app = express();
 
 // Middleware
-app.use(cors());
+// Log incoming Origin header to help debug CORS issues from browser requests
+app.use((req, res, next) => {
+  if (req.headers && req.headers.origin) {
+    console.log('➡️ Incoming Origin:', req.headers.origin);
+  }
+  next();
+});
+
+// Safer CORS: allowlist and function check to avoid malformed input
+// Add http://localhost:3001 so the frontend running on that origin can access the API
+const allowedOrigins = ['http://localhost:3002', 'http://localhost:3001', 'http://localhost:3000'];
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like curl, mobile apps)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    console.log('⛔ CORS blocked for origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -21,13 +43,27 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Sinkronisasi database (gunakan alter untuk menjaga konsistensi schema dari models)
-db.sequelize.sync({ alter: true })
+// Use authenticate() at startup instead of sync({ alter: true }) to avoid
+// running potentially destructive or large ALTER operations automatically
+// (which on some MySQL setups can fail with "Too many keys specified").
+// This still verifies DB connectivity without modifying schema.
+db.sequelize.authenticate()
   .then(() => {
-    console.log("Database tersinkronisasi (alter: true).");
+    console.log('Database terkoneksi (authenticate).');
   })
   .catch((err) => {
-    console.log("Gagal sinkronisasi database: " + err.message);
+    console.log('Gagal koneksi database: ' + (err && err.message ? err.message : err));
+    // don't throw; allow server to start so routes can be debugged even when
+    // schema sync fails locally. Developers should fix migrations separately.
   });
+
+// log unhandled errors so the process doesn't silently exit during debugging
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err && err.stack ? err.stack : err);
+});
 
 console.log("=== LOADING & REGISTERING ROUTES ===");
 
@@ -54,6 +90,7 @@ const kurikulumRoutes = require('./routes/kurikulumRoutes');
 const guruRoutes = require('./routes/guruRoutes');
 
 app.use('/api/siswa', siswaRoutes);
+console.log("Registered route: /api/siswa -> ./routes/siswaRoutes.js");
 app.use('/api/wali-kelas', waliKelasRoutes);
 app.use('/api/kepala-pesantren', kepalaPesantrenRoutes);
 app.use('/api/mata-pelajaran', mataPelajaranRoutes);
@@ -64,7 +101,10 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/kelas', kelasRoutes);
 app.use('/api/indikator-sikap', indikatorSikapRoutes);
 app.use('/api/tahun-ajaran', tahunAjaranRoutes);
-app.use('/api/raports', raportRoutes); 
+// Keep existing plural route for backward compatibility
+app.use('/api/raports', raportRoutes);
+// Also register singular '/api/raport' so clients using either form won't get 404s
+app.use('/api/raport', raportRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/draft', draftRoutes);
 app.use('/api/indikator-kehadiran', indikatorKehadiranRoutes);
@@ -75,6 +115,7 @@ app.use('/api/kurikulum', kurikulumRoutes);
 app.use('/api/guru', guruRoutes);
 
 console.log("✓ All routes registered successfully");
+console.log("\u2713 All routes registered successfully");
 
 // Rute dasar
 app.get('/', (req, res) => {

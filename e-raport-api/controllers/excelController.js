@@ -360,7 +360,7 @@ exports.uploadNilai = async (req, res) => {
           // PERUBAHAN: simpan final gabungan ke kolom `nilai`
           nilai: finalNilai,
           semester: row.getCell(7).value,
-          tahun_ajaran: row.getCell(8).value
+          tahun_ajaran: row.getCell(8).value  
         });
         success++;
       }

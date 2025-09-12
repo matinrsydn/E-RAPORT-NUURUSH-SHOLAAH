@@ -17,11 +17,26 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
         for (const nilai of nilaiBatch) {
             // proses hanya jika field nilai diberikan
             if (nilai.nilai !== undefined) {
+                // Resolve tahun_ajaran -> tahun_ajaran_id when needed
+                let tahunAjaranId = null;
+                if (nilai.tahun_ajaran_id) {
+                    tahunAjaranId = nilai.tahun_ajaran_id;
+                } else if (nilai.tahun_ajaran) {
+                    const ta = await TahunAjaran.findOne({ where: { nama_ajaran: nilai.tahun_ajaran, semester: nilai.semester } });
+                    if (ta) tahunAjaranId = ta.id;
+                }
+
+                // If tahunAjaranId could not be resolved, skip this row (or you may want to throw)
+                if (!tahunAjaranId) {
+                    console.warn(`Skipping nilai for siswa_id=${nilai.siswa_id}: tidak bisa menemukan tahun ajaran untuk '${nilai.tahun_ajaran || nilai.tahun_ajaran_id}' semester ${nilai.semester}`);
+                    continue;
+                }
+
                 await NilaiUjian.upsert({
                     siswa_id: nilai.siswa_id,
                     mapel_id: nilai.mapel_id,
                     semester: nilai.semester,
-                    tahun_ajaran: nilai.tahun_ajaran,
+                    tahun_ajaran_id: tahunAjaranId,
                     // Direct store single nilai
                     nilai: nilai.nilai,
                 }, { transaction });
@@ -96,12 +111,21 @@ exports.createNilai = async (req, res) => {
         if (!siswa_id || !mapel_id || !semester || !tahun_ajaran) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
+        // Accept either tahun_ajaran_id (preferred) or tahun_ajaran (string) and resolve to id
+        let tahunAjaranId = null;
+        if (req.body.tahun_ajaran_id) {
+            tahunAjaranId = req.body.tahun_ajaran_id;
+        } else if (tahun_ajaran) {
+            const ta = await TahunAjaran.findOne({ where: { nama_ajaran: String(tahun_ajaran), semester } });
+            if (!ta) return res.status(404).json({ message: `Tahun Ajaran ${tahun_ajaran} semester ${semester} tidak ditemukan.` });
+            tahunAjaranId = ta.id;
+        }
 
         const payload = {
             siswa_id,
             mapel_id,
             semester,
-            tahun_ajaran,
+            tahun_ajaran_id: tahunAjaranId,
             // Direct store single nilai
             nilai: nilai || null
         };
@@ -122,7 +146,9 @@ exports.getAllNilai = async (req, res) => {
                 { model: Siswa, as: 'siswa', attributes: ['nama', 'nis'] },
                 { model: MataPelajaran, as: 'mapel', attributes: ['nama_mapel'] }
             ],
-            order: [['tahun_ajaran', 'DESC'], ['semester', 'DESC']]
+            // Order by foreign key tahun_ajaran_id (model uses that column). If you want to order by readable name,
+            // include TahunAjaran and order by its nama_ajaran instead.
+            order: [['tahun_ajaran_id', 'DESC'], ['semester', 'DESC']]
         });
         res.status(200).json(allNilai);
     } catch (error) {
