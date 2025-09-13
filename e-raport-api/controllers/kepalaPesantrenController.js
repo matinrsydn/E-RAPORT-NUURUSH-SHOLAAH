@@ -8,6 +8,16 @@ const SIGNATURES_DIR = path.join(__dirname, '../uploads/signatures');
 
 exports.getAll = async (req, res) => res.json(await KepalaPesantren.findAll());
 
+exports.getById = async (req, res) => {
+    try {
+        const kp = await KepalaPesantren.findByPk(req.params.id);
+        if (!kp) return res.status(404).json({ message: 'Not found' });
+        res.json(kp);
+    } catch (error) {
+        res.status(500).json({ message: 'Gagal mengambil data.', error: error.message });
+    }
+};
+
 exports.create = async (req, res) => res.status(201).json(await KepalaPesantren.create(req.body));
 
 exports.delete = async (req, res) => {

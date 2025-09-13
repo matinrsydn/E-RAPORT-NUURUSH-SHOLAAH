@@ -14,14 +14,17 @@ const sections: { title: string; items: NavItem[] }[] = [
       { to: "/dashboard/manajemen-kelas", label: "Manajemen Kelas", Icon: Layers },
     ],
   },
-  {
-    title: "Akademik",
-    items: [
-      { to: "/dashboard/input-nilai", label: "Input Nilai", Icon: FileUp },
-      { to: "/dashboard/manajemen-raport", label: "Manajemen Raport", Icon: BookUser },
-      { to: "/dashboard/promosi-kelas", label: "Kenaikan Kelas", Icon: CheckSquare },
-    ],
-  },
+      {
+        title: "Akademik",
+        items: [
+          { to: "/dashboard/input-nilai", label: "Input Nilai", Icon: FileUp },
+          { to: "/dashboard/manajemen-raport", label: "Manajemen Raport", Icon: BookUser },
+          // keep label 'Kenaikan' but route to the Promosi page which is already implemented
+          { to: "/dashboard/promosi-kelas", label: "Kenaikan", Icon: CheckSquare },
+          { to: "/dashboard/manajemen-kehadiran", label: "Manajemen Kehadiran", Icon: ClipboardList },
+          { to: "/dashboard/manajemen-sikap", label: "Manajemen Sikap", Icon: Book },
+        ],
+      },
   {
     title: "Master Data",
     items: [

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import axios from "axios";
 import { Button } from "../../components/ui/button";
 import DashboardLayout from '../../dashboard/layout';
 import FilterSelect from '../../components/FilterSelect';
@@ -29,6 +28,12 @@ import { useToast } from "../../components/ui/toast";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 
 import API_BASE from "../../api";
+import nilaiService from '../../services/nilaiService'
+import siswaService from '../../services/siswaService'
+import mapelService from '../../services/mapelService'
+import kelasService from '../../services/kelasService'
+import tahunAjaranService from '../../services/tahunAjaranService'
+import excelService from '../../services/excelService'
 
 // --- TIPE DATA ---
 interface Siswa {
@@ -94,6 +99,7 @@ export default function InputNilaiPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const { toast } = useToast()
 
@@ -101,21 +107,20 @@ export default function InputNilaiPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [resNilai, resSiswa, resMapel, resKelas, resTahun] =
-        await Promise.all([
-          axios.get(`${API_BASE}/nilai`),
-          axios.get(`${API_BASE}/siswa`),
-          axios.get(`${API_BASE}/mata-pelajaran`),
-          axios.get(`${API_BASE}/kelas`),
-          axios.get(`${API_BASE}/tahun-ajaran`),
-        ]);
+      const [nilaiData, siswaData, mapelData, kelasData, tahunData] = await Promise.all([
+        nilaiService.getAllNilai(),
+        siswaService.getAllSiswa(),
+        mapelService.getAllMapel(),
+        kelasService.getAllKelas(),
+        tahunAjaranService.getAllTahunAjaran(),
+      ])
 
-      setNilaiList(resNilai.data);
+      setNilaiList(nilaiData);
       setOptions({
-        siswa: resSiswa.data,
-        mapel: resMapel.data,
-        kelas: resKelas.data,
-        tahunAjaran: resTahun.data,
+        siswa: siswaData,
+        mapel: mapelData,
+        kelas: kelasData,
+        tahunAjaran: tahunData,
       });
     } catch (error) {
       console.error("Gagal memuat data:", error);
@@ -143,7 +148,7 @@ export default function InputNilaiPage() {
   const handleDelete = async (id: number) => {
     if (window.confirm("Apakah Anda yakin ingin menghapus data nilai ini?")) {
       try {
-        await axios.delete(`${API_BASE}/nilai/${id}`);
+        await nilaiService.deleteNilai(id)
         toast({ title: "Berhasil", description: "Data nilai dihapus" });
         fetchData();
       } catch (error: any) {
@@ -167,10 +172,10 @@ export default function InputNilaiPage() {
       };
 
       if (currentNilai?.id) {
-        await axios.put(`${API_BASE}/nilai/${currentNilai.id}`, payload);
+        await nilaiService.updateNilai(currentNilai.id, payload)
         toast({ title: "Berhasil", description: "Data nilai diperbarui" });
       } else {
-        await axios.post(`${API_BASE}/nilai`, payload);
+        await nilaiService.createNilai(payload)
         toast({ title: "Berhasil", description: "Data nilai ditambahkan" });
       }
       setIsModalOpen(false);
@@ -205,17 +210,8 @@ export default function InputNilaiPage() {
       return;
     }
     try {
-      const res = await axios.get(
-        `${API_BASE}/excel/download-complete-template`,
-        {
-          params: {
-            kelas_id: filters.kelas_id,
-            tahun_ajaran_id: filters.tahun_ajaran_id,
-          },
-          responseType: "blob",
-        }
-      );
-      const blob = new Blob([res.data], {
+      const blobData = await excelService.downloadCompleteTemplate({ kelas_id: filters.kelas_id, tahun_ajaran_id: filters.tahun_ajaran_id })
+      const blob = new Blob([blobData], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = window.URL.createObjectURL(blob);
@@ -248,10 +244,9 @@ export default function InputNilaiPage() {
     fd.append("file", file);
     try {
       setUploading(true);
-      const res = await axios.post(`${API_BASE}/excel/upload-complete-data`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      toast({ title: "Upload selesai", description: res.data?.message || "Selesai" });
+      setUploadProgress(0)
+      const json = await excelService.uploadCompleteData(fd, (percent:number) => setUploadProgress(percent))
+      toast({ title: "Upload selesai", description: json?.message || "Selesai" });
       fetchData();
     } catch (e: any) {
       toast({
@@ -261,6 +256,7 @@ export default function InputNilaiPage() {
       });
     } finally {
       setUploading(false);
+      setTimeout(()=>setUploadProgress(null), 800)
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -283,6 +279,14 @@ export default function InputNilaiPage() {
                 <Button onClick={handleUploadExcel} disabled={uploading}>
                   {uploading ? "Mengunggah..." : "Upload Excel"}
                 </Button>
+                {uploadProgress !== null && (
+                  <div className="w-56">
+                    <div className="h-2 bg-gray-200 rounded overflow-hidden mt-2">
+                      <div className="h-2 bg-blue-500" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-1">{uploadProgress}%</div>
+                  </div>
+                )}
               </div>
             </div>
           </CardHeader>

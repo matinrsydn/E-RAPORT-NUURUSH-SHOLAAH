@@ -144,11 +144,13 @@ exports.getDeskripsiSikapByFilter = async (req, res) => {
             return (total / daftarSikap.length).toFixed(2);
         };
 
-        const rataSpiritual = hitungRataRata(sikapSpiritual);
-        const rataSosial = hitungRataRata(sikapSosial);
+    const rataSpiritual = hitungRataRata(sikapSpiritual);
+    const rataSosial = hitungRataRata(sikapSosial);
 
+    // placeholder for wali kelas notes (if you store/compute it elsewhere, replace this)
+    const catatanWaliKelas = '';
 
-        res.status(200).json({
+    res.status(200).json({
             spiritual: {
                 rata_rata: parseFloat(rataSpiritual),
                 predikat: nilaiSikapKePredikat(rataSpiritual),
@@ -272,12 +274,13 @@ exports.createSikap = async (req, res) => {
 // 2. Mengambil semua data nilai sikap (termasuk nama siswa dan indikator)
 exports.getAllSikap = async (req, res) => {
     try {
+        // order by createdAt to avoid dialect-specific ORDER BY errors
         const allSikap = await Sikap.findAll({
             include: [
                 { model: Siswa, as: 'siswa', attributes: ['nama', 'nis'] },
                 { model: IndikatorSikap, as: 'indikator_sikap' }
             ],
-            order: [['tahun_ajaran', 'DESC'], ['semester', 'DESC']]
+            order: [['createdAt', 'DESC']]
         });
         res.status(200).json(allSikap);
     } catch (error) {

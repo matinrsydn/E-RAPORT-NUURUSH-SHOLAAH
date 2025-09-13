@@ -25,4 +25,31 @@ async function listLogs(req, res) {
   }
 }
 
-module.exports = { promote, listLogs };
+async function promoteAllForTahun(req, res) {
+  // Expect { fromTaId, toTaId, mode, manualMapping }
+  const { fromTaId, toTaId, mode='auto', manualMapping = {}, executedBy = null, note = null } = req.body;
+  const t = await db.sequelize.transaction();
+  try {
+    // Find distinct kelas ids which have history entries for fromTaId
+    const kelasRows = await db.SiswaKelasHistory.findAll({ where: { tahun_ajaran_id: fromTaId }, attributes: [[db.Sequelize.fn('DISTINCT', db.Sequelize.col('kelas_id')), 'kelas_id']], transaction: t });
+    const kelasIds = (kelasRows || []).map(r => r.kelas_id).filter(Boolean);
+
+    // If none found, fallback to promoting across all kelas (could be empty)
+    const targets = kelasIds.length ? kelasIds : (await db.Kelas.findAll({ attributes: ['id'], transaction: t })).map(k=>k.id);
+
+    const results = [];
+    for (const kelasFromId of targets) {
+      const log = await promotionService.promoteStudents({ fromTaId, toTaId, kelasFromId, mode, manualMapping, executedBy, note }, { transaction: t });
+      results.push(log);
+    }
+
+    await t.commit();
+    res.json({ success: true, results });
+  } catch (err) {
+    await t.rollback();
+    console.error('promoteAllForTahun error', err);
+    res.status(500).json({ success: false, message: err.message || 'Gagal menjalankan promosi untuk seluruh tahun' });
+  }
+}
+
+module.exports = { promote, listLogs, promoteAllForTahun };

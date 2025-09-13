@@ -17,7 +17,6 @@ import ManajemenTemplatePage from './dashboard/manajemen-template/page';
 import ManajemenGuruPage from './dashboard/manajemen-guru/page';
 import InputNilaiDashboardPage from './dashboard/input-nilai/page'
 import ManajemenRaportDashboardPage from './dashboard/manajemen-raport/page'
-// import PromosiKelasPage from './dashboard/PromosiKelasPage';
 import ManajemenMapelDashboardPage from './dashboard/manajemen-mapel/page'
 import ManajemenKelasDashboardPage from './dashboard/manajemen-kelas/page'
 import ManajemenKamarDashboardPage from './dashboard/manajemen-kamar/page'
@@ -26,6 +25,10 @@ import ManajemenNilaiUjianPage from './dashboard/manajemen-nilai-ujian/page'
 import ManajemenNilaiHafalanPage from './dashboard/manajemen-nilai-hafalan/page'
 import ManajemenDraftNilaiPage from './dashboard/manajemen-draft-nilai/page'
 import ManajemenKitabPage from './dashboard/manajemen-kitab/page'; 
+import ManajemenKehadiranPage from './dashboard/manajemen-kehadiran/page'
+import ManajemenSikapPage from './dashboard/manajemen-sikap/page'
+import PromosiKelasPage from './dashboard/promosi-kelas/page'
+
 
 
 
@@ -50,14 +53,21 @@ function App() {
         <Route path="/dashboard/manajemen-raport" element={<ManajemenRaportDashboardPage />} />
         <Route path="/dashboard/manajemen-template" element={<ManajemenTemplatePage />} />
         {/* <Route path="/dashboard/promosi-kelas" element={<PromosiKelasPage />} /> */}
-        <Route path="/dashboard/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
+  <Route path="/dashboard/indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
+  {/* compatibility route: some nav links use 'manajemen-indikator-sikap' */}
+  <Route path="/dashboard/manajemen-indikator-sikap" element={<ManajemenIndikatorSikapPage />} />
         <Route path="/dashboard/indikator-kehadiran" element={<ManajemenIndikatorKehadiranPage />} />
         <Route path="/dashboard/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
         <Route path="/dashboard/manajemen-kurikulum" element={<ManajemenKurikulumPage />} />
         <Route path="/dashboard/manajemen-nilai-ujian" element={<ManajemenNilaiUjianPage />} />
         <Route path="/dashboard/manajemen-nilai-hafalan" element={<ManajemenNilaiHafalanPage />} />
         <Route path="/dashboard/manajemen-draft-nilai" element={<ManajemenDraftNilaiPage />} />
-        <Route path="/dashboard/manajemen-kitab" element={<ManajemenKitabPage />} />
+    <Route path="/dashboard/manajemen-kitab" element={<ManajemenKitabPage />} />
+    <Route path="/dashboard/manajemen-kehadiran" element={<ManajemenKehadiranPage />} />
+    <Route path="/dashboard/manajemen-sikap" element={<ManajemenSikapPage />} />
+    <Route path="/dashboard/promosi-kelas" element={<PromosiKelasPage />} />
+  {/* compatibility: some links may use the old 'kenaikan-kelas' path */}
+  <Route path="/dashboard/kenaikan-kelas" element={<PromosiKelasPage />} />
 
         {/* legacy routes: redirect to dashboard equivalents */}
         <Route path="/manajemen-siswa" element={<Navigate to="/dashboard/manajemen-siswa" replace />} />
@@ -69,6 +79,7 @@ function App() {
         <Route path="/manajemen-raport" element={<Navigate to="/dashboard/manajemen-raport" replace />} />
         <Route path="/manajemen-template" element={<Navigate to="/dashboard/manajemen-template" replace />} />
         <Route path="/manajemen-akademik/promosi-kelas" element={<Navigate to="/dashboard/promosi-kelas" replace />} />
+  <Route path="/manajemen-akademik/kenaikan-kelas" element={<Navigate to="/dashboard/kenaikan-kelas" replace />} />
         <Route path="/manajemen-akademik/indikator-sikap" element={<Navigate to="/dashboard/indikator-sikap" replace />} />
         <Route path="/manajemen-akademik/indikator-kehadiran" element={<Navigate to="/dashboard/indikator-kehadiran" replace />} />
         <Route path="/manajemen-akademik/kepala-pesantren" element={<Navigate to="/dashboard/kepala-pesantren" replace />} />

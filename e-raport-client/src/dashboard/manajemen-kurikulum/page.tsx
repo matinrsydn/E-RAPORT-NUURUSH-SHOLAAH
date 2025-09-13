@@ -1,11 +1,15 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import DashboardLayout from '../../dashboard/layout';
 import API_BASE from '../../api';
-import axios from 'axios';
+import kurikulumService from '../../services/kurikulumService';
+import tahunAjaranService from '../../services/tahunAjaranService';
+import kelasService from '../../services/kelasService';
+import mapelService from '../../services/mapelService';
+import kitabService from '../../services/kitabService.js';
 import DataTable from '../../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { useForm, Controller } from 'react-hook-form';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -68,18 +72,18 @@ export default function ManajemenKurikulumPage() {
     const run = async () => {
       setLoading(true);
       try {
-        const [resTA, resKelas, resMapel, resKitab] = await Promise.all([
-          axios.get(`${API_BASE}/tahun-ajaran`),
-          axios.get(`${API_BASE}/kelas`),
-          axios.get(`${API_BASE}/mata-pelajaran`),
-          axios.get(`${API_BASE}/kitab`),
+        const [tahunAjaran, kelas, mapel, kitab] = await Promise.all([
+          tahunAjaranService.getAllTahunAjaran(),
+          kelasService.getAllKelas(),
+          mapelService.getAllMapel(),
+          kitabService.getAllKitab(),
         ]);
         if (!mounted) return;
         setMasterData({
-          tahunAjaran: resTA.data,
-          kelas: resKelas.data,
-          mapel: resMapel.data,
-          kitab: resKitab.data,
+          tahunAjaran,
+          kelas,
+          mapel,
+          kitab,
         });
       } catch (error) {
         toastRef.current?.({ title: 'Gagal Memuat Data Master', description: 'Periksa koneksi ke server.', variant: 'destructive' });
@@ -109,9 +113,9 @@ export default function ManajemenKurikulumPage() {
           return;
         }
         const params = { ...filters, semester };
-        const res = await axios.get(`${API_BASE}/kurikulum`, { params });
-        if (!mounted) return;
-        setData(res.data);
+  const rows = await kurikulumService.getAllKurikulum(params);
+  if (!mounted) return;
+  setData(rows);
       } catch (error) {
         toastRef.current?.({ title: 'Gagal Memuat Kurikulum', description: 'Tidak dapat mengambil data kurikulum untuk filter yang dipilih.', variant: 'destructive' });
       } finally {
@@ -127,6 +131,10 @@ export default function ManajemenKurikulumPage() {
   // --- HANDLER UNTUK OPERASI CRUD ---
   const handleAdd = async (vals: FormValues) => {
     if (!filters.tahun_ajaran_id || !filters.kelas_id || !adding.semester) return;
+    if (!vals.kitab_id) {
+      toast({ title: 'Validasi', description: 'Kitab harus dipilih.', variant: 'destructive' });
+      return;
+    }
     try {
       const payload = {
         ...vals,
@@ -134,12 +142,12 @@ export default function ManajemenKurikulumPage() {
         kelas_id: Number(filters.kelas_id),
         semester: adding.semester,
         mapel_id: Number(vals.mapel_id),
-        kitab_id: vals.kitab_id ? Number(vals.kitab_id) : null,
+        kitab_id: Number(vals.kitab_id),
       };
-      await axios.post(`${API_BASE}/kurikulum`, payload);
+      await kurikulumService.createKurikulum(payload);
       toast({ title: 'Berhasil', description: 'Mata pelajaran ditambahkan ke kurikulum.' });
-  setAdding({ open: false, semester: null });
-  setKurikulumReload(n => n + 1);
+      setAdding({ open: false, semester: null });
+      setKurikulumReload(n => n + 1);
     } catch (e: any) {
       toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menambahkan.', variant: 'destructive' });
     }
@@ -147,15 +155,19 @@ export default function ManajemenKurikulumPage() {
 
   const handleEdit = async (vals: FormValues) => {
     if (!editing) return;
+    if (!vals.kitab_id) {
+      toast({ title: 'Validasi', description: 'Kitab harus dipilih.', variant: 'destructive' });
+      return;
+    }
     try {
       const payload = {
-        kitab_id: vals.kitab_id ? Number(vals.kitab_id) : null,
+        kitab_id: Number(vals.kitab_id),
         batas_hafalan: vals.batas_hafalan,
       };
-      await axios.put(`${API_BASE}/kurikulum/${editing.id}`, payload);
+      await kurikulumService.updateKurikulum(editing.id, payload);
       toast({ title: 'Berhasil', description: 'Kurikulum diperbarui.' });
-  setEditing(null);
-  setKurikulumReload(n => n + 1);
+      setEditing(null);
+      setKurikulumReload(n => n + 1);
     } catch (e: any) {
       toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan.', variant: 'destructive' });
     }
@@ -164,7 +176,7 @@ export default function ManajemenKurikulumPage() {
   const handleDelete = async () => {
     if (!deleting) return;
     try {
-      await axios.delete(`${API_BASE}/kurikulum/${deleting.id}`);
+  await kurikulumService.deleteKurikulum(deleting.id);
       toast({ title: 'Berhasil', description: 'Entri kurikulum dihapus.' });
       setData(prev => prev.filter(item => item.id !== deleting.id));
       setDeleting(null);
@@ -243,6 +255,7 @@ export default function ManajemenKurikulumPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Tambah Mapel ke Kurikulum (Semester {adding.semester})</DialogTitle>
+              <DialogDescription>Pilih mata pelajaran dan opsi kitab serta target hafalan untuk ditambahkan ke kurikulum.</DialogDescription>
             </DialogHeader>
             <form onSubmit={form.handleSubmit(handleAdd)} className="grid gap-4 py-4">
               <div className="space-y-2">
@@ -255,13 +268,14 @@ export default function ManajemenKurikulumPage() {
                 )} />
               </div>
                <div className="space-y-2">
-                <Label>Kitab yang Digunakan (Opsional)</Label>
-                <Controller name="kitab_id" control={form.control} render={({ field }) => (
+                <Label>Kitab yang Digunakan</Label>
+                <Controller name="kitab_id" control={form.control} rules={{ required: true }} render={({ field }) => (
                   <Select {...field} onChange={e => field.onChange(e.target.value)}>
                     <SelectItem value="">-- Pilih Kitab --</SelectItem>
                     {masterData.kitab.map(k => <SelectItem key={k.id} value={String(k.id)}>{k.nama_kitab}</SelectItem>)}
                   </Select>
                 )} />
+                <p className="text-sm text-muted-foreground">Pilih kitab yang digunakan untuk mata pelajaran ini. Field wajib diisi.</p>
               </div>
               <div className="space-y-2">
                 <Label>Batas Hafalan (Opsional)</Label>
@@ -280,16 +294,18 @@ export default function ManajemenKurikulumPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Kurikulum: {editing?.mapel.nama_mapel}</DialogTitle>
+              <DialogDescription>Ubah kitab yang digunakan atau target hafalan untuk mata pelajaran ini.</DialogDescription>
             </DialogHeader>
             <form onSubmit={form.handleSubmit(handleEdit)} className="grid gap-4 py-4">
                <div className="space-y-2">
-                <Label>Kitab yang Digunakan (Opsional)</Label>
-                <Controller name="kitab_id" control={form.control} render={({ field }) => (
+                <Label>Kitab yang Digunakan</Label>
+                <Controller name="kitab_id" control={form.control} rules={{ required: true }} render={({ field }) => (
                   <Select {...field} onChange={e => field.onChange(e.target.value)}>
                     <SelectItem value="">-- Pilih Kitab --</SelectItem>
                     {masterData.kitab.map(k => <SelectItem key={k.id} value={String(k.id)}>{k.nama_kitab}</SelectItem>)}
                   </Select>
                 )} />
+                <p className="text-sm text-muted-foreground">Pilih kitab yang digunakan. Wajib diisi.</p>
               </div>
               <div className="space-y-2">
                 <Label>Batas Hafalan (Opsional)</Label>
@@ -308,8 +324,9 @@ export default function ManajemenKurikulumPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Konfirmasi Hapus</DialogTitle>
+              <DialogDescription>Tindakan ini akan menghapus mata pelajaran dari kurikulum untuk tahun ajaran dan kelas yang dipilih.</DialogDescription>
             </DialogHeader>
-            <p>Apakah Anda yakin ingin menghapus mata pelajaran <strong>{deleting?.mapel.nama_mapel}</strong> dari kurikulum ini?</p>
+            <p className="mt-4">Apakah Anda yakin ingin menghapus mata pelajaran <strong>{deleting?.mapel.nama_mapel}</strong> dari kurikulum ini?</p>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
               <Button variant="destructive" onClick={handleDelete}>Hapus</Button>

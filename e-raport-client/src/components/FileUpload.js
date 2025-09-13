@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import API_BASE from '../api'
 
 export default function FileUpload({ onUpload, accept = '.xlsx,.xls' }) {
   const [file, setFile] = useState(null)
@@ -13,7 +14,7 @@ export default function FileUpload({ onUpload, accept = '.xlsx,.xls' }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const res = await fetch('/api/excel/upload-nilai', { method: 'POST', body: fd })
+  const res = await fetch(`${API_BASE.replace(/\/api\/?$/,'')}/api/excel/upload-nilai`, { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Upload gagal')
       if (onUpload) onUpload(data)

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
-import API_BASE from '../../api'
 import axios from 'axios'
+import raportService from '../../services/raportService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog'
@@ -19,12 +19,12 @@ export default function ManajemenRaportDashboardPage(){
   const fetchData = async ()=>{
     setLoading(true)
     try{
-      const res = await axios.get(`${API_BASE}/raport`)
-      setData(res.data)
+      const res = await raportService.getRaportList()
+      setData(res)
     } catch (e) {
       console.error(e);
       if (axios.isAxiosError(e) && e.response) {
-        if (e.response.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/raport', variant: 'destructive' })
+        if (e.response.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/raports', variant: 'destructive' })
         else toast({ title: 'Gagal', description: e.response.data?.message || 'Gagal memuat', variant: 'destructive' })
       } else toast({ title: 'Gagal', description: String(e), variant: 'destructive' })
     } finally {

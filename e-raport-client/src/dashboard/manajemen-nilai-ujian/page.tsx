@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
 import axios from 'axios'
+import nilaiService from '../../services/nilaiService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -31,8 +32,8 @@ export default function ManajemenNilaiUjianPage(){
   const fetchData = async ()=>{
     setLoading(true)
     try{
-      const res = await axios.get(`${API_BASE}/nilai`)
-      setData(res.data.filter((r:any)=> r.jenis === 'Ujian' || String(r.mapel_text || '').toLowerCase().includes('ujian')))
+  const res = await nilaiService.getAllNilai()
+  setData(res.filter((r:any)=> r.jenis === 'Ujian' || String(r.mapel_text || '').toLowerCase().includes('ujian')))
     } catch (e) {
       console.error(e)
       if (axios.isAxiosError(e) && e.response) {
@@ -46,9 +47,9 @@ export default function ManajemenNilaiUjianPage(){
 
   const fetchOptions = async ()=>{
     try{
-      const s = await axios.get(`${API_BASE}/siswa`); setSiswaOptions(s.data)
-      const m = await axios.get(`${API_BASE}/mata-pelajaran`); setMapelOptions(m.data)
-      const t = await axios.get(`${API_BASE}/tahun-ajaran`); setTahunOptions(t.data)
+  const s = await axios.get(`${API_BASE}/siswa`); setSiswaOptions(s.data)
+  const m = await axios.get(`${API_BASE}/mata-pelajaran`); setMapelOptions(m.data)
+  const t = await axios.get(`${API_BASE}/tahun-ajaran`); setTahunOptions(t.data)
     } catch (e) {
       console.warn('fetchOptions error', e);
       if (axios.isAxiosError(e) && e.response) {
@@ -65,8 +66,8 @@ export default function ManajemenNilaiUjianPage(){
       vals.mapel_id = Number(vals.mapel_id);
       vals.tahun_ajaran_id = Number(vals.tahun_ajaran_id);
       const payload = { ...vals, jenis: 'Ujian' };
-      await axios.post(`${API_BASE}/nilai`, payload);
-      await fetchData();
+  await nilaiService.createNilai(payload);
+  await fetchData();
       toast({ title: 'Berhasil', description: 'Ditambahkan' });
       addForm.reset();
       setAddOpen(false);
@@ -86,8 +87,8 @@ export default function ManajemenNilaiUjianPage(){
       vals.mapel_id = Number(vals.mapel_id);
       vals.tahun_ajaran_id = Number(vals.tahun_ajaran_id);
       const payload = { ...vals, jenis: 'Ujian' };
-      await axios.put(`${API_BASE}/nilai/${editing.id}`, payload);
-      await fetchData();
+  await nilaiService.updateNilai(editing.id, payload);
+  await fetchData();
       setEditing(null);
       toast({ title: 'Berhasil', description: 'Perubahan disimpan' });
     } catch (e) {
@@ -102,8 +103,8 @@ export default function ManajemenNilaiUjianPage(){
   const handleDelete = async () => {
     if (!deleting) return;
     try {
-      await axios.delete(`${API_BASE}/nilai/${deleting.id}`);
-      await fetchData();
+  await nilaiService.deleteNilai(deleting.id);
+  await fetchData();
       setDeleting(null);
       toast({ title: 'Berhasil', description: 'Di hapus' });
     } catch (e) {

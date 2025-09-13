@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
-import axios from 'axios'
+import sikapService from '../../services/sikapService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -27,63 +27,59 @@ export default function ManajemenSikapPage(){
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await axios.get(`${API_BASE}/sikap`);
-        setData(res.data);
+        const rows = await sikapService.getAllSikap();
+        setData(rows);
       } catch (e) {
-        console.error(e);
-        if (axios.isAxiosError(e) && e.response) {
-          if (e.response.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
-          else toast({ title: 'Gagal', description: e.response.data?.message || 'Gagal memuat data', variant: 'destructive' })
-        } else toast({ title: 'Gagal', description: String(e), variant: 'destructive' })
+  console.error(e);
+  // @ts-ignore
+        if (e?.response?.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
+        else toast({ title: 'Gagal', description: e?.response?.data?.message || String(e), variant: 'destructive' })
       } finally { setLoading(false); }
     }
   useEffect(()=>{ fetchData() }, [])
 
   const handleAdd = async (vals: { nama:string; keterangan?:string }) => {
     try {
-      await axios.post(`${API_BASE}/sikap`, vals);
+      await sikapService.createSikap(vals);
       await fetchData();
       toast({ title: 'Berhasil', description: 'Ditambahkan' });
       addForm.reset();
       setAddOpen(false);
     } catch (e) {
       console.error(e);
-      if (axios.isAxiosError(e) && e.response) {
-        if (e.response.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
-        else toast({ title: 'Gagal', description: e.response.data?.message || 'Gagal menambahkan', variant: 'destructive' })
-      } else toast({ title: 'Gagal', description: String(e), variant: 'destructive' })
+      // @ts-ignore
+      if (e?.response?.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
+      else toast({ title: 'Gagal', description: e?.response?.data?.message || String(e), variant: 'destructive' })
     }
   }
 
   const handleEdit = async (vals: { nama:string; keterangan?:string }) => {
     if (!editing) return;
     try {
-      await axios.put(`${API_BASE}/sikap/${editing.id}`, vals);
+      await sikapService.updateSikap(editing.id, vals);
       await fetchData();
       setEditing(null);
       toast({ title: 'Berhasil', description: 'Perubahan disimpan' });
     } catch (e) {
       console.error(e);
-      if (axios.isAxiosError(e) && e.response) {
-        if (e.response.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
-        else toast({ title: 'Gagal', description: e.response.data?.message || 'Gagal menyimpan', variant: 'destructive' })
-      } else toast({ title: 'Gagal', description: String(e), variant: 'destructive' })
+      // @ts-ignore
+      if (e?.response?.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
+      else toast({ title: 'Gagal', description: e?.response?.data?.message || String(e), variant: 'destructive' })
     }
   }
 
   const handleDelete = async () => {
     if (!deleting) return;
     try {
-      await axios.delete(`${API_BASE}/sikap/${deleting.id}`);
+      await sikapService.deleteSikap(deleting.id);
       await fetchData();
       setDeleting(null);
       toast({ title: 'Berhasil', description: 'Di hapus' });
     } catch (e) {
       console.error(e);
-      if (axios.isAxiosError(e) && e.response) {
-        if (e.response.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
-        else toast({ title: 'Gagal', description: e.response.data?.message || 'Gagal menghapus', variant: 'destructive' })
-      } else toast({ title: 'Gagal', description: String(e), variant: 'destructive' })
+      // @ts-ignore
+      if (e?.response?.status === 404) toast({ title: 'Endpoint tidak ditemukan', description: '/sikap', variant: 'destructive' })
+      else toast({ title: 'Gagal', description: e?.response?.data?.message || String(e), variant: 'destructive' })
     }
   }
 

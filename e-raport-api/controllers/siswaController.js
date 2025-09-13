@@ -91,6 +91,11 @@ exports.createSiswa = async (req, res) => {
     try {
         // Sanitize payload to avoid passing invalid datetime strings to MySQL
         const payload = { ...req.body };
+        // Enforce tahun_ajaran_id presence
+        const tahunAjaranIdRaw = payload.tahun_ajaran_id || payload.tahunAjaranId || null;
+        if (!tahunAjaranIdRaw) {
+            return res.status(400).json({ message: 'tahun_ajaran_id is required when creating a siswa' });
+        }
         if ('tanggal_lahir' in payload) {
             const parsed = parseValidDate(payload.tanggal_lahir);
             if (payload.tanggal_lahir && !parsed) {
@@ -99,8 +104,33 @@ exports.createSiswa = async (req, res) => {
             payload.tanggal_lahir = parsed; // null or Date
         }
 
+        // Create siswa record
         const newSiswa = await db.Siswa.create(payload);
-        res.status(201).json(newSiswa);
+
+        // Determine kelas for history: prefer payload.kelas_id, then payload.kelas_id_masuk, fall back to created record
+        const kelasForHistory = payload.kelas_id ?? payload.kelas_id_masuk ?? newSiswa.kelas_id;
+
+        // Create history entry; fail the request if configured to do so
+        let createdHistory = null;
+        try {
+            createdHistory = await db.SiswaKelasHistory.create({
+                siswa_id: newSiswa.id,
+                kelas_id: Number(kelasForHistory),
+                tahun_ajaran_id: Number(tahunAjaranIdRaw),
+                note: 'masuk'
+            });
+        } catch (histErr) {
+            console.error('ERROR: failed to create SiswaKelasHistory for new siswa:', histErr);
+            const failOnHist = (process.env.FAIL_ON_HISTORY_ERROR || '').toLowerCase() === 'true';
+            if (failOnHist) {
+                // attempt to rollback the created siswa to avoid partial state
+                try { await db.Siswa.destroy({ where: { id: newSiswa.id } }); } catch(e) { console.error('Failed to rollback siswa after history error', e); }
+                return res.status(500).json({ message: 'Failed to create siswa history', error: histErr.message });
+            }
+            // otherwise, leave createdSiswa and return warning
+        }
+
+        return res.status(201).json({ siswa: newSiswa, history: createdHistory });
     } catch (error) {
         console.error('SERVER ERROR - POST /api/siswa:', error);
         res.status(400).json({ message: "Gagal membuat siswa", error: error.message });

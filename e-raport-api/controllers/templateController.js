@@ -152,7 +152,16 @@ exports.generateRaport = async (req, res) => {
         const kepalaPesantren = await db.KepalaPesantren.findOne();
 
         // 2. Proses dan hitung semua nilai (sesuai logika app.js)
-        const nilaiUjian = siswa.NilaiUjians || [];
+        let nilaiUjian = siswa.NilaiUjians || [];
+        // fallback: if there are no nilai for the requested tahun_ajaran/semester, try fetching any nilai for the siswa
+        if ((nilaiUjian || []).length === 0) {
+            try {
+                const fallback = await db.NilaiUjian.findAll({ where: { siswa_id: siswaId }, include: { model: db.MataPelajaran, as: 'mapel' } });
+                if (fallback && fallback.length > 0) nilaiUjian = fallback;
+            } catch (e) {
+                console.warn('Fallback fetch NilaiUjian failed:', e.message);
+            }
+        }
         const jumlahMapel = nilaiUjian.length > 0 ? nilaiUjian.length : 1;
 
     // Gunakan single `nilai` untuk setiap mapel
@@ -164,11 +173,19 @@ exports.generateRaport = async (req, res) => {
         const peringkatData = { peringkat: 'N/A', total_siswa: 'N/A' };
 
         // Proses Nilai Sikap
-        const semuaSikap = siswa.Sikaps || [];
+        let semuaSikap = siswa.Sikaps || [];
+        if ((semuaSikap || []).length === 0) {
+            try {
+                const fallbackSikap = await db.Sikap.findAll({ where: { siswa_id: siswaId }, include: { model: db.IndikatorSikap, as: 'indikator_sikap' } });
+                if (fallbackSikap && fallbackSikap.length > 0) semuaSikap = fallbackSikap;
+            } catch (e) {
+                console.warn('Fallback fetch Sikap failed:', e.message);
+            }
+        }
         const sikapSpiritualIndicators = semuaSikap.filter(s => s.indikator_sikap?.jenis_sikap === 'Spiritual'); // PERBAIKI FILTER
         const sikapSosialIndicators = semuaSikap.filter(s => s.indikator_sikap?.jenis_sikap === 'Sosial'); // PERBAIKI FILTER
 
-        const rataSikapSpiritual = (sikapSpiritualIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSpiritualIndicators.length || 1)).toFixed(1);
+    const rataSikapSpiritual = (sikapSpiritualIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSpiritualIndicators.length || 1)).toFixed(1);
         const rataSikapSosial = (sikapSosialIndicators.reduce((sum, s) => sum + (s.angka || 0), 0) / (sikapSosialIndicators.length || 1)).toFixed(1);
 
         const nilaiAkhirSikap = ((parseFloat(rataSikapSpiritual) + parseFloat(rataSikapSosial)) / 2).toFixed(1);

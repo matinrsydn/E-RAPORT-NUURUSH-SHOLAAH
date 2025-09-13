@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
-import axios from 'axios'
+import mapelService from '../../services/mapelService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -30,8 +30,8 @@ export default function ManajemenMapelPage(){
   const fetchData = async ()=>{ 
     setLoading(true); 
     try { 
-      const res = await axios.get(`${API_BASE}/mata-pelajaran`); 
-      setData(res.data) 
+      const rows = await mapelService.getAllMapel();
+      setData(rows)
     } catch(e) { 
       console.error(e); 
       toast({ title: 'Gagal', description: 'Gagal memuat mata pelajaran', variant:'destructive' }) 
@@ -69,8 +69,8 @@ export default function ManajemenMapelPage(){
                           <DialogDescription>Isi informasi mata pelajaran</DialogDescription>
                         </DialogHeader>
                         <form onSubmit={addForm.handleSubmit(async (vals)=>{ 
-                          try { 
-                            await axios.post(`${API_BASE}/mata-pelajaran`, vals); 
+                            try { 
+                            await mapelService.createMapel(vals); 
                             await fetchData(); 
                             toast({ title: 'Berhasil', description: 'Mata pelajaran ditambahkan' }); 
                             addForm.reset(); 
@@ -129,8 +129,8 @@ export default function ManajemenMapelPage(){
             <DialogHeader><DialogTitle>Edit Mapel</DialogTitle></DialogHeader>
             <form onSubmit={form.handleSubmit(async (vals)=>{ 
               if(!editing) return; 
-              try { 
-                await axios.put(`${API_BASE}/mata-pelajaran/${editing.id}`, vals); 
+                try { 
+                await mapelService.updateMapel(editing.id, vals); 
                 await fetchData(); 
                 setEditing(null); 
                 toast({ title: 'Berhasil', description: 'Perubahan disimpan' }) 
@@ -181,7 +181,7 @@ export default function ManajemenMapelPage(){
               <Button variant="destructive" onClick={async ()=>{ 
                 if(!deleting) return; 
                 try { 
-                  await axios.delete(`${API_BASE}/mata-pelajaran/${deleting.id}`); 
+                  await mapelService.deleteMapel(deleting.id); 
                   await fetchData(); 
                   setDeleting(null); 
                   toast({ title: 'Berhasil', description: 'Mata pelajaran dihapus' }) 

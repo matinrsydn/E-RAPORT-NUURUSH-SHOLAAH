@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
 import axios from 'axios'
+import kelasService from '../../services/kelasService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -31,8 +32,8 @@ export default function ManajemenKelasPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [res, resGuru] = await Promise.all([axios.get(`${API_BASE}/kelas`), axios.get(`${API_BASE}/guru`)])
-      setData(res.data)
+      const [res, resGuru] = await Promise.all([kelasService.getAllKelas(), axios.get(`${API_BASE}/guru`)])
+      setData(res)
       setGuruOptions(resGuru.data)
     } catch (e) {
       console.error(e)
@@ -74,9 +75,14 @@ export default function ManajemenKelasPage() {
                       </DialogHeader>
                       <form onSubmit={addForm.handleSubmit(async (vals)=>{
                         try {
-                          const payload = { ...vals, kapasitas: vals.kapasitas === '' ? null : Number(vals.kapasitas), wali_kelas_id: vals.wali_kelas_id === '' ? null : (typeof vals.wali_kelas_id === 'string' ? Number(vals.wali_kelas_id) : vals.wali_kelas_id) }
-                          await axios.post(`${API_BASE}/kelas`, payload)
-                          await fetchData(); toast({ title: 'Berhasil', description: 'Kelas ditambahkan' }); addForm.reset(); setAddOpen(false)
+                          // Normalize kapasitas: convert to number or null if invalid/empty
+                          let kapasitasVal = Number((vals as any).kapasitas);
+                          if (isNaN(kapasitasVal)) kapasitasVal = null;
+                          const payload = { ...vals, kapasitas: kapasitasVal, wali_kelas_id: vals.wali_kelas_id === '' ? null : (typeof vals.wali_kelas_id === 'string' ? Number(vals.wali_kelas_id) : vals.wali_kelas_id) }
+                          await kelasService.createKelas(payload)
+                          const updated = await kelasService.getAllKelas()
+                          setData(updated)
+                          toast({ title: 'Berhasil', description: 'Kelas ditambahkan' }); addForm.reset(); setAddOpen(false)
                         } catch (e:any) { console.error(e); toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menambahkan', variant: 'destructive' }) }
                       })} className="grid grid-cols-2 gap-4 py-4">
                         <div className="space-y-2"><Label htmlFor="nama_kelas">Nama Kelas</Label><Input id="nama_kelas" {...addForm.register('nama_kelas',{ required: 'Nama kelas wajib' })} /></div>
@@ -105,9 +111,13 @@ export default function ManajemenKelasPage() {
         <Dialog open={!!editing} onOpenChange={(v)=>{ if(!v) setEditing(null) }}>
           <DialogContent>
             <DialogHeader><DialogTitle>Edit Kelas</DialogTitle><DialogDescription>Perbarui data kelas</DialogDescription></DialogHeader>
-            <form onSubmit={form.handleSubmit(async (vals)=>{ if(!editing) return; try{ const payload = { ...vals, wali_kelas_id: vals.wali_kelas_id === '' ? null : (typeof vals.wali_kelas_id === 'string' ? Number(vals.wali_kelas_id) : vals.wali_kelas_id) }; await axios.put(`${API_BASE}/kelas/${editing.id}`, payload); await fetchData(); setEditing(null); toast({ title: 'Berhasil', description: 'Perubahan disimpan' }); } catch(e:any){ console.error(e); toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan', variant: 'destructive' }) } })} className="grid grid-cols-2 gap-4 py-4">
+      <form onSubmit={form.handleSubmit(async (vals)=>{ if(!editing) return; try{ // Normalize kapasitas for update
+        let kapasitasVal = Number((vals as any).kapasitas);
+        if (isNaN(kapasitasVal)) kapasitasVal = null;
+        const payload = { ...vals, kapasitas: kapasitasVal, wali_kelas_id: vals.wali_kelas_id === '' ? null : (typeof vals.wali_kelas_id === 'string' ? Number(vals.wali_kelas_id) : vals.wali_kelas_id) };
+        await kelasService.updateKelas(editing.id, payload); const updated = await kelasService.getAllKelas(); setData(updated); setEditing(null); toast({ title: 'Berhasil', description: 'Perubahan disimpan' }); } catch(e:any){ console.error(e); toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan', variant: 'destructive' }) } })} className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2"><Label htmlFor="edit-nama_kelas">Nama Kelas</Label><Input id="edit-nama_kelas" {...form.register('nama_kelas',{ required: 'Nama kelas wajib' })} /></div>
-              <div className="space-y-2"><Label htmlFor="edit-kapasitas">Kapasitas</Label><Input id="edit-kapasitas" type="number" {...form.register('kapasitas')} /></div>
+              <div className="space-y-2"><Label htmlFor="edit-kapasitas">Kapasitas</Label><Input id="edit-kapasitas" type="number" {...form.register('kapasitas',{ valueAsNumber: true })} /></div>
               <div className="space-y-2 col-span-2"><Label htmlFor="edit-wali_kelas_id">Wali Kelas</Label>
                 <Controller control={form.control} name="wali_kelas_id" render={({ field }) => (
                   <Select id="edit-wali_kelas_id" value={(field.value ?? '') as any} onChange={e=>field.onChange((e.target as HTMLSelectElement).value)}>
@@ -125,7 +135,7 @@ export default function ManajemenKelasPage() {
           <DialogContent>
             <DialogHeader><DialogTitle>Konfirmasi Hapus</DialogTitle></DialogHeader>
             <div className="py-2">Apakah Anda yakin ingin menghapus kelas <strong>{deleting?.nama_kelas}</strong> ?</div>
-            <DialogFooter className="flex justify-end gap-2"><Button variant="outline" onClick={()=>setDeleting(null)}>Batal</Button><Button variant="destructive" onClick={async ()=>{ if(!deleting) return; try{ await axios.delete(`${API_BASE}/kelas/${deleting.id}`); await fetchData(); setDeleting(null); toast({ title: 'Berhasil', description: 'Data dihapus' }); } catch(e:any){ console.error(e); toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menghapus', variant:'destructive' }) } }}>Hapus</Button></DialogFooter>
+            <DialogFooter className="flex justify-end gap-2"><Button variant="outline" onClick={()=>setDeleting(null)}>Batal</Button><Button variant="destructive" onClick={async ()=>{ if(!deleting) return; try{ await kelasService.deleteKelas(deleting.id); const updated = await kelasService.getAllKelas(); setData(updated); setDeleting(null); toast({ title: 'Berhasil', description: 'Data dihapus' }); } catch(e:any){ console.error(e); toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menghapus', variant:'destructive' }) } }}>Hapus</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

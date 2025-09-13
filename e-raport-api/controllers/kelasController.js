@@ -87,12 +87,21 @@ exports.updateKelas = async (req, res) => {
     console.log("DATA DITERIMA DARI FRONTEND (req.body):", req.body);
     console.log("===================================");
 
-    const { nama_kelas, wali_kelas_id, next_kelas_id } = req.body;
+    const { nama_kelas, wali_kelas_id, next_kelas_id, kapasitas } = req.body;
     // Build update payload only with provided fields so we don't overwrite unintentionally
     const dataToUpdate = {};
     if (typeof nama_kelas !== 'undefined') dataToUpdate.nama_kelas = nama_kelas;
     if (typeof wali_kelas_id !== 'undefined') dataToUpdate.wali_kelas_id = wali_kelas_id;
     if (typeof next_kelas_id !== 'undefined') dataToUpdate.next_kelas_id = next_kelas_id;
+    // Normalize kapasitas when provided: convert to integer or null
+    if (typeof kapasitas !== 'undefined') {
+      let kapas = Number(kapasitas);
+      if (isNaN(kapas)) {
+        dataToUpdate.kapasitas = null;
+      } else {
+        dataToUpdate.kapasitas = Math.trunc(kapas);
+      }
+    }
 
     console.log(`Attempting to update Kelas id=${req.params.id} with:`, dataToUpdate);
 

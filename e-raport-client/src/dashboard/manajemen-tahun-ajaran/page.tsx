@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
 import axios from 'axios'
+import tahunAjaranService from '../../services/tahunAjaranService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -48,8 +49,8 @@ export default function ManajemenTahunAjaranPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API_BASE}/tahun-ajaran`)
-      setData(res.data)
+      const res = await tahunAjaranService.getAllTahunAjaran()
+      setData(res)
     } catch (e) {
       console.error(e)
       toast({ title: 'Gagal', description: 'Gagal memuat data tahun ajaran', variant: 'destructive' })
@@ -104,8 +105,9 @@ export default function ManajemenTahunAjaranPage() {
                               semester: vals.semester,
                               status: vals.status || 'tidak-aktif',
                             }
-                            await axios.post(`${API_BASE}/tahun-ajaran`, payload)
-                            await fetchData()
+                            await tahunAjaranService.createTahunAjaran(payload)
+                            const updated = await tahunAjaranService.getAllTahunAjaran()
+                            setData(updated)
                             toast({ title: 'Berhasil', description: 'Tahun ajaran ditambahkan' })
                             addForm.reset()
                             setAddOpen(false)
@@ -197,8 +199,9 @@ export default function ManajemenTahunAjaranPage() {
                 if (!editing) return
                 try {
                   const payload = { nama_ajaran: vals.nama_ajaran, semester: vals.semester, status: vals.status || 'tidak-aktif' }
-                  await axios.put(`${API_BASE}/tahun-ajaran/${editing.id}`, payload)
-                  await fetchData()
+                  await tahunAjaranService.updateTahunAjaran(editing.id, payload)
+                  const updated = await tahunAjaranService.getAllTahunAjaran()
+                  setData(updated)
                   setEditing(null)
                   toast({ title: 'Berhasil', description: 'Perubahan disimpan' })
                 } catch (e: any) {
@@ -258,8 +261,9 @@ export default function ManajemenTahunAjaranPage() {
               <Button variant="destructive" onClick={async () => {
                 if (!deleting) return
                 try {
-                  await axios.delete(`${API_BASE}/tahun-ajaran/${deleting.id}`)
-                  await fetchData()
+                  await tahunAjaranService.deleteTahunAjaran(deleting.id)
+                  const updated = await tahunAjaranService.getAllTahunAjaran()
+                  setData(updated)
                   setDeleting(null)
                   toast({ title: 'Berhasil', description: 'Tahun ajaran dihapus' })
                 } catch (e: any) {

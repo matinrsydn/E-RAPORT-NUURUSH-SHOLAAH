@@ -6,19 +6,19 @@ async function main(){
     await db.sequelize.authenticate();
     console.log('DB connected');
 
-    // create tahun ajaran
-    const taFrom = await db.TahunAjaran.create({ nama_ajaran: 'TA-From', status: 'tidak-aktif', semester: '1' });
-    const taTo = await db.TahunAjaran.create({ nama_ajaran: 'TA-To', status: 'tidak-aktif', semester: '2' });
+  // create or find tahun ajaran
+  const [taFrom] = await db.TahunAjaran.findOrCreate({ where: { nama_ajaran: 'TA-From', semester: '1' }, defaults: { status: 'tidak-aktif' } });
+  const [taTo] = await db.TahunAjaran.findOrCreate({ where: { nama_ajaran: 'TA-To', semester: '2' }, defaults: { status: 'tidak-aktif' } });
 
-    // create kelas
-    const kelasA = await db.Kelas.create({ nama_kelas: 'Kelas A', kapasitas: 30 });
-    const kelasB = await db.Kelas.create({ nama_kelas: 'Kelas B', kapasitas: 30 });
+  // create or find kelas
+  const [kelasA] = await db.Kelas.findOrCreate({ where: { nama_kelas: 'Kelas A' }, defaults: { kapasitas: 30 } });
+  const [kelasB] = await db.Kelas.findOrCreate({ where: { nama_kelas: 'Kelas B' }, defaults: { kapasitas: 30 } });
 
     // set next_kelas_id mapping (A -> B)
     await kelasA.update({ next_kelas_id: kelasB.id });
 
-    // create siswa
-    const siswa = await db.Siswa.create({ nama: 'Siswa Test', nis: 'TEST001', kelas_id: kelasA.id });
+  // create or find siswa
+  const [siswa] = await db.Siswa.findOrCreate({ where: { nis: 'TEST001' }, defaults: { nama: 'Siswa Test', kelas_id: kelasA.id } });
 
     console.log('Created test data:', { taFrom: taFrom.id, taTo: taTo.id, kelasA: kelasA.id, kelasB: kelasB.id, siswa: siswa.id });
 

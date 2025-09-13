@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
+import siswaService from '../../services/siswaService'
 import axios from 'axios'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
@@ -25,6 +26,7 @@ type FormData = {
   kota_asal?: string
   kelas_id?: number | string | ''
   kamar_id?: number | string | ''
+  tahun_ajaran_id?: number | string | ''
   nama_ayah?: string
   pekerjaan_ayah?: string
   alamat_ayah?: string
@@ -72,8 +74,8 @@ export default function ManajemenSiswaPage() {
   const [tahunAjaranOptions, setTahunAjaranOptions] = useState<Array<{id:number; nama_ajaran:string; semester:number}>>([])
   const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | ''>('')
 
-  const form = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '' } })
-  const addForm = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '' } })
+  const form = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '' , tahun_ajaran_id: '' } })
+  const addForm = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '' , tahun_ajaran_id: '' } })
   const { toast } = useToast()
   const [addOpen, setAddOpen] = useState(false)
 
@@ -81,15 +83,18 @@ export default function ManajemenSiswaPage() {
     const load = async () => {
       try {
         const [resSiswa, resKelas, resKamar, resTa] = await Promise.all([
-          axios.get(`${API_BASE}/siswa`),
+          siswaService.getAllSiswa(),
           axios.get(`${API_BASE}/kelas`),
           axios.get(`${API_BASE}/kamar`),
           axios.get(`${API_BASE}/tahun-ajaran`),
         ])
-        setData(resSiswa.data)
+        setData(resSiswa)
         setKelasOptions(resKelas.data)
         setKamarOptions(resKamar.data)
         setTahunAjaranOptions(resTa.data)
+        // default add form tahun ajaran to active TA if exists
+        const active = resTa.data.find((t:any)=>t.status === 'aktif') || resTa.data[0]
+        if (active) addForm.setValue('tahun_ajaran_id', String(active.id))
       } catch (err) {
         console.error(err)
       } finally {
@@ -142,16 +147,22 @@ export default function ManajemenSiswaPage() {
                           <DialogDescription>Isi semua data yang diperlukan untuk siswa baru. Klik simpan jika sudah selesai.</DialogDescription>
                         </DialogHeader>
 
-                        <form onSubmit={addForm.handleSubmit(async (vals)=>{
+                          <form onSubmit={addForm.handleSubmit(async (vals)=>{
                         try{
                           const payload = { ...vals,
                             kelas_id: vals.kelas_id === '' ? null : (typeof vals.kelas_id === 'string' ? Number(vals.kelas_id) : vals.kelas_id),
                             kamar_id: vals.kamar_id === '' ? null : (typeof vals.kamar_id === 'string' ? Number(vals.kamar_id) : vals.kamar_id),
+                            tahun_ajaran_id: vals['tahun_ajaran_id'] === '' ? null : (typeof vals['tahun_ajaran_id'] === 'string' ? Number(vals['tahun_ajaran_id']) : vals['tahun_ajaran_id'])
                           }
-                          await axios.post(`${API_BASE}/siswa`, payload)
-                          const res = await axios.get(`${API_BASE}/siswa`)
-                          setData(res.data)
-                          toast({title: 'Berhasil', description: 'Siswa berhasil ditambahkan'})
+                          const resp = await siswaService.createSiswa(payload)
+                          // backend returns { siswa, history }
+                          const res = await siswaService.getAllSiswa()
+                          setData(res)
+                          if (resp && resp.history) {
+                            toast({title: 'Berhasil', description: 'Siswa dan histori masuk berhasil dibuat'})
+                          } else {
+                            toast({title: 'Berhasil', description: 'Siswa berhasil ditambahkan (history tidak dibuat)'})
+                          }
                           addForm.reset()
                           setAddOpen(false)
                         }catch(e:any){
@@ -215,6 +226,17 @@ export default function ManajemenSiswaPage() {
                                 {kelasOptions.map(k => (<SelectItem key={k.id} value={String(k.id)}>{k.nama_kelas}</SelectItem>))}
                               </Select>
                             )} />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="add-tahun_ajaran_id">Tahun Ajaran Masuk</Label>
+                            <Controller control={addForm.control} name="tahun_ajaran_id" rules={{ required: 'Tahun ajaran wajib dipilih' }} render={({ field }) => (
+                              <Select id="add-tahun_ajaran_id" value={(field.value ?? '') as any} onChange={e => field.onChange((e.target as HTMLSelectElement).value)}>
+                                <SelectItem value="">-- Pilih Tahun Ajaran --</SelectItem>
+                                {tahunAjaranOptions.map(t => (<SelectItem key={t.id} value={String(t.id)}>{t.nama_ajaran} - Semester {t.semester}</SelectItem>))}
+                              </Select>
+                            )} />
+                            {addForm.formState.errors.tahun_ajaran_id && <p className="text-sm text-rose-600">{String(addForm.formState.errors.tahun_ajaran_id.message)}</p>}
                           </div>
 
                           <div className="space-y-2">
@@ -326,11 +348,20 @@ export default function ManajemenSiswaPage() {
                       return
                     }
                     try {
-                      const endpoint = reportType === 'identitas'
-                        ? `raports/generate/identitas/${r.id}`
-                        : `raports/generate/${reportType}/${r.id}/${selectedTahunAjaranId}/${(tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? '')}`
-                      const url = `${API_BASE}/${endpoint}?format=${format}`
-                      const resp = await axios.get(url, { responseType: 'blob' })
+                      let resp
+                      if (reportType === 'identitas') {
+                        resp = await (await import('../../services/raportService')).default.generateIdentitas(r.id)
+                      } else if (reportType === 'nilai') {
+                        resp = await (await import('../../services/raportService')).default.generateNilai(r.id, selectedTahunAjaranId, (tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? ''))
+                      } else if (reportType === 'sikap') {
+                        resp = await (await import('../../services/raportService')).default.generateSikap(r.id, selectedTahunAjaranId, (tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? ''))
+                      } else {
+                        // fallback: try to fetch via API_BASE
+                        const endpoint = `raports/generate/${reportType}/${r.id}/${selectedTahunAjaranId}/${(tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? '')}`
+                        const url = `${API_BASE}/${endpoint}?format=${format}`
+                        resp = await axios.get(url, { responseType: 'blob' })
+                      }
+                      const respData = resp.data || resp
                       const blob = new Blob([resp.data], { type: resp.headers['content-type'] })
                       const link = document.createElement('a')
                       link.href = window.URL.createObjectURL(blob)
@@ -372,9 +403,9 @@ export default function ManajemenSiswaPage() {
                   kelas_id: vals.kelas_id === '' ? null : (typeof vals.kelas_id === 'string' ? Number(vals.kelas_id) : vals.kelas_id),
                   kamar_id: vals.kamar_id === '' ? null : (typeof vals.kamar_id === 'string' ? Number(vals.kamar_id) : vals.kamar_id),
                 }
-                await axios.put(`${API_BASE}/siswa/${editing.id}`, payload)
-                const res = await axios.get(`${API_BASE}/siswa`)
-                setData(res.data)
+                await siswaService.updateSiswa(editing.id, payload)
+                const res = await siswaService.getAllSiswa()
+                setData(res)
                 setEditing(null)
                 toast({title:'Berhasil', description: 'Perubahan siswa disimpan'})
               }catch(e:any){
@@ -526,9 +557,9 @@ export default function ManajemenSiswaPage() {
               <Button variant="destructive" onClick={async()=>{
                 if(!deleting) return
                 try{
-                  await axios.delete(`${API_BASE}/siswa/${deleting.id}`)
-                  const res = await axios.get(`${API_BASE}/siswa`)
-                  setData(res.data)
+                  await siswaService.deleteSiswa(deleting.id)
+                  const res = await siswaService.getAllSiswa()
+                  setData(res)
                   setDeleting(null)
                   toast({title:'Berhasil', description: 'Siswa berhasil dihapus'})
                 }catch(e:any){ console.error(e); toast({title:'Gagal', description: e.response?.data?.message || 'Gagal menghapus siswa', variant:'destructive'}) }

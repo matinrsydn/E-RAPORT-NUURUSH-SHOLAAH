@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
 import axios from 'axios'
+import nilaiService from '../../services/nilaiService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -32,9 +33,9 @@ export default function ManajemenNilaiHafalanPage(){
     setLoading(true)
     try{
       // backend exposes generic /nilai endpoint (see e-raport-api/routes/nilaiRoutes.js)
-      const res = await axios.get(`${API_BASE}/nilai`)
-      // filter client-side for hafalan-type entries when backend doesn't separate endpoints
-      setData(res.data.filter((r:any) => r.jenis === 'Hafalan' || String(r.mapel_text || '').toLowerCase().includes('hafalan')))
+  const res = await nilaiService.getAllNilai()
+  // filter client-side for hafalan-type entries when backend doesn't separate endpoints
+  setData(res.filter((r:any) => r.jenis === 'Hafalan' || String(r.mapel_text || '').toLowerCase().includes('hafalan')))
   }catch(e){
       console.error(e)
       if(axios.isAxiosError(e) && e.response){
@@ -78,8 +79,8 @@ export default function ManajemenNilaiHafalanPage(){
       vals.mapel_id = Number(vals.mapel_id);
       vals.tahun_ajaran_id = Number(vals.tahun_ajaran_id);
       const payload = { ...vals, jenis: 'Hafalan' };
-      await axios.post(`${API_BASE}/nilai`, payload);
-      await fetchData();
+  await nilaiService.createNilai(payload);
+  await fetchData();
       toast({ title: 'Berhasil', description: 'Ditambahkan' });
       addForm.reset();
       setAddOpen(false);
@@ -99,8 +100,8 @@ export default function ManajemenNilaiHafalanPage(){
       vals.mapel_id = Number(vals.mapel_id);
       vals.tahun_ajaran_id = Number(vals.tahun_ajaran_id);
       const payload = { ...vals, jenis: 'Hafalan' };
-      await axios.put(`${API_BASE}/nilai/${editing.id}`, payload);
-      await fetchData();
+  await nilaiService.updateNilai(editing.id, payload);
+  await fetchData();
       setEditing(null);
       toast({ title: 'Berhasil', description: 'Perubahan disimpan' });
     } catch (e) {
@@ -115,8 +116,8 @@ export default function ManajemenNilaiHafalanPage(){
   const handleDelete = async () => {
     if (!deleting) return;
     try {
-      await axios.delete(`${API_BASE}/nilai/${deleting.id}`);
-      await fetchData();
+  await nilaiService.deleteNilai(deleting.id);
+  await fetchData();
       setDeleting(null);
       toast({ title: 'Berhasil', description: 'Di hapus' });
     } catch (e) {

@@ -79,9 +79,18 @@ exports.updateGuru = async (req, res) => {
             data.tanda_tangan = req.file.filename;
         }
 
-        if ('tanggal_lahir' in data && (data.tanggal_lahir === '' || data.tanggal_lahir === 'Invalid date')) {
-            data.tanggal_lahir = null;
-        }
+            // Normalize tanggal_lahir: treat empty or invalid dates as null
+            if ('tanggal_lahir' in data && (data.tanggal_lahir === '' || data.tanggal_lahir === 'Invalid date')) {
+                data.tanggal_lahir = null;
+            }
+
+            // Normalize enum fields: do not attempt to write empty string into ENUM columns
+            // MySQL will reject/trim empty string for ENUMs; convert empty string to null instead.
+            if ('jenis_kelamin' in data) {
+                if (data.jenis_kelamin === '') {
+                    data.jenis_kelamin = null;
+                }
+            }
 
         await guru.update(data);
         
