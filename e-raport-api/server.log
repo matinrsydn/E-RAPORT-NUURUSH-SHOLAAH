@@ -1,0 +1,25 @@
+=== LOADING & REGISTERING ROUTES ===
+📝 Loading Excel Routes...
+📦 Loading Excel Controller...
+✅ Excel Controller loaded successfully
+📦 Loading Upload Middleware...
+✅ Upload Middleware loaded successfully
+✅ Excel Routes loaded successfully
+KELAS CONTROLLER METHODS: [
+  'getAllKelas',
+  'getKelasById',
+  'createKelas',
+  'updateKelas',
+  'deleteKelas',
+  'promosikanSiswa'
+]
+Registered route: /api/siswa -> ./routes/siswaRoutes.js
+✓ All routes registered successfully
+✓ All routes registered successfully
+Server berjalan pada port 5000.
+Executing (default): SELECT 1+1 AS result
+Database terkoneksi (authenticate).
+➡️ Incoming Origin: http://localhost:3000
+➡️ GET /api/tahun-ajaran
+Executing (default): SELECT `id`, `nama_ajaran`, `semester`, `status`, `master_tahun_ajaran_id` FROM `TahunAjarans` AS `PeriodeAjaran` ORDER BY `PeriodeAjaran`.`nama_ajaran` DESC, `PeriodeAjaran`.`semester` ASC;
+^C

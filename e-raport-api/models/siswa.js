@@ -12,6 +12,8 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'kamar_id',
         as: 'infoKamar'
       });
+      // association needed for queries that include SiswaKelasHistory as 'histories'
+      Siswa.hasMany(models.SiswaKelasHistory, { foreignKey: 'siswa_id', as: 'histories' });
       Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'NilaiUjians' });
       Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswa_id', as: 'NilaiHafalans' });
       Siswa.hasMany(models.Sikap, { foreignKey: 'siswa_id', as: 'Sikaps', onDelete: 'CASCADE' });
@@ -27,12 +29,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     tempat_lahir: DataTypes.STRING,
     tanggal_lahir: DataTypes.DATE,
-    jenis_kelamin: DataTypes.STRING,
+    jenis_kelamin: DataTypes.ENUM('Laki-laki', 'Perempuan'),
     agama: DataTypes.STRING,
     alamat: DataTypes.TEXT,
-    kelas_id: DataTypes.INTEGER,
-    kamar_id: DataTypes.INTEGER,
-    kamar: DataTypes.STRING,
+  kelas_id: DataTypes.INTEGER,
+  kamar_id: DataTypes.INTEGER,
     
     // === TAMBAHKAN BARIS INI ===
     kota_asal: DataTypes.STRING, 

@@ -13,7 +13,8 @@ module.exports = (sequelize, DataTypes) => {
   }
   Kamar.init({
     nama_kamar: DataTypes.STRING,
-    kapasitas: DataTypes.INTEGER
+    kapasitas: DataTypes.INTEGER,
+    // note: do not define 'keterangan' here because the DB table 'kamars' does not have that column
   }, {
     sequelize,
     modelName: 'Kamar',

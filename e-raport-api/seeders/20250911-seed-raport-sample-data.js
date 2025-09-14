@@ -60,22 +60,25 @@ async function run() {
       console.log('Tidak ada MataPelajaran ditemukan, lewati pembuatan nilai ujian contoh.');
     }
 
-    // 5. NilaiHafalan (baru)
-    const hafalanData = {
-      siswa_id: siswa.id,
-      mapel_id: mapel ? mapel.id : null,
-      nama_mapel_hafalan: 'Hafalan Surat Al-Fatihah',
-      nama_kitab: 'Kitab Dasar',
-      batas: 5,
-      predikat: 'Tercapai',
-      semester: tahun.semester,
-      tahun_ajaran_id: tahun.id,
-      mapel_text: mapel ? mapel.nama_mapel : null
-    };
-    const existingHaf = await db.NilaiHafalan.findOne({ where: { siswa_id: siswa.id, nama_mapel_hafalan: hafalanData.nama_mapel_hafalan, semester: tahun.semester, tahun_ajaran_id: tahun.id } });
-    if (!existingHaf) {
-      await db.NilaiHafalan.create(hafalanData);
-      console.log('NilaiHafalan dibuat.');
+    // 5. NilaiHafalan (baru) - align with current NilaiHafalan model fields
+    // model fields: siswa_id, mapel_id, tahun_ajaran_id, semester, nilai, predikat, mapel_text
+    if (mapel) {
+      const hafalanData = {
+        siswa_id: siswa.id,
+        mapel_id: mapel.id,
+        predikat: 'Tercapai',
+        semester: tahun.semester,
+        tahun_ajaran_id: tahun.id,
+        mapel_text: mapel.nama_mapel
+      };
+      const hafalanWhere = { siswa_id: siswa.id, mapel_id: mapel.id, semester: tahun.semester, tahun_ajaran_id: tahun.id };
+      const existingHaf = await db.NilaiHafalan.findOne({ where: hafalanWhere });
+      if (!existingHaf) {
+        await db.NilaiHafalan.create(hafalanData);
+        console.log('NilaiHafalan dibuat.');
+      }
+    } else {
+      console.log('Tidak ada MataPelajaran ditemukan, lewati pembuatan nilai hafalan contoh.');
     }
 
     // 6. Sikap minimal

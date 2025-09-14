@@ -17,11 +17,16 @@ exports.bulkUpdateOrInsertHafalan = async (req, res) => {
         for (const hafalan of hafalanBatch) {
             // Hanya proses jika ada nilai yang diinput (tidak kosong)
             if (hafalan.nilai_angka !== null) {
+                let tahunAjaranId = hafalan.tahun_ajaran_id || hafalan.tahunAjaranId || null;
+                if (!tahunAjaranId && hafalan.tahun_ajaran) {
+                    const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: hafalan.tahun_ajaran, semester: hafalan.semester } });
+                    if (ta) tahunAjaranId = ta.id;
+                }
                 await NilaiHafalan.upsert({
-                    siswaId: hafalan.siswa_id,
-                    mataPelajaranId: hafalan.mapel_id,
+                    siswa_id: hafalan.siswa_id,
+                    mapel_id: hafalan.mapel_id,
                     semester: hafalan.semester,
-                    tahun_ajaran: hafalan.tahun_ajaran,
+                    tahun_ajaran_id: tahunAjaranId,
                     nilai_angka: hafalan.nilai_angka,
                 }, {
                     transaction
@@ -41,22 +46,29 @@ exports.bulkUpdateOrInsertHafalan = async (req, res) => {
 
 // --- FUNGSI UNTUK MENGAMBIL SISWA DAN NILAI HAFALAN BERDASARKAN FILTER ---
 exports.getSiswaWithHafalanByFilter = async (req, res) => {
-    const { kelas_id, mapel_id, semester, tahun_ajaran } = req.query;
+    const { kelas_id, mapel_id, semester } = req.query;
+    let tahunAjaranId = req.query.tahun_ajaran_id || req.body?.tahun_ajaran_id || req.params?.tahun_ajaran_id;
+    const tahun_ajaran_text = req.query.tahun_ajaran || req.body?.tahun_ajaran || req.params?.tahun_ajaran;
 
-    if (!kelas_id || !mapel_id || !semester || !tahun_ajaran) {
+    if (!kelas_id || !mapel_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
         return res.status(400).json({ message: "Semua filter harus diisi." });
     }
 
     try {
+        if (!tahunAjaranId && tahun_ajaran_text) {
+            const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text, semester } });
+            if (ta) tahunAjaranId = ta.id;
+        }
+
         const siswaList = await Siswa.findAll({
             where: { kelas_id: kelas_id },
             include: [{
                 model: NilaiHafalan,
                 as: 'nilai_hafalan',
                 where: {
-                    mataPelajaranId: mapel_id,
+                    mapel_id: mapel_id,
                     semester: semester,
-                    tahun_ajaran: tahun_ajaran
+                    tahun_ajaran_id: tahunAjaranId
                 },
                 required: false // LEFT JOIN, agar siswa tetap tampil meskipun belum ada nilai
             }],
@@ -74,11 +86,18 @@ exports.getSiswaWithHafalanByFilter = async (req, res) => {
 // 1. Membuat satu entri nilai hafalan baru
 exports.createHafalan = async (req, res) => {
     try {
-        const { siswaId, mataPelajaranId, semester, tahun_ajaran, nilai_angka } = req.body;
-        if (!siswaId || !mataPelajaranId || !semester || !tahun_ajaran) {
+        const { siswa_id, mapel_id, semester, nilai_angka } = req.body;
+        let tahunAjaranId = req.body?.tahun_ajaran_id || req.params?.tahun_ajaran_id || req.query?.tahun_ajaran_id;
+        const tahun_ajaran_text = req.body?.tahun_ajaran || req.params?.tahun_ajaran || req.query?.tahun_ajaran;
+        if (!siswa_id || !mapel_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
-        const newHafalan = await NilaiHafalan.create(req.body);
+        if (!tahunAjaranId && tahun_ajaran_text) {
+            const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text, semester } });
+            if (!ta) return res.status(404).json({ message: `Tahun Ajaran ${tahun_ajaran_text} semester ${semester} tidak ditemukan.` });
+            tahunAjaranId = ta.id;
+        }
+        const newHafalan = await NilaiHafalan.create({ siswa_id, mapel_id, semester, tahun_ajaran_id: tahunAjaranId, nilai_angka });
         res.status(201).json(newHafalan);
     } catch (error) {
         console.error("Error membuat nilai hafalan:", error);
@@ -94,7 +113,8 @@ exports.getAllHafalan = async (req, res) => {
                 { model: Siswa, attributes: ['nama', 'nis'] },
                 { model: MataPelajaran, as: 'mapel', attributes: ['nama_mapel', 'kitab'] }
             ],
-            order: [['tahun_ajaran', 'DESC'], ['semester', 'DESC']]
+            // Order by the FK column (tahun_ajaran_id) which is the canonical field
+            order: [['tahun_ajaran_id', 'DESC'], ['semester', 'DESC']]
         });
         res.status(200).json(allHafalan);
     } catch (error) {

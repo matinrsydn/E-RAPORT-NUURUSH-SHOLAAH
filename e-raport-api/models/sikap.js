@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
       });
 
       // 🔥 PERBAIKAN: Tambahkan relasi ke TahunAjaran
-      Sikap.belongsTo(models.TahunAjaran, {
+        Sikap.belongsTo(models.PeriodeAjaran, {
         foreignKey: 'tahun_ajaran_id',
         as: 'tahun_ajaran'
       });

@@ -3,8 +3,8 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class PromosiLog extends Model {
     static associate(models) {
-      PromosiLog.belongsTo(models.TahunAjaran, { foreignKey: 'tahun_ajaran_from_id', as: 'fromTahunAjaran' });
-      PromosiLog.belongsTo(models.TahunAjaran, { foreignKey: 'tahun_ajaran_to_id', as: 'toTahunAjaran' });
+  PromosiLog.belongsTo(models.PeriodeAjaran, { foreignKey: 'tahun_ajaran_from_id', as: 'fromTahunAjaran' });
+  PromosiLog.belongsTo(models.PeriodeAjaran, { foreignKey: 'tahun_ajaran_to_id', as: 'toTahunAjaran' });
       PromosiLog.belongsTo(models.Kelas, { foreignKey: 'kelas_from_id', as: 'kelasFrom' });
       PromosiLog.belongsTo(models.Kelas, { foreignKey: 'kelas_to_id', as: 'kelasTo' });
       // executed_by may reference Users table if exists

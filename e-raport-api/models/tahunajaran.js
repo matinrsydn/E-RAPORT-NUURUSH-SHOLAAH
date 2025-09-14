@@ -3,10 +3,13 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class TahunAjaran extends Model {
     static associate(models) {
-      TahunAjaran.hasMany(models.Kurikulum, {
-        foreignKey: 'tahun_ajaran_id',
-        as: 'kurikulum'
-      });
+      // Only add legacy association if Kurikulum model has the foreign key defined.
+      if (models.Kurikulum && models.Kurikulum.rawAttributes && models.Kurikulum.rawAttributes.tahun_ajaran_id) {
+        TahunAjaran.hasMany(models.Kurikulum, {
+          foreignKey: 'tahun_ajaran_id',
+          as: 'kurikulum'
+        });
+      }
     }
   }
   TahunAjaran.init({
@@ -19,18 +22,25 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     status: {
-      type: DataTypes.ENUM('aktif', 'tidak-aktif'),
-      defaultValue: 'tidak-aktif'
+      type: DataTypes.ENUM('aktif', 'nonaktif'),
+      defaultValue: 'nonaktif'
+    }
+    ,
+    master_tahun_ajaran_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
     }
   }, {
     sequelize,
     modelName: 'TahunAjaran',
-    indexes: [
-        {
-            unique: true,
-            fields: ['nama_ajaran', 'semester']
-        }
-    ]
+  tableName: 'TahunAjarans',
+  indexes: [
+    {
+      unique: true,
+      fields: ['nama_ajaran', 'semester'],
+      name: 'tahun_ajarans_nama_ajaran_semester'
+    }
+  ]
   });
   return TahunAjaran;
 };

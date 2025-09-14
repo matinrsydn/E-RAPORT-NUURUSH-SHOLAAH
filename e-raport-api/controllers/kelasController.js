@@ -5,16 +5,24 @@ const db = require('../models');
 // Mendapatkan semua data kelas
 exports.getAllKelas = async (req, res) => {
   try {
+    // Support optional filtering by tingkatan_id
+    const where = {};
+    if (req.query.tingkatan_id) {
+      const t = Number(req.query.tingkatan_id);
+      if (!isNaN(t)) where.tingkatan_id = t;
+      console.log('Filtering kelas by tingkatan_id:', t);
+    }
+
+    console.log('Query where clause:', where);
     const kelas = await db.Kelas.findAll({
+      where,
       include: [
-        // === PERUBAHAN DI SINI: Gunakan model 'Guru' ===
         { 
-          model: db.Guru, // Menggunakan model Guru yang baru
-          as: 'walikelas',      // Alias 'walikelas' ini sudah benar sesuai models/kelas.js
-          attributes: ['nama'], 
-          required: false 
+          model: db.Guru,
+          as: 'walikelas',
+          attributes: ['nama'],
+          required: false
         },
-        // ===============================================
         { 
           model: db.Siswa, 
           as: 'siswa', 
@@ -24,6 +32,7 @@ exports.getAllKelas = async (req, res) => {
       ],
       order: [['nama_kelas', 'ASC']]
     });
+    console.log('Found kelas:', kelas.map(k => ({ id: k.id, nama: k.nama_kelas, tingkatanId: k.tingkatan_id })));
     res.json(kelas);
   } catch (error) {
     console.error('SERVER ERROR - GET /api/kelas:', error);
@@ -71,12 +80,19 @@ exports.getKelasById = async (req, res) => {
 
 // Fungsi createKelas
 exports.createKelas = async (req, res) => {
-    try {
-        const newKelas = await db.Kelas.create(req.body);
-        res.status(201).json(newKelas);
-    } catch (error) {
-        res.status(500).json({ message: 'Error saat membuat kelas', error: error.message });
+  try {
+    const payload = { ...req.body };
+    // ensure tingkatan_id is present and valid
+    if (typeof payload.tingkatan_id === 'undefined' || payload.tingkatan_id === null) {
+      return res.status(400).json({ message: 'tingkatan_id wajib diisi saat membuat kelas.' });
     }
+    payload.tingkatan_id = Number(payload.tingkatan_id) || null;
+    const newKelas = await db.Kelas.create(payload);
+    res.status(201).json(newKelas);
+  } catch (error) {
+    console.error('SERVER ERROR - POST /api/kelas:', error);
+    res.status(500).json({ message: 'Error saat membuat kelas', error: error.message });
+  }
 };
 
 // Memperbarui data kelas

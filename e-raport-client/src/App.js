@@ -19,15 +19,15 @@ import InputNilaiDashboardPage from './dashboard/input-nilai/page'
 import ManajemenRaportDashboardPage from './dashboard/manajemen-raport/page'
 import ManajemenMapelDashboardPage from './dashboard/manajemen-mapel/page'
 import ManajemenKelasDashboardPage from './dashboard/manajemen-kelas/page'
+import ManajemenTingkatanPage from './dashboard/manajemen-tingkatan/page'
 import ManajemenKamarDashboardPage from './dashboard/manajemen-kamar/page'
 import ManajemenKurikulumPage from './dashboard/manajemen-kurikulum/page'
 import ManajemenNilaiUjianPage from './dashboard/manajemen-nilai-ujian/page'
 import ManajemenNilaiHafalanPage from './dashboard/manajemen-nilai-hafalan/page'
-import ManajemenDraftNilaiPage from './dashboard/manajemen-draft-nilai/page'
+import UploadValidatePage from './dashboard/upload-validate/page'
 import ManajemenKitabPage from './dashboard/manajemen-kitab/page'; 
-import ManajemenKehadiranPage from './dashboard/manajemen-kehadiran/page'
-import ManajemenSikapPage from './dashboard/manajemen-sikap/page'
 import PromosiKelasPage from './dashboard/promosi-kelas/page'
+import SuratKeluarTemplatePage from './dashboard/surat-keluar-template/page'
 
 
 
@@ -46,6 +46,7 @@ function App() {
         <Route path="/dashboard/manajemen-siswa" element={<ManajemenSiswaPage />} />
         <Route path="/dashboard/manajemen-guru" element={<ManajemenGuruPage />} />
         <Route path="/dashboard/manajemen-kelas" element={<ManajemenKelasDashboardPage />} />
+  <Route path="/dashboard/manajemen-tingkatan" element={<ManajemenTingkatanPage />} />
         <Route path="/dashboard/manajemen-kamar" element={<ManajemenKamarDashboardPage />} />
         <Route path="/dashboard/manajemen-mapel" element={<ManajemenMapelDashboardPage />} />
         <Route path="/dashboard/manajemen-tahun-ajaran" element={<ManajemenTahunAjaranPage />} />
@@ -61,11 +62,12 @@ function App() {
         <Route path="/dashboard/manajemen-kurikulum" element={<ManajemenKurikulumPage />} />
         <Route path="/dashboard/manajemen-nilai-ujian" element={<ManajemenNilaiUjianPage />} />
         <Route path="/dashboard/manajemen-nilai-hafalan" element={<ManajemenNilaiHafalanPage />} />
-        <Route path="/dashboard/manajemen-draft-nilai" element={<ManajemenDraftNilaiPage />} />
+  <Route path="/dashboard/manajemen-draft-nilai" element={<UploadValidatePage />} />
+  <Route path="/dashboard/upload-validate" element={<UploadValidatePage />} />
     <Route path="/dashboard/manajemen-kitab" element={<ManajemenKitabPage />} />
-    <Route path="/dashboard/manajemen-kehadiran" element={<ManajemenKehadiranPage />} />
-    <Route path="/dashboard/manajemen-sikap" element={<ManajemenSikapPage />} />
+      {/* Manajemen Kehadiran page removed: use Indikator Kehadiran (master) for CRUD */}
     <Route path="/dashboard/promosi-kelas" element={<PromosiKelasPage />} />
+  <Route path="/dashboard/surat-keluar-template" element={<SuratKeluarTemplatePage />} />
   {/* compatibility: some links may use the old 'kenaikan-kelas' path */}
   <Route path="/dashboard/kenaikan-kelas" element={<PromosiKelasPage />} />
 
@@ -85,8 +87,8 @@ function App() {
         <Route path="/manajemen-akademik/kepala-pesantren" element={<Navigate to="/dashboard/kepala-pesantren" replace />} />
 
         {/* keep specific legacy pages (validate/draft) redirect if needed */}
-        <Route path="/validasi-raport/:batchId" element={<Navigate to="/dashboard/manajemen-raport" replace />} />
-        <Route path="/draft-raport" element={<Navigate to="/dashboard/manajemen-draft-nilai" replace />} />
+  <Route path="/validasi-raport/:batchId" element={<Navigate to="/dashboard/manajemen-raport" replace />} />
+  <Route path="/draft-raport" element={<Navigate to="/dashboard/upload-validate" replace />} />
       </Routes>
   </Router>
   </ToastProvider>

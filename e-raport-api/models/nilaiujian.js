@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'mapel_id',
         as: 'mapel'
       });
-      NilaiUjian.belongsTo(models.TahunAjaran, {
+      NilaiUjian.belongsTo(models.PeriodeAjaran, {
         foreignKey: 'tahun_ajaran_id',
         as: 'tahunAjaran'
       });
@@ -27,12 +27,8 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     nilai: {
-      type: DataTypes.DECIMAL(5,2),
-      allowNull: true,
-      validate: {
-        min: 0,
-        max: 100
-      }
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true
     },
     semester: {
       type: DataTypes.ENUM('1', '2'),

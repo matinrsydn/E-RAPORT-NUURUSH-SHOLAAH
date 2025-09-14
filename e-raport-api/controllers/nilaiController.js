@@ -2,7 +2,8 @@ const db = require('../models');
 const NilaiUjian = db.NilaiUjian;
 const Siswa = db.Siswa;
 const MataPelajaran = db.MataPelajaran;
-const TahunAjaran = db.TahunAjaran;
+const PeriodeAjaran = db.PeriodeAjaran || db.TahunAjaran;
+const MasterTahunAjaran = db.MasterTahunAjaran || null;
 const { Op } = require("sequelize");
 
 // --- FUNGSI UNTUK MENYIMPAN BANYAK NILAI SEKALIGUS (BULK) ---
@@ -22,7 +23,14 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
                 if (nilai.tahun_ajaran_id) {
                     tahunAjaranId = nilai.tahun_ajaran_id;
                 } else if (nilai.tahun_ajaran) {
-                    const ta = await TahunAjaran.findOne({ where: { nama_ajaran: nilai.tahun_ajaran, semester: nilai.semester } });
+                    // Resolve in a backward compatible way: prefer master -> periode
+                    let ta = null;
+                    if (MasterTahunAjaran) {
+                        const master = await MasterTahunAjaran.findOne({ where: { nama_ajaran: nilai.tahun_ajaran } });
+                        if (master) ta = await PeriodeAjaran.findOne({ where: { master_tahun_ajaran_id: master.id, semester: nilai.semester } });
+                    }
+                    // fallback: try legacy nama_ajaran on PeriodeAjaran
+                    if (!ta) ta = await PeriodeAjaran.findOne({ where: { nama_ajaran: nilai.tahun_ajaran, semester: nilai.semester } });
                     if (ta) tahunAjaranId = ta.id;
                 }
 
@@ -32,13 +40,16 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
                     continue;
                 }
 
+                // Accept either numeric 'nilai' (backwards compat) or 'predikat'/'deskripsi'
+                const numericNilai = (nilai.nilai !== undefined && !isNaN(parseFloat(nilai.nilai))) ? parseFloat(nilai.nilai) : null;
+                const predikat = nilai.predikat || (numericNilai !== null ? (numericNilai === 100 ? 'Sempurna' : numericNilai >= 90 ? 'Sangat Baik' : numericNilai >= 80 ? 'Baik' : numericNilai >= 70 ? 'Cukup' : 'Kurang') : null);
+                // NilaiUjian model stores numeric nilai only; predikat is derived at read-time
                 await NilaiUjian.upsert({
                     siswa_id: nilai.siswa_id,
                     mapel_id: nilai.mapel_id,
                     semester: nilai.semester,
                     tahun_ajaran_id: tahunAjaranId,
-                    // Direct store single nilai
-                    nilai: nilai.nilai,
+                    nilai: numericNilai
                 }, { transaction });
             }
         }
@@ -55,29 +66,40 @@ exports.bulkUpdateOrInsertNilai = async (req, res) => {
 
 // --- FUNGSI UNTUK MENGAMBIL SISWA DAN NILAI BERDASARKAN FILTER ---
 exports.getSiswaWithNilaiByFilter = async (req, res) => {
-    const { kelas_id, mapel_id, semester, tahun_ajaran } = req.query;
+    const { kelas_id, mapel_id, semester } = req.query;
+    // prefer numeric FK if middleware provided it (check params too)
+    let tahunAjaranId = req.query.tahun_ajaran_id || req.body?.tahun_ajaran_id || req.params?.tahun_ajaran_id;
+    // fallback to legacy textual param (maintained for backward compatibility)
+    const tahun_ajaran_text = req.query.tahun_ajaran || req.body?.tahun_ajaran || req.params?.tahun_ajaran;
 
-    // --- TAMBAHKAN LOG INI ---
-    console.log("➡️  Request diterima untuk filter nilai:");
-    console.log({ kelas_id, mapel_id, semester, tahun_ajaran });
+    // --- LOG REQUEST ---
+    console.log("➡️  Request diterima untuk filter nilai:", { kelas_id, mapel_id, semester, tahunAjaranId, tahun_ajaran_text });
     // -------------------------
 
-    if (!kelas_id || !mapel_id || !semester || !tahun_ajaran) {
+    if (!kelas_id || !mapel_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
         return res.status(400).json({ message: "Semua filter harus diisi." });
     }
 
     try {
-        const tahunAjaranRecord = await db.TahunAjaran.findOne({
-            where: {
-                nama_ajaran: tahun_ajaran,
-                semester: semester
+        // If an id was provided (by middleware or client), use it. Otherwise resolve the textual value.
+        let tahunAjaranRecord = null;
+        if (tahunAjaranId) {
+            tahunAjaranRecord = await db.PeriodeAjaran.findByPk(tahunAjaranId);
+        } else {
+            if (MasterTahunAjaran) {
+                const master = await MasterTahunAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text } });
+                if (master) {
+                    tahunAjaranRecord = await db.PeriodeAjaran.findOne({ where: { master_tahun_ajaran_id: master.id, semester } });
+                }
             }
-        });
+            if (!tahunAjaranRecord) {
+                tahunAjaranRecord = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text, semester } });
+            }
+        }
 
-        // --- TAMBAHKAN LOG INI ---
         if (!tahunAjaranRecord) {
             console.error("❌ GAGAL: Tidak ada Tahun Ajaran yang cocok ditemukan di database.");
-            return res.status(404).json({ message: `Kombinasi Tahun Ajaran ${tahun_ajaran} dan Semester ${semester} tidak ditemukan.` });
+            return res.status(404).json({ message: `Kombinasi Tahun Ajaran ${tahun_ajaran_text} dan Semester ${semester} tidak ditemukan.` });
         }
         console.log("✅ SUKSES: Tahun Ajaran ditemukan, ID:", tahunAjaranRecord.id);
         // -------------------------
@@ -107,27 +129,27 @@ exports.getSiswaWithNilaiByFilter = async (req, res) => {
 // 1. Membuat satu entri nilai baru
 exports.createNilai = async (req, res) => {
     try {
-        const { siswa_id, mapel_id, semester, tahun_ajaran, nilai } = req.body;
-        if (!siswa_id || !mapel_id || !semester || !tahun_ajaran) {
+    const { siswa_id, mapel_id, semester, nilai } = req.body;
+        // prefer numeric id from middleware/client
+        let tahunAjaranId = req.body?.tahun_ajaran_id || req.params?.tahun_ajaran_id || req.query?.tahun_ajaran_id;
+        const tahun_ajaran_text = req.body?.tahun_ajaran || req.params?.tahun_ajaran || req.query?.tahun_ajaran;
+        if (!siswa_id || !mapel_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
-        // Accept either tahun_ajaran_id (preferred) or tahun_ajaran (string) and resolve to id
-        let tahunAjaranId = null;
-        if (req.body.tahun_ajaran_id) {
-            tahunAjaranId = req.body.tahun_ajaran_id;
-        } else if (tahun_ajaran) {
-            const ta = await TahunAjaran.findOne({ where: { nama_ajaran: String(tahun_ajaran), semester } });
-            if (!ta) return res.status(404).json({ message: `Tahun Ajaran ${tahun_ajaran} semester ${semester} tidak ditemukan.` });
+        if (!tahunAjaranId && tahun_ajaran_text) {
+            const ta = await PeriodeAjaran.findOne({ where: { nama_ajaran: String(tahun_ajaran_text), semester } });
+            if (!ta) return res.status(404).json({ message: `Tahun Ajaran ${tahun_ajaran_text} semester ${semester} tidak ditemukan.` });
             tahunAjaranId = ta.id;
         }
 
+        const numericNilai = (nilai !== undefined && !isNaN(parseFloat(nilai))) ? parseFloat(nilai) : null;
+        // NilaiUjian model stores numeric nilai; predikat is derived on read so we don't persist it
         const payload = {
             siswa_id,
             mapel_id,
             semester,
             tahun_ajaran_id: tahunAjaranId,
-            // Direct store single nilai
-            nilai: nilai || null
+            nilai: numericNilai
         };
 
         const newNilai = await NilaiUjian.create(payload);
@@ -181,8 +203,10 @@ exports.getNilaiById = async (req, res) => {
 exports.updateNilai = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nilai, ...rest } = req.body;
-        const updatePayload = { ...rest, nilai: (nilai !== undefined ? nilai : null) };
+    const { nilai, ...rest } = req.body;
+    const numericNilaiUpd = (nilai !== undefined && !isNaN(parseFloat(nilai))) ? parseFloat(nilai) : null;
+    // Do not persist predikat; it's derived at read-time
+    const updatePayload = { ...rest, nilai: numericNilaiUpd };
 
         const [updated] = await NilaiUjian.update(updatePayload, {
             where: { id: id }

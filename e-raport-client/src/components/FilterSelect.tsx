@@ -11,13 +11,19 @@ type Props = {
   onChange: (value: string) => void
   placeholder?: string
   options: Option[]
+  disabled?: boolean // Add disabled prop for the whole select
 }
 
-export default function FilterSelect({ id, label, value, onChange, placeholder, options }: Props) {
+export default function FilterSelect({ id, label, value, onChange, placeholder, options, disabled }: Props) {
   return (
     <div>
       {label && <Label htmlFor={id}>{label}</Label>}
-      <Select id={id} value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value)}>
+      <Select 
+        id={id} 
+        value={value} 
+        onChange={(e) => onChange((e.target as HTMLSelectElement).value)}
+        disabled={disabled}
+      >
         {placeholder ? <option value="">{placeholder}</option> : null}
         {options.map((opt) => (
           <option key={String(opt.value)} value={opt.value} disabled={opt.disabled}>

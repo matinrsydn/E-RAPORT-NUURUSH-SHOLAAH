@@ -3,32 +3,15 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./models');
 
+const os = require('os');
 const app = express();
 
-// Middleware
-// Log incoming Origin header to help debug CORS issues from browser requests
-app.use((req, res, next) => {
-  if (req.headers && req.headers.origin) {
-    console.log('➡️ Incoming Origin:', req.headers.origin);
-  }
-  next();
-});
-
-// Safer CORS: allowlist and function check to avoid malformed input
-// Add http://localhost:3001 so the frontend running on that origin can access the API
-const allowedOrigins = ['http://localhost:3002', 'http://localhost:3001', 'http://localhost:3000'];
+// Enable CORS for all routes
 app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like curl, mobile apps)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    }
-    console.log('⛔ CORS blocked for origin:', origin);
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
+  origin: 'http://localhost:3000',
+  credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -79,8 +62,8 @@ const excelRoutes = require('./routes/excelRoutes');
 const kelasRoutes = require('./routes/kelasRoutes');
 const indikatorSikapRoutes = require('./routes/indikatorSikapRoutes');
 const tahunAjaranRoutes = require('./routes/tahunAjaranRoutes');
+const masterTahunAjaranRoutes = require('./routes/masterTahunAjaranRoutes');
 const templateRoutes = require('./routes/templateRoutes.js');
-const draftRoutes = require('./routes/draftRoutes');
 const raportRoutes = require('./routes/raportRoutes');
 const indikatorKehadiranRoutes = require('./routes/indikatorKehadiranRoutes');
 const kamarRoutes = require('./routes/kamarRoutes');
@@ -89,6 +72,11 @@ const kitabRoutes = require('./routes/kitabRoutes');
 const kurikulumRoutes = require('./routes/kurikulumRoutes');
 const guruRoutes = require('./routes/guruRoutes');
 const kenaikanRoutes = require('./routes/kenaikanRoutes');
+const promosiRoutes = require('./routes/promosiRoutes');
+const suratKeluarRoutes = require('./routes/suratKeluarRoutes');
+const kelasPeriodeRoutes = require('./routes/kelasPeriodeRoutes');
+const historyRoutes = require('./routes/historyRoutes');
+const tingkatanRoutes = require('./routes/tingkatanRoutes');
 
 app.use('/api/siswa', siswaRoutes);
 console.log("Registered route: /api/siswa -> ./routes/siswaRoutes.js");
@@ -102,12 +90,13 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/kelas', kelasRoutes);
 app.use('/api/indikator-sikap', indikatorSikapRoutes);
 app.use('/api/tahun-ajaran', tahunAjaranRoutes);
+app.use('/api/master-tahun-ajaran', masterTahunAjaranRoutes);
 // Keep existing plural route for backward compatibility
 app.use('/api/raports', raportRoutes);
 // Also register singular '/api/raport' so clients using either form won't get 404s
 app.use('/api/raport', raportRoutes);
 app.use('/api/templates', templateRoutes);
-app.use('/api/draft', draftRoutes);
+// draft routes removed: draft flow deprecated — uploads now go directly to raport endpoints
 app.use('/api/indikator-kehadiran', indikatorKehadiranRoutes);
 app.use('/api/kamar', kamarRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -115,17 +104,62 @@ app.use('/api/kitab', kitabRoutes);
 app.use('/api/kurikulum', kurikulumRoutes);
 app.use('/api/guru', guruRoutes);
 app.use('/api/kenaikan', kenaikanRoutes);
+app.use('/api/promosi', promosiRoutes);
+app.use('/api/surat-keluar', suratKeluarRoutes);
+app.use('/api/kelas-periode', kelasPeriodeRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/tingkatans', tingkatanRoutes);
 
 console.log("✓ All routes registered successfully");
 console.log("\u2713 All routes registered successfully");
 
 // Rute dasar
-app.get('/', (req, res) => {
+// Serve React production build if it exists (assumes client build at ../e-raport-client/build)
+const clientBuildPath = path.join(__dirname, '..', 'e-raport-client', 'build');
+try {
+  // check if build folder exists
+  const fs = require('fs');
+  if (fs.existsSync(clientBuildPath)) {
+    console.log('Serving React build from', clientBuildPath);
+    app.use(express.static(clientBuildPath));
+
+    // For any non-API route, serve index.html so client-side router works
+    app.get(/^((?!\/api).)*$/, (req, res) => {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+  } else {
+    // fallback JSON greeting
+    app.get('/', (req, res) => {
+      res.json({ message: 'Selamat datang di API e-Raport.' });
+    });
+  }
+} catch (e) {
+  console.error('Error while configuring client static middleware:', e && e.message ? e.message : e);
+  app.get('/', (req, res) => {
     res.json({ message: 'Selamat datang di API e-Raport.' });
-});
+  });
+}
 
 // Atur port dan jalankan server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server berjalan pada port ${PORT}.`);
+// If ALLOW_LAN=true, bind to 0.0.0.0 so other devices on the LAN can reach the API
+const HOST = process.env.ALLOW_LAN === 'true' ? '0.0.0.0' : '127.0.0.1';
+app.listen(PORT, HOST, () => {
+    console.log(`Server berjalan pada ${HOST}:${PORT}.`);
+    // If running in LAN mode, log possible LAN URL to help clients find API
+    if (HOST === '0.0.0.0') {
+      try {
+        const os = require('os');
+        const ifaces = os.networkInterfaces();
+        for (const name of Object.keys(ifaces)) {
+          for (const iface of ifaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+              console.log(`➡️ API available at: http://${iface.address}:${PORT}/`);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Could not list network interfaces:', e && e.message ? e.message : e);
+      }
+    }
 });

@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'indikatorkehadirans_id',
         as: 'indikator'
       });
-      Kehadiran.belongsTo(models.TahunAjaran, {
+      Kehadiran.belongsTo(models.PeriodeAjaran, {
         foreignKey: 'tahun_ajaran_id',
         as: 'tahunAjaran'
       });

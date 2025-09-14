@@ -3,6 +3,8 @@ import DashboardLayout from '../../dashboard/layout'
 import API_BASE from '../../api'
 import siswaService from '../../services/siswaService'
 import axios from 'axios'
+import tahunAjaranService from '../../services/tahunAjaranService'
+import { getAllTingkatans } from '../../services/tingkatanService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -26,7 +28,9 @@ type FormData = {
   kota_asal?: string
   kelas_id?: number | string | ''
   kamar_id?: number | string | ''
-  tahun_ajaran_id?: number | string | ''
+  master_tahun_ajaran_id?: number | string | ''
+  tingkatan_id?: number | string | ''
+  tahun_ajaran_masuk?: number | string | ''
   nama_ayah?: string
   pekerjaan_ayah?: string
   alamat_ayah?: string
@@ -70,31 +74,64 @@ export default function ManajemenSiswaPage() {
   const [editing, setEditing] = useState<Siswa | null>(null)
   const [deleting, setDeleting] = useState<Siswa | null>(null)
   const [kelasOptions, setKelasOptions] = useState<Array<{id:number; nama_kelas:string}>>([])
+  const [tingkatanOptions, setTingkatanOptions] = useState<Array<{id:number; nama_tingkatan:string}>>([])
   const [kamarOptions, setKamarOptions] = useState<Array<{id:number; nama_kamar:string; kapasitas:number; siswa?:any[]}>>([])
-  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<Array<{id:number; nama_ajaran:string; semester:number}>>([])
-  const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | ''>('')
+  // normalize semester to string to avoid TS mismatches and simplify UI logic
+  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<Array<{id:number; nama_ajaran:string; semester: string; status?: string}>>([])
+  const [masterOptions, setMasterOptions] = useState<Array<{id:number; nama_ajaran:string}>>([])
+  // Periode filter removed; use master TA selector and kelas selector only
+  const [selectedMasterTaId, setSelectedMasterTaId] = useState<number | ''>('')
+  const [selectedTingkatanId, setSelectedTingkatanId] = useState<number | ''>('')
+  const [selectedKelasId, setSelectedKelasId] = useState<number | ''>('')
 
-  const form = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '' , tahun_ajaran_id: '' } })
-  const addForm = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '' , tahun_ajaran_id: '' } })
+  const form = useForm<FormData>({ defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '', master_tahun_ajaran_id: '', tahun_ajaran_masuk: '' } })
+  const addForm = useForm<FormData>({
+    defaultValues: { nis: '', nama: '', kelas_id: '', kamar_id: '', jenis_kelamin: '', master_tahun_ajaran_id: '', tahun_ajaran_masuk: '', tingkatan_id: '' }
+  })
+
   const { toast } = useToast()
   const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [resSiswa, resKelas, resKamar, resTa] = await Promise.all([
-          siswaService.getAllSiswa(),
+        setLoading(true)
+        const [taList, kelasRes, masterList, kamarRes] = await Promise.all([
+          tahunAjaranService.getAllTahunAjaran(),
           axios.get(`${API_BASE}/kelas`),
+          tahunAjaranService.getAllMasterTahunAjaran().catch(() => []),
           axios.get(`${API_BASE}/kamar`),
-          axios.get(`${API_BASE}/tahun-ajaran`),
         ])
-        setData(resSiswa)
-        setKelasOptions(resKelas.data)
-        setKamarOptions(resKamar.data)
-        setTahunAjaranOptions(resTa.data)
-        // default add form tahun ajaran to active TA if exists
-        const active = resTa.data.find((t:any)=>t.status === 'aktif') || resTa.data[0]
-        if (active) addForm.setValue('tahun_ajaran_id', String(active.id))
+
+        const kelasList = (kelasRes as any).data
+        const kamarList = (kamarRes as any).data as Array<{ id:number; nama_kamar:string; kapasitas:number; siswa?: any[] }>
+
+        // pick active TA as default (prefer semester '2') and select its master
+        const active = (taList as any[]).find((t:any)=>t.status === 'aktif' && String(t.semester) === '2')
+          || (taList as any[]).find((t:any)=>t.status === 'aktif') || (taList as any[])[0]
+        if (active) {
+          const master = (masterList as any[]).find((m:any)=>m.nama_ajaran === active.nama_ajaran)
+          if (master) setSelectedMasterTaId(master.id)
+        }
+
+        // dedupe master options by id (just in case)
+        setMasterOptions(Array.from(new Map(((masterList as any[]) || []).map((m:any)=>[m.id, m])).values()) as Array<{id:number; nama_ajaran:string}>)
+
+        // fetch siswa with show_all for the selected master TA (attach hasHistory)
+        const resSiswa = await siswaService.getAllSiswa({ show_all: true, master_ta_id: active ? ((masterList as any[]).find((m:any)=>m.nama_ajaran === active.nama_ajaran)?.id) : undefined })
+
+        setData(resSiswa as Siswa[])
+        setKelasOptions(kelasList)
+        // also load semua tingkatan for add form
+        try{ const t = await getAllTingkatans(); setTingkatanOptions(t || []) } catch(e){ console.error(e) }
+        setKamarOptions(kamarList)
+        setTahunAjaranOptions((taList as any[]).map((t:any)=>({ ...t, semester: String(t.semester) })))
+
+        // default add form tahun ajaran to active MASTER TA (prefer semester 2 if active)
+        if (active) {
+          const master = (masterList as any[]).find((m:any)=>m.nama_ajaran === active.nama_ajaran)
+          if (master) addForm.setValue('master_tahun_ajaran_id', String(master.id))
+        }
       } catch (err) {
         console.error(err)
       } finally {
@@ -104,10 +141,38 @@ export default function ManajemenSiswaPage() {
     load()
   }, [])
 
+  // when any filter changes, reload siswa list with show_all -> hasHistory flag
+  useEffect(()=>{
+    const loadForFilters = async () => {
+      try{
+        setLoading(true)
+        const params:any = {}
+        if (selectedMasterTaId) params.master_ta_id = selectedMasterTaId
+        if (selectedKelasId) params.kelas_id = selectedKelasId
+        if (selectedTingkatanId) params.tingkatan_id = selectedTingkatanId
+        params.show_all = true
+        const res = await siswaService.getAllSiswa(params)
+        setData(res as Siswa[])
+      }catch(e){ console.error(e) }finally{ setLoading(false) }
+    }
+    // always load at least once (fetch all) -- but only after masterOptions are loaded
+    loadForFilters()
+  }, [selectedMasterTaId, selectedKelasId, selectedTingkatanId])
+
+  // highlight bagian perubahan: pakai master_tahun_ajaran_id di semua tempat
   const columns: ColumnDef<Siswa, any>[] = [
     { header: 'NIS', accessorKey: 'nis' },
     { header: 'Nama', accessorKey: 'nama' },
-    { header: 'Kelas', accessorFn: row => row.kelas?.nama_kelas ?? '-' },
+    { header: 'Kelas Saat Ini', accessorFn: row => row.kelas?.nama_kelas ?? '-' },
+    { header: 'Tahun Ajaran Saat Ini', accessorFn: row => {
+        const ch:any = (row as any).currentHistory
+        if (ch && ch.master_tahun_ajaran_id) {
+          const ta = masterOptions.find(m => m.id === ch.master_tahun_ajaran_id)
+          return ta ? ta.nama_ajaran : '-'
+        }
+        return '-'
+      }
+    },
     { header: 'Kamar', accessorFn: row => row.infoKamar?.nama_kamar ?? '-' },
     { id: 'actions', header: 'Aksi', accessorKey: 'id' as any },
   ]
@@ -128,13 +193,28 @@ export default function ManajemenSiswaPage() {
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <div>
-                    <label className="text-sm font-medium">Pilih Periode Rapor</label>
-                    <select className="ml-2 border rounded px-2 py-1" value={selectedTahunAjaranId === '' ? '' : String(selectedTahunAjaranId)} onChange={(e)=>setSelectedTahunAjaranId(e.target.value ? parseInt(e.target.value,10) : '')}>
-                      <option value="">-- Pilih Periode --</option>
-                      {tahunAjaranOptions.map(ta=> (
-                        <option key={ta.id} value={ta.id}>{ta.nama_ajaran} - Semester {ta.semester}</option>
-                      ))}
-                    </select>
+                    <label className="text-sm font-medium">Pilih Tahun Ajaran</label>
+                    <div className="flex items-center gap-2">
+                      {/* Master tahun ajaran selector */}
+                      <select className="ml-2 border rounded px-2 py-1" value={selectedMasterTaId === '' ? '' : String(selectedMasterTaId)} onChange={(e)=>{
+                        const masterId = e.target.value ? Number(e.target.value) : null
+                        setSelectedMasterTaId(masterId ?? '')
+                      }}>
+                        <option value="">-- Pilih Tahun Ajaran --</option>
+                        {masterOptions.map(m => (<option key={m.id} value={m.id}>{m.nama_ajaran}</option>))}
+                      </select>
+
+                              {/* Optional Kelas filter: if selected, apply additional filtering */}
+                              <select className="ml-2 border rounded px-2 py-1" value={selectedTingkatanId === '' ? '' : String(selectedTingkatanId)} onChange={async (e)=>{ const ting = e.target.value ? Number(e.target.value) : ''; setSelectedTingkatanId(ting); if (!ting) { setKelasOptions([]); return } const resp:any = await axios.get(`${API_BASE}/kelas`, { params: { tingkatan_id: ting } }); setKelasOptions(resp.data || []) }}>
+                                <option value="">-- Pilih Tingkatan --</option>
+                                {tingkatanOptions.map(t => (<option key={t.id} value={t.id}>{t.nama_tingkatan}</option>))}
+                              </select>
+
+                              <select className="ml-2 border rounded px-2 py-1" value={selectedKelasId === '' ? '' : String(selectedKelasId)} onChange={(e)=>{ const v = e.target.value ? Number(e.target.value) : ''; setSelectedKelasId(v) }}>
+                                <option value="">-- Semua Kelas --</option>
+                                {kelasOptions.map(k => (<option key={k.id} value={k.id}>{k.nama_kelas}</option>))}
+                              </select>
+                    </div>
                   </div>
 
                   <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -149,10 +229,28 @@ export default function ManajemenSiswaPage() {
 
                           <form onSubmit={addForm.handleSubmit(async (vals)=>{
                         try{
+                          // Normalize and sanitize fields to match backend expectations
+                          let jk:any = vals.jenis_kelamin ?? ''
+                          if (typeof jk === 'string') jk = jk.trim()
+                          if (!jk) jk = null
+                          else {
+                            const low = String(jk).toLowerCase()
+                            if (low === 'l' || low === 'laki' || low === 'laki-laki' || low === 'laki laki') jk = 'Laki-laki'
+                            else if (low === 'p' || low === 'perempuan') jk = 'Perempuan'
+                            else if (low === 'laki-laki' || low === 'perempuan') jk = jk
+                            else {
+                              // fallback: attempt to map common variants, otherwise keep original trimmed value
+                              if (low.startsWith('l')) jk = 'Laki-laki'
+                              else if (low.startsWith('p')) jk = 'Perempuan'
+                            }
+                          }
+
                           const payload = { ...vals,
                             kelas_id: vals.kelas_id === '' ? null : (typeof vals.kelas_id === 'string' ? Number(vals.kelas_id) : vals.kelas_id),
                             kamar_id: vals.kamar_id === '' ? null : (typeof vals.kamar_id === 'string' ? Number(vals.kamar_id) : vals.kamar_id),
-                            tahun_ajaran_id: vals['tahun_ajaran_id'] === '' ? null : (typeof vals['tahun_ajaran_id'] === 'string' ? Number(vals['tahun_ajaran_id']) : vals['tahun_ajaran_id'])
+                            // send master_tahun_ajaran_id to backend so backend can create history linked to master
+                            master_tahun_ajaran_id: vals.master_tahun_ajaran_id === '' ? null : (typeof vals.master_tahun_ajaran_id === 'string' ? Number(vals.master_tahun_ajaran_id) : vals.master_tahun_ajaran_id),
+                            jenis_kelamin: jk
                           }
                           const resp = await siswaService.createSiswa(payload)
                           // backend returns { siswa, history }
@@ -219,24 +317,61 @@ export default function ManajemenSiswaPage() {
                           </div>
 
                           <div className="space-y-2">
+                            <Label htmlFor="add-tahun_master_id">Tahun Ajaran Masuk</Label>
+                            <Controller
+                              control={addForm.control}
+                              name="master_tahun_ajaran_id"
+                              rules={{ required: 'Tahun ajaran wajib dipilih' }}
+                              render={({ field }) => (
+                                <Select
+                                  id="add-tahun_master_id"
+                                  value={(field.value ?? '') as any}
+                                  onChange={(e) => field.onChange((e.target as HTMLSelectElement).value)}
+                                >
+                                  <SelectItem value="">-- Pilih Tahun Ajaran --</SelectItem>
+                                  {masterOptions.map(m => (
+                                    <SelectItem key={m.id} value={String(m.id)}>
+                                      {m.nama_ajaran}
+                                    </SelectItem>
+                                  ))}
+                                </Select>
+                              )}
+                            />
+                            {addForm.formState.errors.master_tahun_ajaran_id && <p className="text-sm text-rose-600">{String(addForm.formState.errors.master_tahun_ajaran_id.message)}</p>}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="add-tingkatan_id">Tingkatan</Label>
+                            <Controller control={addForm.control} name="tingkatan_id" rules={{ required: 'Tingkatan wajib dipilih' }} render={({ field }) => (
+                              <Select id="add-tingkatan_id" value={(field.value ?? '') as any} onChange={async (e) => {
+                                const val = (e.target as HTMLSelectElement).value
+                                field.onChange(val)
+                                // fetch kelas for this tingkatan and enable kelas select
+                                if (val) {
+                                  try {
+                                    const resp:any = await axios.get(`${API_BASE}/kelas`, { params: { tingkatan_id: Number(val) } })
+                                    setKelasOptions(resp.data || [])
+                                  } catch(err){ console.error('Failed fetching kelas for tingkatan', err) }
+                                } else {
+                                  setKelasOptions([])
+                                }
+                              }}>
+                                <SelectItem value="">-- Pilih Tingkatan --</SelectItem>
+                                {tingkatanOptions.map(t => (<SelectItem key={t.id} value={String(t.id)}>{t.nama_tingkatan}</SelectItem>))}
+                              </Select>
+                            )} />
+                            {addForm.formState.errors.tingkatan_id && <p className="text-sm text-rose-600">{String(addForm.formState.errors.tingkatan_id.message)}</p>}
+                          </div>
+
+                          <div className="space-y-2">
                             <Label htmlFor="add-kelas_id">Kelas</Label>
-                            <Controller control={addForm.control} name="kelas_id" render={({ field }) => (
-                              <Select id="add-kelas_id" value={(field.value ?? '') as any} onChange={e => field.onChange((e.target as HTMLSelectElement).value)}>
+                            <Controller control={addForm.control} name="kelas_id" rules={{ required: 'Kelas wajib dipilih' }} render={({ field }) => (
+                              <Select id="add-kelas_id" value={(field.value ?? '') as any} onChange={e => field.onChange((e.target as HTMLSelectElement).value)} disabled={kelasOptions.length === 0}>
                                 <SelectItem value="">-- Pilih Kelas --</SelectItem>
                                 {kelasOptions.map(k => (<SelectItem key={k.id} value={String(k.id)}>{k.nama_kelas}</SelectItem>))}
                               </Select>
                             )} />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="add-tahun_ajaran_id">Tahun Ajaran Masuk</Label>
-                            <Controller control={addForm.control} name="tahun_ajaran_id" rules={{ required: 'Tahun ajaran wajib dipilih' }} render={({ field }) => (
-                              <Select id="add-tahun_ajaran_id" value={(field.value ?? '') as any} onChange={e => field.onChange((e.target as HTMLSelectElement).value)}>
-                                <SelectItem value="">-- Pilih Tahun Ajaran --</SelectItem>
-                                {tahunAjaranOptions.map(t => (<SelectItem key={t.id} value={String(t.id)}>{t.nama_ajaran} - Semester {t.semester}</SelectItem>))}
-                              </Select>
-                            )} />
-                            {addForm.formState.errors.tahun_ajaran_id && <p className="text-sm text-rose-600">{String(addForm.formState.errors.tahun_ajaran_id.message)}</p>}
+                            {addForm.formState.errors.kelas_id && <p className="text-sm text-rose-600">{String(addForm.formState.errors.kelas_id.message)}</p>}
                           </div>
 
                           <div className="space-y-2">
@@ -314,11 +449,32 @@ export default function ManajemenSiswaPage() {
                   </Dialog>
                 </div>
 
-                <DataTable<Siswa>
+                  <DataTable<Siswa>
                   columns={columns}
-                  data={data}
-                  onEdit={(r) => {
-                    setEditing(r)
+                  data={
+                    // Only apply kelas filter client-side; server already filters by master_ta_id when requested
+                    (() => {
+                      let list = data
+                      if (selectedKelasId) list = list.filter(d => (d.kelas_id ?? (d.kelas && d.kelas.id)) === selectedKelasId)
+                      return list
+                    })()
+                  }
+                  onEdit={async (r) => {
+                    // Prefill edit form and prefer the student's currentHistory.tahun_ajaran_id when available
+                    const taId = (r as any).currentHistory?.master_tahun_ajaran_id ?? ''
+                    // attempt to fetch earliest history to prefill Tahun Ajaran Masuk
+                    let masukId = ''
+                    try {
+                      const resp = await fetch(`${API_BASE}/siswa/${r.id}/earliest-history`)
+                      if (resp.ok) {
+                        const json = await resp.json()
+                        // Prefer master_tahun_ajaran_id if available on the history row
+                        masukId = json?.master_tahun_ajaran_id ?? ''
+                      }
+                    } catch (e) {
+                      // ignore, we'll fallback to blank
+                    }
+
                     form.reset({
                       nis: r.nis,
                       nama: r.nama,
@@ -339,49 +495,12 @@ export default function ManajemenSiswaPage() {
                       nama_wali: r.nama_wali,
                       pekerjaan_wali: r.pekerjaan_wali,
                       alamat_wali: r.alamat_wali,
+                      master_tahun_ajaran_id: taId ? String(taId) : '',
+                      tahun_ajaran_masuk: masukId ? String(masukId) : ''
                     })
+                    setEditing(r)
                   }}
                   onDelete={(r) => setDeleting(r)}
-                  onPrint={async (r, reportType, format) => {
-                    if (!selectedTahunAjaranId && (reportType === 'nilai' || reportType === 'sikap')) {
-                      toast({ title: 'Pilih Periode', description: 'Silakan pilih periode rapor terlebih dahulu', variant: 'destructive' })
-                      return
-                    }
-                    try {
-                      let resp
-                      if (reportType === 'identitas') {
-                        resp = await (await import('../../services/raportService')).default.generateIdentitas(r.id)
-                      } else if (reportType === 'nilai') {
-                        resp = await (await import('../../services/raportService')).default.generateNilai(r.id, selectedTahunAjaranId, (tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? ''))
-                      } else if (reportType === 'sikap') {
-                        resp = await (await import('../../services/raportService')).default.generateSikap(r.id, selectedTahunAjaranId, (tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? ''))
-                      } else {
-                        // fallback: try to fetch via API_BASE
-                        const endpoint = `raports/generate/${reportType}/${r.id}/${selectedTahunAjaranId}/${(tahunAjaranOptions.find(t=>t.id===selectedTahunAjaranId)?.semester ?? '')}`
-                        const url = `${API_BASE}/${endpoint}?format=${format}`
-                        resp = await axios.get(url, { responseType: 'blob' })
-                      }
-                      const respData = resp.data || resp
-                      const blob = new Blob([resp.data], { type: resp.headers['content-type'] })
-                      const link = document.createElement('a')
-                      link.href = window.URL.createObjectURL(blob)
-                      let fileName = `Laporan_${r.nama.replace(/\s+/g,'_')}.${format}`
-                      const cd = resp.headers['content-disposition']
-                      if (cd) {
-                        const m = cd.match(/filename="(.+)"/)
-                        if (m) fileName = m[1]
-                      }
-                      link.download = fileName
-                      document.body.appendChild(link)
-                      link.click()
-                      link.remove()
-                      window.URL.revokeObjectURL(link.href)
-                      toast({ title: 'Unduhan selesai', description: `${fileName}` })
-                    } catch (e:any) {
-                      console.error(e)
-                      toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal mengunduh', variant: 'destructive' })
-                    }
-                  }}
                 />
               </div>
             )}
@@ -402,6 +521,7 @@ export default function ManajemenSiswaPage() {
                 const payload = { ...vals,
                   kelas_id: vals.kelas_id === '' ? null : (typeof vals.kelas_id === 'string' ? Number(vals.kelas_id) : vals.kelas_id),
                   kamar_id: vals.kamar_id === '' ? null : (typeof vals.kamar_id === 'string' ? Number(vals.kamar_id) : vals.kamar_id),
+                  master_tahun_ajaran_id: vals.master_tahun_ajaran_id === '' ? null : (typeof vals.master_tahun_ajaran_id === 'string' ? Number(vals.master_tahun_ajaran_id) : vals.master_tahun_ajaran_id)
                 }
                 await siswaService.updateSiswa(editing.id, payload)
                 const res = await siswaService.getAllSiswa()
@@ -471,6 +591,27 @@ export default function ManajemenSiswaPage() {
                 )} />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="edit-tahun_masuk">Tahun Ajaran Masuk</Label>
+                <Controller
+                  control={form.control}
+                  name="master_tahun_ajaran_id"
+                  render={({ field }) => (
+                    <Select
+                      id="edit-tahun_masuk"
+                      value={(field.value ?? '') as any}
+                      onChange={e => field.onChange((e.target as HTMLSelectElement).value)}
+                    >
+                      <SelectItem value="">-- Pilih Tahun Ajaran Masuk --</SelectItem>
+                      {masterOptions.map(m => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                          {m.nama_ajaran}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  )}
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-kamar_id">Kamar</Label>
                 <Controller control={form.control} name="kamar_id" render={({ field }) => (

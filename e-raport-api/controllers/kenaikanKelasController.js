@@ -5,9 +5,10 @@ async function promote(req, res) {
   const { fromTaId, toTaId, kelasFromId, mode, manualMapping, executedBy, note } = req.body;
   const t = await db.sequelize.transaction();
   try {
-    const log = await promotionService.promoteStudents({ fromTaId, toTaId, kelasFromId, mode, manualMapping, executedBy, note }, { transaction: t });
+    // promoteStudents now returns { promosiLog, promotedCount }
+    const result = await promotionService.promoteStudents({ fromTaId, toTaId, kelasFromId, mode, manualMapping, executedBy, note }, { transaction: t });
     await t.commit();
-    res.json({ success: true, log });
+    res.json({ success: true, result });
   } catch (err) {
     await t.rollback();
     console.error(err);
@@ -39,8 +40,13 @@ async function promoteAllForTahun(req, res) {
 
     const results = [];
     for (const kelasFromId of targets) {
-      const log = await promotionService.promoteStudents({ fromTaId, toTaId, kelasFromId, mode, manualMapping, executedBy, note }, { transaction: t });
-      results.push(log);
+      // each call returns { promosiLog, promotedCount }
+      const item = await promotionService.promoteStudents({ fromTaId, toTaId, kelasFromId, mode, manualMapping, executedBy, note }, { transaction: t });
+      // normalize promosiLog to plain object when it's a Sequelize instance
+      if (item && item.promosiLog && typeof item.promosiLog.get === 'function') {
+        item.promosiLog = item.promosiLog.get({ plain: true });
+      }
+      results.push(item);
     }
 
     await t.commit();

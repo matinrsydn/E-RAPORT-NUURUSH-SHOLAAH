@@ -16,6 +16,13 @@ exports.bulkUpdateOrInsertKehadiran = async (req, res) => {
         for (const kehadiran of kehadiranBatch) {
             // Hanya proses jika ada data yang diinput
             if (kehadiran.indikatorkehadirans_id) {
+                // prefer tahun_ajaran_id; allow legacy tahun_ajaran string as fallback
+                let tahunAjaranId = kehadiran.tahun_ajaran_id || kehadiran.tahunAjaranId || null;
+                if (!tahunAjaranId && kehadiran.tahun_ajaran) {
+                    // try resolving via PeriodeAjaran
+                    const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: kehadiran.tahun_ajaran, semester: kehadiran.semester } });
+                    if (ta) tahunAjaranId = ta.id;
+                }
                 await Kehadiran.upsert({
                     siswa_id: kehadiran.siswa_id,
                     indikatorkehadirans_id: kehadiran.indikatorkehadirans_id,
@@ -23,7 +30,7 @@ exports.bulkUpdateOrInsertKehadiran = async (req, res) => {
                     sakit: kehadiran.sakit || 0,
                     absen: kehadiran.absen || 0,
                     semester: kehadiran.semester,
-                    tahun_ajaran: kehadiran.tahun_ajaran,
+                    tahun_ajaran_id: tahunAjaranId,
                 }, { transaction });
             }
         }
@@ -40,13 +47,20 @@ exports.bulkUpdateOrInsertKehadiran = async (req, res) => {
 
 // --- FUNGSI UNTUK MENGAMBIL SISWA DAN KEHADIRAN BERDASARKAN FILTER ---
 exports.getSiswaWithKehadiranByFilter = async (req, res) => {
-    const { kelas_id, semester, tahun_ajaran } = req.query;
+    const { kelas_id, semester } = req.query;
+    let tahunAjaranId = req.query.tahun_ajaran_id || req.body?.tahun_ajaran_id || req.params?.tahun_ajaran_id;
+    const tahun_ajaran_text = req.query.tahun_ajaran || req.body?.tahun_ajaran || req.params?.tahun_ajaran;
 
-    if (!kelas_id || !semester || !tahun_ajaran) {
+    if (!kelas_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
         return res.status(400).json({ message: "Semua filter harus diisi." });
     }
 
     try {
+        if (!tahunAjaranId && tahun_ajaran_text) {
+            const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text, semester } });
+            if (ta) tahunAjaranId = ta.id;
+        }
+
         const siswaList = await Siswa.findAll({
             where: { kelas_id: kelas_id },
             include: [{
@@ -54,7 +68,7 @@ exports.getSiswaWithKehadiranByFilter = async (req, res) => {
                 as: 'kehadiran',
                 where: {
                     semester: semester,
-                    tahun_ajaran: tahun_ajaran
+                    tahun_ajaran_id: tahunAjaranId
                 },
                 required: false,
                 include: [
@@ -97,11 +111,20 @@ exports.getTemplateKegiatan = async (req, res) => {
 // 1. Membuat satu entri kehadiran baru
 exports.createKehadiran = async (req, res) => {
     try {
-        const { siswa_id, indikatorkehadirans_id, semester, tahun_ajaran } = req.body;
-        if (!siswa_id || !indikatorkehadirans_id || !semester || !tahun_ajaran) {
+        const { siswa_id, indikatorkehadirans_id, semester } = req.body;
+        // prefer id from middleware or client
+        let tahunAjaranId = req.body?.tahun_ajaran_id || req.params?.tahun_ajaran_id || req.query?.tahun_ajaran_id;
+        const tahun_ajaran_text = req.body?.tahun_ajaran || req.params?.tahun_ajaran || req.query?.tahun_ajaran;
+        if (!siswa_id || !indikatorkehadirans_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
             return res.status(400).json({ message: "Data input tidak lengkap." });
         }
-        const newKehadiran = await Kehadiran.create(req.body);
+        if (!tahunAjaranId && tahun_ajaran_text) {
+            const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text, semester } });
+            if (ta) tahunAjaranId = ta.id;
+            else return res.status(404).json({ message: `Tahun Ajaran ${tahun_ajaran_text} semester ${semester} tidak ditemukan.` });
+        }
+        const payload = { ...req.body, tahun_ajaran_id: tahunAjaranId };
+        const newKehadiran = await Kehadiran.create(payload);
         res.status(201).json(newKehadiran);
     } catch (error) {
         console.error("Error membuat data kehadiran:", error);
@@ -117,7 +140,8 @@ exports.getAllKehadiran = async (req, res) => {
                 { model: Siswa, attributes: ['nama', 'nis'] },
                 { model: db.IndikatorKehadiran, attributes: ['nama_kegiatan'] }
             ],
-            order: [['tahun_ajaran', 'DESC'], ['semester', 'DESC']]
+            // Order by the FK column (tahun_ajaran_id) which is the canonical field
+            order: [['tahun_ajaran_id', 'DESC'], ['semester', 'DESC']]
         });
         res.status(200).json(allKehadiran);
     } catch (error) {
@@ -186,17 +210,24 @@ exports.deleteKehadiran = async (req, res) => {
 // 6. Mengambil rangkuman kehadiran per siswa
 exports.getRangkumanKehadiran = async (req, res) => {
     try {
-        const { siswa_id, semester, tahun_ajaran } = req.query;
-        
-        if (!siswa_id || !semester || !tahun_ajaran) {
+        const { siswa_id, semester } = req.query;
+        let tahunAjaranId = req.query.tahun_ajaran_id || req.body?.tahun_ajaran_id;
+        const tahun_ajaran_text = req.query.tahun_ajaran || req.body?.tahun_ajaran;
+
+        if (!siswa_id || !semester || (!tahunAjaranId && !tahun_ajaran_text)) {
             return res.status(400).json({ message: "Parameter siswa_id, semester, dan tahun_ajaran wajib diisi." });
+        }
+
+        if (!tahunAjaranId && tahun_ajaran_text) {
+            const ta = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text, semester } });
+            if (ta) tahunAjaranId = ta.id;
         }
 
         const kehadiran = await Kehadiran.findAll({
             where: {
-                siswaId: siswa_id,
+                siswa_id: siswa_id,
                 semester: semester,
-                tahun_ajaran: tahun_ajaran
+                tahun_ajaran_id: tahunAjaranId
             },
             include: [
                 { model: Siswa, attributes: ['nama', 'nis'] },

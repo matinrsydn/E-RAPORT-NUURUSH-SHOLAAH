@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import API_BASE from '../api'
 
-export default function FileUpload({ onUpload, accept = '.xlsx,.xls' }) {
+export default function FileUpload({ onUpload, onPreview, accept = '.xlsx,.xls' }) {
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState(null)
 
   const handleChange = (e) => setFile(e.target.files?.[0] || null)
 
@@ -14,18 +15,43 @@ export default function FileUpload({ onUpload, accept = '.xlsx,.xls' }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-  const res = await fetch(`${API_BASE.replace(/\/api\/?$/,'')}/api/excel/upload-nilai`, { method: 'POST', body: fd })
+      // Preview mode (no commit)
+      const res = await fetch(`${API_BASE}/raport/upload`, { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Upload gagal')
-      if (onUpload) onUpload(data)
-      alert(data.message || 'Upload selesai')
+      // Expect parsed preview
+  const parsed = data.parsed || null
+  setPreview(parsed)
+  if (onUpload) onUpload(data)
+  if (onPreview) onPreview(parsed)
     } catch (err) {
       console.error(err)
       alert(err.message || 'Error saat upload')
     } finally {
       setLoading(false)
+      // keep file for potential confirm action
+      if (document.getElementById('file-upload-input')) document.getElementById('file-upload-input').value = ''
+    }
+  }
+
+  const handleConfirm = async () => {
+    if (!file) return alert('Tidak ada file untuk disimpan')
+    setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`${API_BASE}/raport/upload?commit=1`, { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Commit gagal')
+      alert(data.message || 'Data berhasil disimpan')
+      setPreview(null)
       setFile(null)
       if (document.getElementById('file-upload-input')) document.getElementById('file-upload-input').value = ''
+    } catch (err) {
+      console.error(err)
+      alert(err.message || 'Error saat commit')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -35,6 +61,18 @@ export default function FileUpload({ onUpload, accept = '.xlsx,.xls' }) {
       <div>
         <button type="submit" className="px-3 py-1 bg-sky-600 text-white rounded" disabled={loading}>{loading ? 'Mengirim...' : 'Upload'}</button>
       </div>
+      {preview && (
+        <div className="mt-3 p-3 border rounded bg-white">
+          <div className="mb-2 font-semibold">Preview Hasil Parsing</div>
+          <div>Jumlah baris: {preview.length}</div>
+          <div>Valid: {preview.filter(p=>p.is_valid).length}</div>
+          <div>Invalid: {preview.filter(p=>!p.is_valid).length}</div>
+          <div className="mt-2">
+            <button type="button" className="px-3 py-1 bg-green-600 text-white rounded mr-2" onClick={handleConfirm} disabled={loading}>Konfirmasi Simpan</button>
+            <button type="button" className="px-3 py-1 bg-gray-300 rounded" onClick={()=>{ setPreview(null); setFile(null); if (document.getElementById('file-upload-input')) document.getElementById('file-upload-input').value = '' }}>Batal</button>
+          </div>
+        </div>
+      )}
     </form>
   )
 }

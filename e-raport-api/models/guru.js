@@ -19,9 +19,8 @@ module.exports = (sequelize, DataTypes) => {
     tanggal_lahir: DataTypes.DATE,
     telepon: DataTypes.STRING,
     alamat: DataTypes.TEXT,
-    status: DataTypes.ENUM('Aktif', 'Tidak Aktif'),
-
-    // --- TAMBAHKAN BARIS INI ---
+  // normalize enum values to match migration (lowercase)
+  status: DataTypes.ENUM('aktif', 'nonaktif'),
     tanda_tangan: DataTypes.STRING
     
   }, {

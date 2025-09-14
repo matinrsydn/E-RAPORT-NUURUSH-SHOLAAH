@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
-import API_BASE from '../../api'
-import axios from 'axios'
 import tahunAjaranService from '../../services/tahunAjaranService'
 import DataTable from '../../components/data-table'
 import { Card, CardContent } from '../../components/ui/card'
@@ -22,17 +20,17 @@ import { Select, SelectItem } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
 import { useToast } from '../../components/ui/toast'
 
+// PERBAIKAN: Sesuaikan tipe dengan database
 type TahunAjaran = {
   id: number
   nama_ajaran: string
-  semester: '1' | '2'
-  status: 'aktif' | 'tidak-aktif'
+  status: 'aktif' | 'nonaktif'
 }
 
+// PERBAIKAN: Sesuaikan tipe dengan database
 type FormValues = {
   nama_ajaran: string
-  semester: '1' | '2' | ''
-  status: 'aktif' | 'tidak-aktif' | ''
+  status: 'aktif' | 'nonaktif' | ''
 }
 
 export default function ManajemenTahunAjaranPage() {
@@ -42,14 +40,15 @@ export default function ManajemenTahunAjaranPage() {
   const [deleting, setDeleting] = useState<TahunAjaran | null>(null)
   const { toast } = useToast()
 
-  const form = useForm<FormValues>({ defaultValues: { nama_ajaran: '', semester: '', status: 'tidak-aktif' } })
-  const addForm = useForm<FormValues>({ defaultValues: { nama_ajaran: '', semester: '', status: 'tidak-aktif' } })
+  // PERBAIKAN: Gunakan 'nonaktif' sebagai nilai default
+  const form = useForm<FormValues>({ defaultValues: { nama_ajaran: '', status: 'nonaktif' } })
+  const addForm = useForm<FormValues>({ defaultValues: { nama_ajaran: '', status: 'nonaktif' } })
   const [addOpen, setAddOpen] = useState(false)
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const res = await tahunAjaranService.getAllTahunAjaran()
+      const res = await tahunAjaranService.getAllMasterTahunAjaran()
       setData(res)
     } catch (e) {
       console.error(e)
@@ -65,7 +64,6 @@ export default function ManajemenTahunAjaranPage() {
 
   const columns: ColumnDef<TahunAjaran, any>[] = [
     { header: 'Nama Ajaran', accessorKey: 'nama_ajaran' },
-    { header: 'Semester', accessorKey: 'semester' },
     { header: 'Status', accessorKey: 'status' },
     { id: 'actions', header: 'Aksi', accessorKey: 'id' as any },
   ]
@@ -75,7 +73,7 @@ export default function ManajemenTahunAjaranPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Manajemen Tahun Ajaran</h1>
-          <p className="text-muted-foreground">Kelola periode tahun ajaran dan semesternya</p>
+          <p className="text-muted-foreground">Kelola master data tahun ajaran. Semester akan dibuat otomatis.</p>
         </div>
 
         <Card>
@@ -94,7 +92,7 @@ export default function ManajemenTahunAjaranPage() {
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Tambah Tahun Ajaran</DialogTitle>
-                        <DialogDescription>Masukkan nama ajaran dan semester.</DialogDescription>
+                        <DialogDescription>Masukkan nama ajaran baru. Semester 1 & 2 akan dibuat otomatis.</DialogDescription>
                       </DialogHeader>
 
                       <form
@@ -102,12 +100,10 @@ export default function ManajemenTahunAjaranPage() {
                           try {
                             const payload = {
                               nama_ajaran: vals.nama_ajaran,
-                              semester: vals.semester,
-                              status: vals.status || 'tidak-aktif',
+                              status: vals.status || 'nonaktif',
                             }
-                            await tahunAjaranService.createTahunAjaran(payload)
-                            const updated = await tahunAjaranService.getAllTahunAjaran()
-                            setData(updated)
+                            await tahunAjaranService.createMasterTahunAjaran(payload)
+                            await fetchData()
                             toast({ title: 'Berhasil', description: 'Tahun ajaran ditambahkan' })
                             addForm.reset()
                             setAddOpen(false)
@@ -117,48 +113,30 @@ export default function ManajemenTahunAjaranPage() {
                           }
                         })}
                       >
-                        <div className="grid grid-cols-2 gap-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="nama_ajaran">Nama Ajaran</Label>
-                            <Input id="nama_ajaran" autoFocus {...addForm.register('nama_ajaran', { required: 'Nama ajaran wajib diisi' })} />
-                            {addForm.formState.errors.nama_ajaran && (
-                              <p className="text-sm text-rose-600">{String(addForm.formState.errors.nama_ajaran.message)}</p>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="semester">Semester</Label>
-                            <Controller
-                              control={addForm.control}
-                              name="semester"
-                              rules={{ required: 'Semester wajib diisi' }}
-                              render={({ field }) => (
-                                <Select id="semester" value={field.value ?? ''} onChange={(e) => field.onChange((e.target as HTMLSelectElement).value)}>
-                                  <SelectItem value="">-- Pilih --</SelectItem>
-                                  <SelectItem value="1">1</SelectItem>
-                                  <SelectItem value="2">2</SelectItem>
-                                </Select>
+                          <div className="grid grid-cols-1 gap-4 py-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="nama_ajaran">Nama Ajaran</Label>
+                              <Input id="nama_ajaran" autoFocus {...addForm.register('nama_ajaran', { required: 'Nama ajaran wajib diisi' })} />
+                              {addForm.formState.errors.nama_ajaran && (
+                                <p className="text-sm text-rose-600">{String(addForm.formState.errors.nama_ajaran.message)}</p>
                               )}
-                            />
-                            {addForm.formState.errors.semester && (
-                              <p className="text-sm text-rose-600">{String(addForm.formState.errors.semester.message)}</p>
-                            )}
-                          </div>
+                            </div>
 
-                          <div className="space-y-2">
-                            <Label htmlFor="status">Status</Label>
-                            <Controller
-                              control={addForm.control}
-                              name="status"
-                              render={({ field }) => (
-                                <Select id="status" value={field.value ?? 'tidak-aktif'} onChange={(e) => field.onChange((e.target as HTMLSelectElement).value)}>
-                                  <SelectItem value="aktif">aktif</SelectItem>
-                                  <SelectItem value="tidak-aktif">tidak-aktif</SelectItem>
-                                </Select>
-                              )}
-                            />
+                            <div className="space-y-2">
+                              <Label htmlFor="status">Status</Label>
+                              <Controller
+                                control={addForm.control}
+                                name="status"
+                                render={({ field }) => (
+                                  // PERBAIKAN: Gunakan 'nonaktif' sebagai nilai
+                                  <Select id="status" value={field.value ?? 'nonaktif'} onChange={(e) => field.onChange((e.target as HTMLSelectElement).value as FormValues['status'])}>
+                                    <SelectItem value="aktif">Aktif</SelectItem>
+                                    <SelectItem value="nonaktif">Nonaktif</SelectItem>
+                                  </Select>
+                                )}
+                              />
+                            </div>
                           </div>
-                        </div>
                         <DialogFooter>
                           <div className="flex w-full justify-end gap-2">
                             <Button variant="outline" type="button" onClick={() => setAddOpen(false)}>
@@ -177,7 +155,7 @@ export default function ManajemenTahunAjaranPage() {
                   data={data}
                   onEdit={(r) => {
                     setEditing(r)
-                    form.reset({ nama_ajaran: r.nama_ajaran, semester: r.semester, status: r.status })
+                    form.reset({ nama_ajaran: r.nama_ajaran, status: r.status })
                   }}
                   onDelete={(r) => setDeleting(r)}
                 />
@@ -198,10 +176,9 @@ export default function ManajemenTahunAjaranPage() {
               onSubmit={form.handleSubmit(async (vals) => {
                 if (!editing) return
                 try {
-                  const payload = { nama_ajaran: vals.nama_ajaran, semester: vals.semester, status: vals.status || 'tidak-aktif' }
-                  await tahunAjaranService.updateTahunAjaran(editing.id, payload)
-                  const updated = await tahunAjaranService.getAllTahunAjaran()
-                  setData(updated)
+                  const payload = { nama_ajaran: vals.nama_ajaran, status: vals.status || 'nonaktif' }
+                  await tahunAjaranService.updateMasterTahunAjaran(editing.id, payload)
+                  await fetchData()
                   setEditing(null)
                   toast({ title: 'Berhasil', description: 'Perubahan disimpan' })
                 } catch (e: any) {
@@ -209,7 +186,7 @@ export default function ManajemenTahunAjaranPage() {
                   toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan', variant: 'destructive' })
                 }
               })}
-              className="grid grid-cols-2 gap-4 py-4"
+              className="grid grid-cols-1 gap-4 py-4"
             >
               <div className="space-y-2">
                 <Label htmlFor="edit-nama_ajaran">Nama Ajaran</Label>
@@ -218,23 +195,12 @@ export default function ManajemenTahunAjaranPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-semester">Semester</Label>
-                <Controller control={form.control} name="semester" rules={{ required: 'Semester wajib diisi' }} render={({ field }) => (
-                  <Select id="edit-semester" value={field.value ?? ''} onChange={e => field.onChange((e.target as HTMLSelectElement).value)}>
-                    <SelectItem value="">-- Pilih --</SelectItem>
-                    <SelectItem value="1">1</SelectItem>
-                    <SelectItem value="2">2</SelectItem>
-                  </Select>
-                )} />
-                {form.formState.errors.semester && <p className="text-sm text-rose-600">{String(form.formState.errors.semester.message)}</p>}
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="edit-status">Status</Label>
                 <Controller control={form.control} name="status" render={({ field }) => (
-                  <Select id="edit-status" value={field.value ?? 'tidak-aktif'} onChange={e => field.onChange((e.target as HTMLSelectElement).value)}>
-                    <SelectItem value="aktif">aktif</SelectItem>
-                    <SelectItem value="tidak-aktif">tidak-aktif</SelectItem>
+                  // PERBAIKAN: Gunakan 'nonaktif' sebagai nilai
+                  <Select id="edit-status" value={field.value ?? 'nonaktif'} onChange={e => field.onChange((e.target as HTMLSelectElement).value as FormValues['status'])}>
+                    <SelectItem value="aktif">Aktif</SelectItem>
+                    <SelectItem value="nonaktif">Nonaktif</SelectItem>
                   </Select>
                 )} />
               </div>
@@ -255,15 +221,14 @@ export default function ManajemenTahunAjaranPage() {
             <DialogHeader>
               <DialogTitle>Konfirmasi Hapus</DialogTitle>
             </DialogHeader>
-            <div className="py-2">Apakah Anda yakin ingin menghapus tahun ajaran <strong>{deleting?.nama_ajaran}</strong> ?</div>
+            <div className="py-2">Apakah Anda yakin ingin menghapus tahun ajaran <strong>{deleting?.nama_ajaran}</strong>? Ini akan menghapus semester terkait.</div>
             <DialogFooter className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
               <Button variant="destructive" onClick={async () => {
                 if (!deleting) return
                 try {
-                  await tahunAjaranService.deleteTahunAjaran(deleting.id)
-                  const updated = await tahunAjaranService.getAllTahunAjaran()
-                  setData(updated)
+                  await tahunAjaranService.deleteMasterTahunAjaran(deleting.id)
+                  await fetchData()
                   setDeleting(null)
                   toast({ title: 'Berhasil', description: 'Tahun ajaran dihapus' })
                 } catch (e: any) {

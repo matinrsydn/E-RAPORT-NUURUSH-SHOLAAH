@@ -21,13 +21,13 @@ const sections: { title: string; items: NavItem[] }[] = [
           { to: "/dashboard/manajemen-raport", label: "Manajemen Raport", Icon: BookUser },
           // keep label 'Kenaikan' but route to the Promosi page which is already implemented
           { to: "/dashboard/promosi-kelas", label: "Kenaikan", Icon: CheckSquare },
-          { to: "/dashboard/manajemen-kehadiran", label: "Manajemen Kehadiran", Icon: ClipboardList },
-          { to: "/dashboard/manajemen-sikap", label: "Manajemen Sikap", Icon: Book },
+          // Manajemen Sikap page removed; use Indikator Sikap instead
         ],
       },
   {
     title: "Master Data",
     items: [
+      { to: "/dashboard/manajemen-tingkatan", label: "Tingkatan", Icon: ClipboardList },
       { to: "/dashboard/manajemen-tahun-ajaran", label: "Tahun Ajaran", Icon: Calendar },
       { to: "/dashboard/manajemen-mapel", label: "Mata Pelajaran", Icon: Book },
       { to: "/dashboard/manajemen-kitab", label: "Manajemen Kitab", Icon: BookCopy },
@@ -41,6 +41,7 @@ const sections: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/dashboard/manajemen-template", label: "Manajemen Template", Icon: FileCog },
       { to: "/dashboard/kepala-pesantren", label: "Pimpinan Pesantren", Icon: UserCog },
+      { to: "/dashboard/surat-keluar-template", label: "Surat Keluar (Template)", Icon: FileUp },
     ],
   },
 ];

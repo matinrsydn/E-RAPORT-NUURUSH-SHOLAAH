@@ -4,7 +4,7 @@ const db = require('../models');
 // GET all
 exports.getAllKamar = async (req, res) => {
     try {
-        const kamars = await db.Kamar.findAll({ include: ['siswa'] }); // Sertakan data siswa untuk hitung kapasitas
+        const kamars = await db.Kamar.findAll({ include: [ 'siswa' ] });
         res.json(kamars);
     } catch (error) {
         res.status(500).json({ message: "Gagal mengambil data kamar", error: error.message });
@@ -14,7 +14,8 @@ exports.getAllKamar = async (req, res) => {
 // CREATE
 exports.createKamar = async (req, res) => {
     try {
-        const newKamar = await db.Kamar.create(req.body);
+        const payload = { ...req.body };
+        const newKamar = await db.Kamar.create(payload);
         res.status(201).json(newKamar);
     } catch (error) {
         res.status(400).json({ message: "Gagal membuat kamar", error: error.message });
@@ -24,7 +25,8 @@ exports.createKamar = async (req, res) => {
 // UPDATE
 exports.updateKamar = async (req, res) => {
     try {
-        await db.Kamar.update(req.body, { where: { id: req.params.id } });
+        const payload = { ...req.body };
+        await db.Kamar.update(payload, { where: { id: req.params.id } });
         res.status(200).json({ message: "Kamar berhasil diperbarui." });
     } catch (error) {
         res.status(400).json({ message: "Gagal memperbarui kamar", error: error.message });

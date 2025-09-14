@@ -6,7 +6,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       NilaiHafalan.belongsTo(models.Siswa, { foreignKey: 'siswa_id', as: 'siswa' });
       NilaiHafalan.belongsTo(models.MataPelajaran, { foreignKey: 'mapel_id', as: 'mapel' });
-      NilaiHafalan.belongsTo(models.TahunAjaran, { foreignKey: 'tahun_ajaran_id', as: 'tahunAjaran' });
+  NilaiHafalan.belongsTo(models.PeriodeAjaran, { foreignKey: 'tahun_ajaran_id', as: 'tahunAjaran' });
     }
   }
   NilaiHafalan.init({
@@ -26,10 +26,6 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('1', '2'),
       allowNull: false
     },
-    nilai: {
-      type: DataTypes.DECIMAL(5, 2),
-      allowNull: true
-    },
     predikat: {
       type: DataTypes.ENUM('Tercapai', 'Tidak Tercapai'),
       allowNull: true
@@ -38,6 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true
     }
+    
   }, {
     sequelize,
     modelName: 'NilaiHafalan',

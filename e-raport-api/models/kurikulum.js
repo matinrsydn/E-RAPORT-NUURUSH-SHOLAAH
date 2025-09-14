@@ -3,16 +3,18 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Kurikulum extends Model {
     static associate(models) {
-      Kurikulum.belongsTo(models.TahunAjaran, { foreignKey: 'tahun_ajaran_id', as: 'tahun_ajaran' });
-      Kurikulum.belongsTo(models.Kelas, { foreignKey: 'kelas_id', as: 'kelas' });
+      // Refactored: Kurikulum now links to Tingkatan only, as curriculum structure is tied to education level only
+      Kurikulum.belongsTo(models.Tingkatan, { foreignKey: 'tingkatan_id', as: 'tingkatan' });
       Kurikulum.belongsTo(models.MataPelajaran, { foreignKey: 'mapel_id', as: 'mapel' });
       Kurikulum.belongsTo(models.Kitab, { foreignKey: 'kitab_id', as: 'kitab' });
     }
   }
   Kurikulum.init({
-    tahun_ajaran_id: DataTypes.INTEGER,
-    kelas_id: DataTypes.INTEGER,
-    semester: DataTypes.ENUM('1', '2'),
+    // Link to Tingkatan instead of per-kelas periode
+    tingkatan_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
     mapel_id: DataTypes.INTEGER,
     kitab_id: { // kitab_id bisa null, karena mapel Ujian mungkin tidak pakai kitab
       type: DataTypes.INTEGER,

@@ -18,12 +18,15 @@ async function promoteStudents({ fromTaId, toTaId, kelasFromId, mode='auto', man
     // Create promosi log
     const promosiLog = await db.PromosiLog.create({ tahun_ajaran_from_id: fromTaId, tahun_ajaran_to_id: toTaId, kelas_from_id: kelasFromId || null, kelas_to_id: null, executed_by: executedBy || null, note: note || null }, { transaction });
 
-    // fetch students in kelasFromId
-    const siswas = await db.Siswa.findAll({ where: { kelas_id: kelasFromId } , transaction });
+  // fetch students in kelasFromId
+  const siswas = await db.Siswa.findAll({ where: { kelas_id: kelasFromId } , transaction });
 
-    for (const siswa of siswas) {
+  let promotedCount = 0;
+
+  for (const siswa of siswas) {
       // save history before
-      await db.SiswaKelasHistory.create({ siswa_id: siswa.id, kelas_id: siswa.kelas_id, tahun_ajaran_id: fromTaId, note: 'sebelum promosi' }, { transaction });
+  let masterFrom = null; try { const p = await db.PeriodeAjaran.findByPk(fromTaId); if (p) masterFrom = p.master_tahun_ajaran_id || (p.master && p.master.id) || null; } catch(e){}
+  await db.SiswaKelasHistory.create({ siswa_id: siswa.id, kelas_id: siswa.kelas_id, master_tahun_ajaran_id: masterFrom, note: 'sebelum promosi' }, { transaction });
 
       // determine target
       const targetKelasId = await determineTargetKelas(siswa, mode, manualMapping);
@@ -36,11 +39,14 @@ async function promoteStudents({ fromTaId, toTaId, kelasFromId, mode='auto', man
       await siswa.update({ kelas_id: targetKelasId }, { transaction });
 
       // save history after
-      await db.SiswaKelasHistory.create({ siswa_id: siswa.id, kelas_id: targetKelasId, tahun_ajaran_id: toTaId, note: 'setelah promosi' }, { transaction });
+  let masterTo = null; try { const p2 = await db.PeriodeAjaran.findByPk(toTaId); if (p2) masterTo = p2.master_tahun_ajaran_id || (p2.master && p2.master.id) || null; } catch(e){}
+  await db.SiswaKelasHistory.create({ siswa_id: siswa.id, kelas_id: targetKelasId, master_tahun_ajaran_id: masterTo, note: 'setelah promosi' }, { transaction });
+
+      promotedCount += 1;
     }
 
     if (createdTransaction) await transaction.commit();
-    return promosiLog;
+    return { promosiLog, promotedCount };
   } catch (err) {
     if (createdTransaction) await transaction.rollback();
     throw err;

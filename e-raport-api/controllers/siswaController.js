@@ -16,30 +16,109 @@ function parseValidDate(value) {
 // Mengambil SEMUA siswa dengan data kelas dan wali kelas yang benar
 exports.getAllSiswa = async (req, res) => {
     try {
-        const siswas = await db.Siswa.findAll({
-            order: [['nama', 'ASC']],
+    // support optional filters: ?kelas_id=, ?master_ta_id= and ?tingkatan_id=
+    const { kelas_id, master_ta_id, tingkatan_id } = req.query;
+        const showAll = req.query.show_all === 'true' || req.query.include_all === 'true';
+        const where = {};
+        if (kelas_id) where.kelas_id = isNaN(Number(kelas_id)) ? kelas_id : Number(kelas_id);
+
+        const kelasInclude = {
+            model: db.Kelas,
+            as: 'kelas',
+            attributes: ['id', 'nama_kelas', 'tingkatan_id'],
+            required: false,
             include: [
                 {
-                    model: db.Kelas,
-                    as: 'kelas',
-                    attributes: ['nama_kelas'],
-                    required: false,
-                    // Lakukan join tambahan dari Kelas ke Guru untuk mendapatkan nama Wali Kelas
-                    include: [{
-                        model: db.Guru,
-                        as: 'walikelas', // Alias ini berasal dari model Kelas
-                        attributes: ['nama'],
-                        required: false
-                    }]
-                },
-                {
-                    model: db.Kamar,
-                    as: 'infoKamar',
-                    attributes: ['nama_kamar'],
+                    model: db.Guru,
+                    as: 'walikelas',
+                    attributes: ['nama'],
                     required: false
                 }
             ]
-        });
+        };
+        // If tingkatan_id provided, filter kelas by tingkatan
+        if (tingkatan_id) {
+            kelasInclude.where = { tingkatan_id: isNaN(Number(tingkatan_id)) ? tingkatan_id : Number(tingkatan_id) };
+            // also allow top-level where to filter siswa by kelas via provided kelas_id if present
+        }
+
+        const include = [ kelasInclude,
+            {
+                model: db.Kamar,
+                as: 'infoKamar',
+                attributes: ['nama_kamar'],
+                required: false
+            }
+        ];
+
+        // If master_ta_id is provided, include SiswaKelasHistory.
+        // Default behavior: required: true (only return siswa who have history for that master TA).
+        // If client requests show_all=true, use required: false and add a hasHistory flag on each siswa.
+        if (master_ta_id) {
+            const whereHistory = {};
+            whereHistory.master_tahun_ajaran_id = isNaN(Number(master_ta_id)) ? master_ta_id : Number(master_ta_id);
+            if (kelas_id) whereHistory.kelas_id = isNaN(Number(kelas_id)) ? kelas_id : Number(kelas_id);
+
+            // Build histories include: include masterTahunAjaran to provide nama_ajaran if available
+            const historyInclude = {
+                model: db.SiswaKelasHistory,
+                as: 'histories',
+                where: whereHistory,
+                required: !showAll,
+                attributes: ['id', 'master_tahun_ajaran_id', 'kelas_id', 'note'],
+                include: [
+                    {
+                        model: db.MasterTahunAjaran,
+                        as: 'masterTahunAjaran',
+                        attributes: ['id', 'nama_ajaran'],
+                        required: false
+                    }
+                ]
+            };
+
+            include.push(historyInclude);
+        }
+
+        const siswas = await db.Siswa.findAll({ where, order: [['nama', 'ASC']], include });
+
+        // Attach latest history (currentHistory) per siswa so frontend can render the student's actual TA
+        try {
+            const siswaIds = siswas.map(s => s.id);
+            if (siswaIds.length > 0) {
+                const histories = await db.SiswaKelasHistory.findAll({ where: { siswa_id: siswaIds }, order: [['id', 'DESC']], include: [{ model: db.MasterTahunAjaran, as: 'masterTahunAjaran', attributes: ['id','nama_ajaran'], required: false }] });
+                const latestBySiswa = new Map();
+                for (const h of histories) {
+                    if (!latestBySiswa.has(h.siswa_id)) latestBySiswa.set(h.siswa_id, h);
+                }
+                // attach
+                for (const s of siswas) {
+                    const plain = s.toJSON ? s.toJSON() : s;
+                    const latest = latestBySiswa.get(s.id) || null;
+                    if (latest) {
+                        const master = latest.masterTahunAjaran ? { id: latest.masterTahunAjaran.id, nama_ajaran: latest.masterTahunAjaran.nama_ajaran } : null;
+                        plain.currentHistory = { id: latest.id, master_tahun_ajaran_id: latest.master_tahun_ajaran_id, kelas_id: latest.kelas_id, note: latest.note, masterTahunAjaran: master };
+                    } else {
+                        plain.currentHistory = null;
+                    }
+                    // replace s in array with plain object
+                    const idx = siswas.indexOf(s);
+                    siswas[idx] = plain;
+                }
+            }
+        } catch (attachErr) {
+            console.warn('Could not attach currentHistory for siswa list', attachErr);
+        }
+
+        // If showAll was requested and master_ta_id provided, attach hasHistory boolean per siswa
+        if (showAll && master_ta_id) {
+            const out = siswas.map((s) => {
+                const obj = s;
+                obj.hasHistory = Array.isArray(obj.histories) && obj.histories.length > 0;
+                return obj;
+            });
+            return res.status(200).json(out);
+        }
+
         res.status(200).json(siswas);
 
     } catch (error) {
@@ -89,45 +168,49 @@ exports.getSiswaById = async (req, res) => {
 
 exports.createSiswa = async (req, res) => {
     try {
-        // Sanitize payload to avoid passing invalid datetime strings to MySQL
         const payload = { ...req.body };
-        // Enforce tahun_ajaran_id presence
-        const tahunAjaranIdRaw = payload.tahun_ajaran_id || payload.tahunAjaranId || null;
-        if (!tahunAjaranIdRaw) {
-            return res.status(400).json({ message: 'tahun_ajaran_id is required when creating a siswa' });
-        }
+        
+        // Sanitize tanggal_lahir
         if ('tanggal_lahir' in payload) {
             const parsed = parseValidDate(payload.tanggal_lahir);
             if (payload.tanggal_lahir && !parsed) {
                 return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: `Invalid value: ${payload.tanggal_lahir}` });
             }
-            payload.tanggal_lahir = parsed; // null or Date
+            payload.tanggal_lahir = parsed;
+        }
+
+        // Require master_tahun_ajaran_id
+        const masterTaId = payload.master_tahun_ajaran_id || payload.master_ta_id || null;
+        if (!masterTaId) {
+            return res.status(400).json({ message: "master_tahun_ajaran_id wajib diisi saat membuat siswa" });
         }
 
         // Create siswa record
         const newSiswa = await db.Siswa.create(payload);
 
-        // Determine kelas for history: prefer payload.kelas_id, then payload.kelas_id_masuk, fall back to created record
+        // Determine kelas for history
         const kelasForHistory = payload.kelas_id ?? payload.kelas_id_masuk ?? newSiswa.kelas_id;
 
-        // Create history entry; fail the request if configured to do so
+        // Create initial history entry
         let createdHistory = null;
         try {
             createdHistory = await db.SiswaKelasHistory.create({
                 siswa_id: newSiswa.id,
                 kelas_id: Number(kelasForHistory),
-                tahun_ajaran_id: Number(tahunAjaranIdRaw),
+                master_tahun_ajaran_id: Number(masterTaId),
                 note: 'masuk'
             });
         } catch (histErr) {
-            console.error('ERROR: failed to create SiswaKelasHistory for new siswa:', histErr);
+            console.error('ERROR: gagal membuat history siswa:', histErr);
             const failOnHist = (process.env.FAIL_ON_HISTORY_ERROR || '').toLowerCase() === 'true';
             if (failOnHist) {
-                // attempt to rollback the created siswa to avoid partial state
-                try { await db.Siswa.destroy({ where: { id: newSiswa.id } }); } catch(e) { console.error('Failed to rollback siswa after history error', e); }
-                return res.status(500).json({ message: 'Failed to create siswa history', error: histErr.message });
+                try { 
+                    await db.Siswa.destroy({ where: { id: newSiswa.id } });
+                } catch (e) {
+                    console.error('Gagal rollback siswa setelah error history', e);
+                }
+                return res.status(500).json({ message: 'Gagal membuat siswa history', error: histErr.message });
             }
-            // otherwise, leave createdSiswa and return warning
         }
 
         return res.status(201).json({ siswa: newSiswa, history: createdHistory });
@@ -137,33 +220,106 @@ exports.createSiswa = async (req, res) => {
     }
 };
 
-exports.updateSiswa = async (req, res) => {
-    try {
-        // Sanitize payload to avoid database datetime errors
-        const payload = { ...req.body };
-        if ('tanggal_lahir' in payload) {
-            const parsed = parseValidDate(payload.tanggal_lahir);
-            if (payload.tanggal_lahir && !parsed) {
-                return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: `Invalid value: ${payload.tanggal_lahir}` });
-            }
-            payload.tanggal_lahir = parsed; // null or Date
-        }
+exports.createSiswa = async (req, res) => {
+  try {
+    const payload = { ...req.body }
 
-        const [updated] = await db.Siswa.update(payload, { where: { id: req.params.id } });
-        if (updated) {
-            const updatedSiswa = await db.Siswa.findByPk(req.params.id);
-            return res.status(200).json(updatedSiswa);
-        }
-        throw new Error('Siswa tidak ditemukan');
-    } catch (error) {
-        console.error(`SERVER ERROR - PUT /api/siswa/${req.params.id}:`, error);
-        // If it's a validation/DB error, respond 400, otherwise 404 when not found
-        if (error.message && /datetime|Invalid date|Incorrect datetime/i.test(error.message)) {
-            return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: error.message });
-        }
-        res.status(404).json({ message: "Siswa tidak ditemukan", error: error.message });
+    // validasi tanggal lahir
+    if ('tanggal_lahir' in payload) {
+      const parsed = parseValidDate(payload.tanggal_lahir)
+      if (payload.tanggal_lahir && !parsed) {
+        return res.status(400).json({
+          message: "Format tanggal_lahir tidak valid",
+          error: `Invalid value: ${payload.tanggal_lahir}`
+        })
+      }
+      payload.tanggal_lahir = parsed
     }
-};
+
+    // ambil master_tahun_ajaran_id langsung dari payload
+    const masterTaId = payload.master_tahun_ajaran_id || payload.master_ta_id || null
+    if (!masterTaId) {
+      return res.status(400).json({ message: "master_tahun_ajaran_id wajib diisi saat membuat siswa" })
+    }
+
+    // buat siswa
+    const newSiswa = await db.Siswa.create(payload)
+
+    // kelas untuk history
+    const kelasForHistory = payload.kelas_id ?? payload.kelas_id_masuk ?? newSiswa.kelas_id
+
+    // buat history pertama (masuk)
+    let createdHistory = null
+    try {
+      createdHistory = await db.SiswaKelasHistory.create({
+        siswa_id: newSiswa.id,
+        kelas_id: Number(kelasForHistory),
+        master_tahun_ajaran_id: Number(masterTaId),
+        semester: '1', // default semester masuk
+        note: 'masuk'
+      })
+    } catch (histErr) {
+      console.error('ERROR: gagal membuat history siswa:', histErr)
+      const failOnHist = (process.env.FAIL_ON_HISTORY_ERROR || '').toLowerCase() === 'true'
+      if (failOnHist) {
+        try { await db.Siswa.destroy({ where: { id: newSiswa.id } }) } catch (e) {
+          console.error('Gagal rollback siswa setelah error history', e)
+        }
+        return res.status(500).json({ message: 'Gagal membuat siswa history', error: histErr.message })
+      }
+    }
+
+    return res.status(201).json({ siswa: newSiswa, history: createdHistory })
+  } catch (error) {
+    console.error('SERVER ERROR - POST /api/siswa:', error)
+    res.status(400).json({ message: "Gagal membuat siswa", error: error.message })
+  }
+}
+
+exports.updateSiswa = async (req, res) => {
+  try {
+    const payload = { ...req.body }
+
+    // validasi tanggal lahir
+    if ('tanggal_lahir' in payload) {
+      const parsed = parseValidDate(payload.tanggal_lahir)
+      if (payload.tanggal_lahir && !parsed) {
+        return res.status(400).json({
+          message: "Format tanggal_lahir tidak valid",
+          error: `Invalid value: ${payload.tanggal_lahir}`
+        })
+      }
+      payload.tanggal_lahir = parsed
+    }
+
+    const [updated] = await db.Siswa.update(payload, { where: { id: req.params.id } })
+    if (!updated) throw new Error('Siswa tidak ditemukan')
+
+    // update earliest history kalau ada master_tahun_ajaran_id baru
+    if (payload.master_tahun_ajaran_id || payload.master_ta_id) {
+      const siswaId = Number(req.params.id)
+      const earliest = await db.SiswaKelasHistory.findOne({
+        where: { siswa_id: siswaId },
+        order: [['id', 'ASC']]
+      })
+      if (earliest) {
+        const masterIncoming = payload.master_tahun_ajaran_id || payload.master_ta_id
+        earliest.master_tahun_ajaran_id = Number(masterIncoming)
+        await earliest.save()
+      }
+    }
+
+    const updatedSiswa = await db.Siswa.findByPk(req.params.id)
+    return res.status(200).json(updatedSiswa)
+  } catch (error) {
+    console.error(`SERVER ERROR - PUT /api/siswa/${req.params.id}:`, error)
+    if (error.message && /datetime|Invalid date|Incorrect datetime/i.test(error.message)) {
+      return res.status(400).json({ message: "Format tanggal_lahir tidak valid", error: error.message })
+    }
+    res.status(404).json({ message: "Siswa tidak ditemukan", error: error.message })
+  }
+}
+
 
 exports.deleteSiswa = async (req, res) => {
     try {
@@ -174,3 +330,70 @@ exports.deleteSiswa = async (req, res) => {
         res.status(404).json({ message: "Siswa tidak ditemukan", error: error.message });
     }
 };
+
+// Backfill/create missing SiswaKelasHistory rows for a given tahun_ajaran or master_tahun_ajaran
+exports.backfillHistories = async (req, res) => {
+    try {
+        const { master_tahun_ajaran_id, kelas_id, siswa_id } = req.body;
+        if (!master_tahun_ajaran_id) {
+            return res.status(400).json({ message: 'master_tahun_ajaran_id is required' });
+        }
+
+        const where = {};
+        if (kelas_id) where.kelas_id = kelas_id;
+        if (siswa_id) where.id = siswa_id;
+
+        const siswas = await db.Siswa.findAll({ where });
+        let created = 0;
+        for (const s of siswas) {
+            const exists = await db.SiswaKelasHistory.findOne({ where: { siswa_id: s.id, master_tahun_ajaran_id: master_tahun_ajaran_id } });
+            if (!exists) {
+                await db.SiswaKelasHistory.create({ siswa_id: s.id, kelas_id: s.kelas_id || null, master_tahun_ajaran_id: master_tahun_ajaran_id, note: 'backfill via API' });
+                created++;
+            }
+        }
+        return res.json({ success: true, created });
+    } catch (err) {
+        console.error('ERROR backfillHistories', err);
+        return res.status(500).json({ success: false, message: 'Failed to backfill histories', error: err.message });
+    }
+}
+
+// Return list of siswa missing histories for a given tahun_ajaran (optional kelas_id)
+exports.getMissingHistories = async (req, res) => {
+    try {
+        const { master_tahun_ajaran_id, kelas_id } = req.query;
+        if (!master_tahun_ajaran_id) return res.status(400).json({ message: 'master_tahun_ajaran_id is required' });
+        const where = {};
+        if (kelas_id) where.kelas_id = isNaN(Number(kelas_id)) ? kelas_id : Number(kelas_id);
+
+        // All siswa matching where
+        const siswas = await db.Siswa.findAll({ where, include: [{ model: db.Kelas, as: 'kelas', attributes: ['nama_kelas'] }] });
+
+        const missing = [];
+        for (const s of siswas) {
+            const exists = await db.SiswaKelasHistory.findOne({ where: { siswa_id: s.id, master_tahun_ajaran_id: isNaN(Number(master_tahun_ajaran_id)) ? master_tahun_ajaran_id : Number(master_tahun_ajaran_id) } });
+            if (!exists) missing.push({ id: s.id, nama: s.nama, nis: s.nis, kelas_id: s.kelas_id, kelas: s.kelas ? s.kelas.nama_kelas : null });
+        }
+        return res.json({ count: missing.length, missing });
+    } catch (err) {
+        console.error('ERROR getMissingHistories', err);
+        return res.status(500).json({ success: false, message: 'Failed to list missing histories', error: err.message });
+    }
+}
+
+// Get the earliest SiswaKelasHistory for a given siswa (used by frontend to prefill Tahun Ajaran Masuk)
+exports.getEarliestHistory = async (req, res) => {
+    try {
+        const siswaId = Number(req.params.id);
+        if (!siswaId) return res.status(400).json({ message: 'Invalid siswa id' });
+        const earliest = await db.SiswaKelasHistory.findOne({ where: { siswa_id: siswaId }, order: [['id', 'ASC']], include: [{ model: db.MasterTahunAjaran, as: 'masterTahunAjaran', attributes: ['id','nama_ajaran'], required: false }] });
+        if (!earliest) return res.status(404).json({ message: 'History not found' });
+        // Normalize returned payload to include master_tahun_ajaran_id and readable masterTahunAjaran
+        const out = earliest.toJSON();
+        return res.status(200).json(out);
+    } catch (err) {
+        console.error('ERROR getEarliestHistory', err);
+        res.status(500).json({ message: 'Failed to get earliest history', error: err.message });
+    }
+}

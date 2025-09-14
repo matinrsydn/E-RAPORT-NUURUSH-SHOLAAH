@@ -2,8 +2,8 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import DashboardLayout from '../../dashboard/layout';
 import API_BASE from '../../api';
 import kurikulumService from '../../services/kurikulumService';
-import tahunAjaranService from '../../services/tahunAjaranService';
 import kelasService from '../../services/kelasService';
+import { getAllTingkatans } from '../../services/tingkatanService';
 import mapelService from '../../services/mapelService';
 import kitabService from '../../services/kitabService.js';
 import DataTable from '../../components/data-table';
@@ -26,7 +26,6 @@ type Kurikulum = {
   batas_hafalan: string | null;
   mapel_id: number;
   kitab_id: number | null;
-  semester: '1' | '2';
 };
 
 type FormValues = {
@@ -36,8 +35,8 @@ type FormValues = {
 };
 
 type MasterData = {
-  tahunAjaran: Array<{ id: number; nama_ajaran: string; semester: '1' | '2' }>;
   kelas: Array<{ id: number; nama_kelas: string }>;
+  tingkatans: Array<{ id: number; nama_tingkatan: string }>;
   mapel: Array<{ id: number; nama_mapel: string; jenis: 'Ujian' | 'Hafalan' }>;
   kitab: Array<{ id: number; nama_kitab: string }>;
 };
@@ -45,18 +44,20 @@ type MasterData = {
 export default function ManajemenKurikulumPage() {
   // --- STATE MANAGEMENT ---
   const [data, setData] = useState<Kurikulum[]>([]);
-  const [masterData, setMasterData] = useState<MasterData>({ tahunAjaran: [], kelas: [], mapel: [], kitab: [] });
-  const [filters, setFilters] = useState({ tahun_ajaran_id: '', kelas_id: '' });
+  const [masterData, setMasterData] = useState<MasterData>({ kelas: [], tingkatans: [], mapel: [], kitab: [] });
+  const [filters, setFilters] = useState({ tingkatan_id: '' });
   
   const [loading, setLoading] = useState(true);
   const [loadingKurikulum, setLoadingKurikulum] = useState(false);
 
   const [editing, setEditing] = useState<Kurikulum | null>(null);
   const [deleting, setDeleting] = useState<Kurikulum | null>(null);
-  const [adding, setAdding] = useState<{ open: boolean; semester: '1' | '2' | null }>({ open: false, semester: null });
+  const [adding, setAdding] = useState<{ open: boolean }>({ open: false });
 
   const { toast } = useToast();
   const form = useForm<FormValues>();
+  const { watch, control, formState } = form;
+  const [isHafalan, setIsHafalan] = useState(false);
 
   // --- DATA FETCHING (useEffect-based, stable) ---
   // Keep a ref to toast so we don't need to include it in effect deps (some implementations return unstable objects)
@@ -72,16 +73,16 @@ export default function ManajemenKurikulumPage() {
     const run = async () => {
       setLoading(true);
       try {
-        const [tahunAjaran, kelas, mapel, kitab] = await Promise.all([
-          tahunAjaranService.getAllTahunAjaran(),
+        const [kelas, mapel, kitab, tingkatans] = await Promise.all([
           kelasService.getAllKelas(),
           mapelService.getAllMapel(),
           kitabService.getAllKitab(),
+          getAllTingkatans(),
         ]);
         if (!mounted) return;
         setMasterData({
-          tahunAjaran,
           kelas,
+          tingkatans,
           mapel,
           kitab,
         });
@@ -95,27 +96,20 @@ export default function ManajemenKurikulumPage() {
     return () => { mounted = false };
   }, []);
 
-  // Fetch kurikulum when filters change OR when masterData is updated OR when reload toggled
+  // Fetch kurikulum when filters change OR when reload toggled
   useEffect(() => {
     let mounted = true;
-    if (!filters.tahun_ajaran_id || !filters.kelas_id) {
+    if (!filters.tingkatan_id) {
       setData([]);
       return;
     }
-
     const run = async () => {
       setLoadingKurikulum(true);
       try {
-        const semester = masterData.tahunAjaran.find(ta => ta.id === Number(filters.tahun_ajaran_id))?.semester;
-        if (!semester) {
-          // no semester info yet, clear data and stop
-          if (mounted) setData([]);
-          return;
-        }
-        const params = { ...filters, semester };
-  const rows = await kurikulumService.getAllKurikulum(params);
-  if (!mounted) return;
-  setData(rows);
+        const params = { tingkatan_id: Number(filters.tingkatan_id) };
+        const rows = await kurikulumService.getAllKurikulum(params);
+        if (!mounted) return;
+        setData(rows);
       } catch (error) {
         toastRef.current?.({ title: 'Gagal Memuat Kurikulum', description: 'Tidak dapat mengambil data kurikulum untuk filter yang dipilih.', variant: 'destructive' });
       } finally {
@@ -125,12 +119,39 @@ export default function ManajemenKurikulumPage() {
 
     run();
     return () => { mounted = false };
-  // eslint-disable-next-line
-  }, [filters.tahun_ajaran_id, filters.kelas_id, masterData.tahunAjaran, kurikulumReload]);
+  }, [filters.tingkatan_id, kurikulumReload]);
+
+  // Watch selected mapel in the add dialog to decide if "batas_hafalan" should be shown/required
+  const watchedMapelId = watch('mapel_id');
+  useEffect(() => {
+    // Prefer the runtime-selected mapel when adding. masterData.mapel contains master list.
+    if (watchedMapelId) {
+      const mid = Number(watchedMapelId);
+      const found = masterData.mapel.find(m => m.id === mid);
+      const isH = !!found && found.jenis === 'Hafalan';
+      setIsHafalan(isH);
+      if (!isH) {
+        form.setValue('batas_hafalan', '');
+      }
+    } else {
+      // If no selected mapel, reset
+      setIsHafalan(false);
+      form.setValue('batas_hafalan', '');
+    }
+  }, [watchedMapelId, masterData.mapel, form]);
+
+  // When editing an existing kurikulum, ensure batas_hafalan visibility matches the mapel type
+  useEffect(() => {
+    if (editing) {
+      const isH = editing?.mapel?.jenis === 'Hafalan';
+      setIsHafalan(!!isH);
+      if (!isH) form.setValue('batas_hafalan', '');
+    }
+  }, [editing, form]);
 
   // --- HANDLER UNTUK OPERASI CRUD ---
   const handleAdd = async (vals: FormValues) => {
-    if (!filters.tahun_ajaran_id || !filters.kelas_id || !adding.semester) return;
+    if (!filters.tingkatan_id) return;
     if (!vals.kitab_id) {
       toast({ title: 'Validasi', description: 'Kitab harus dipilih.', variant: 'destructive' });
       return;
@@ -138,15 +159,13 @@ export default function ManajemenKurikulumPage() {
     try {
       const payload = {
         ...vals,
-        tahun_ajaran_id: Number(filters.tahun_ajaran_id),
-        kelas_id: Number(filters.kelas_id),
-        semester: adding.semester,
+        tingkatan_id: Number(filters.tingkatan_id),
         mapel_id: Number(vals.mapel_id),
         kitab_id: Number(vals.kitab_id),
       };
       await kurikulumService.createKurikulum(payload);
       toast({ title: 'Berhasil', description: 'Mata pelajaran ditambahkan ke kurikulum.' });
-      setAdding({ open: false, semester: null });
+      setAdding({ open: false });
       setKurikulumReload(n => n + 1);
     } catch (e: any) {
       toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menambahkan.', variant: 'destructive' });
@@ -199,48 +218,38 @@ export default function ManajemenKurikulumPage() {
     )}
   ], [form]);
 
-  const selectedTA = masterData.tahunAjaran.find(ta => ta.id === Number(filters.tahun_ajaran_id));
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Manajemen Kurikulum</h1>
-          <p className="text-muted-foreground">Atur mata pelajaran, kitab, dan target hafalan untuk setiap kelas per tahun ajaran.</p>
+          <p className="text-muted-foreground">Atur mata pelajaran, kitab, dan target hafalan untuk setiap tingkatan per tahun ajaran.</p>
         </div>
 
         {/* --- FILTER --- */}
         <Card>
           <CardHeader>
-            <CardTitle>Filter Kurikulum</CardTitle>
+            <CardTitle>Pilih Tingkatan</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent>
             <FilterSelect
-              id="filter-ta"
-              label="Tahun Ajaran & Semester"
-              value={filters.tahun_ajaran_id}
-              onChange={(v) => setFilters(prev => ({ ...prev, tahun_ajaran_id: v }))}
-              placeholder={loading ? "Memuat..." : "-- Pilih Tahun Ajaran --"}
-              options={masterData.tahunAjaran.map(ta => ({ value: String(ta.id), label: `${ta.nama_ajaran} (Semester ${ta.semester})` }))}
-            />
-            <FilterSelect
-              id="filter-kelas"
-              label="Kelas"
-              value={filters.kelas_id}
-              onChange={(v) => setFilters(prev => ({ ...prev, kelas_id: v }))}
-              placeholder={loading ? "Memuat..." : "-- Pilih Kelas --"}
-              options={masterData.kelas.map(k => ({ value: String(k.id), label: k.nama_kelas }))}
+              id="filter-tingkatan"
+              label="Tingkatan"
+              value={filters.tingkatan_id}
+              onChange={(v) => setFilters(prev => ({ ...prev, tingkatan_id: v }))}
+              placeholder={loading ? "Memuat..." : "-- Pilih Tingkatan --"}
+              options={masterData.tingkatans.map(t => ({ value: String(t.id), label: t.nama_tingkatan }))}
             />
           </CardContent>
         </Card>
 
         {/* --- TAMPILAN DATA --- */}
-        {filters.tahun_ajaran_id && filters.kelas_id && (
+    {filters.tingkatan_id && (
           <Card>
              <CardHeader>
                 <div className="flex justify-between items-center">
-                    <CardTitle>Kurikulum Semester {selectedTA?.semester}</CardTitle>
-                    <Button onClick={() => { form.reset(); setAdding({ open: true, semester: selectedTA?.semester ?? null }); }}>Tambah Mapel</Button>
+      <CardTitle>Kurikulum Tingkatan</CardTitle>
+      <Button onClick={() => { form.reset(); setAdding({ open: true }); }}>Tambah Mapel</Button>
                 </div>
             </CardHeader>
             <CardContent>
@@ -251,10 +260,10 @@ export default function ManajemenKurikulumPage() {
         
         {/* --- DIALOG --- */}
         {/* DIALOG TAMBAH */}
-        <Dialog open={adding.open} onOpenChange={(v) => { if (!v) setAdding({ open: false, semester: null }) }}>
+        <Dialog open={adding.open} onOpenChange={(v) => { if (!v) setAdding({ open: false }) }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Tambah Mapel ke Kurikulum (Semester {adding.semester})</DialogTitle>
+              <DialogTitle>Tambah Mapel ke Kurikulum</DialogTitle>
               <DialogDescription>Pilih mata pelajaran dan opsi kitab serta target hafalan untuk ditambahkan ke kurikulum.</DialogDescription>
             </DialogHeader>
             <form onSubmit={form.handleSubmit(handleAdd)} className="grid gap-4 py-4">
@@ -277,12 +286,19 @@ export default function ManajemenKurikulumPage() {
                 )} />
                 <p className="text-sm text-muted-foreground">Pilih kitab yang digunakan untuk mata pelajaran ini. Field wajib diisi.</p>
               </div>
-              <div className="space-y-2">
-                <Label>Batas Hafalan (Opsional)</Label>
-                <Input {...form.register('batas_hafalan')} placeholder="Contoh: Juz 30, Hadits ke-20" />
-              </div>
+              {isHafalan ? (
+                <div className="space-y-2">
+                  <Label>Batas Hafalan</Label>
+                  <Controller name="batas_hafalan" control={form.control} rules={{ required: 'Batas hafalan wajib untuk mapel hafalan' }} render={({ field, fieldState }) => (
+                    <>
+                      <Input {...field} placeholder="Contoh: Juz 30, Hadits ke-20" />
+                      {fieldState.error && <p className="text-sm text-destructive">{String(fieldState.error.message)}</p>}
+                    </>
+                  )} />
+                </div>
+              ) : null}
               <DialogFooter>
-                <Button variant="outline" type="button" onClick={() => setAdding({ open: false, semester: null })}>Batal</Button>
+                <Button variant="outline" type="button" onClick={() => setAdding({ open: false })}>Batal</Button>
                 <Button type="submit">Simpan</Button>
               </DialogFooter>
             </form>
@@ -307,10 +323,17 @@ export default function ManajemenKurikulumPage() {
                 )} />
                 <p className="text-sm text-muted-foreground">Pilih kitab yang digunakan. Wajib diisi.</p>
               </div>
-              <div className="space-y-2">
-                <Label>Batas Hafalan (Opsional)</Label>
-                <Input {...form.register('batas_hafalan')} placeholder="Contoh: Juz 30, Hadits ke-20" />
-              </div>
+              {isHafalan ? (
+                <div className="space-y-2">
+                  <Label>Batas Hafalan</Label>
+                  <Controller name="batas_hafalan" control={form.control} rules={{ required: 'Batas hafalan wajib untuk mapel hafalan' }} render={({ field, fieldState }) => (
+                    <>
+                      <Input {...field} placeholder="Contoh: Juz 30, Hadits ke-20" />
+                      {fieldState.error && <p className="text-sm text-destructive">{String(fieldState.error.message)}</p>}
+                    </>
+                  )} />
+                </div>
+              ) : null}
               <DialogFooter>
                 <Button variant="outline" type="button" onClick={() => setEditing(null)}>Batal</Button>
                 <Button type="submit">Simpan Perubahan</Button>

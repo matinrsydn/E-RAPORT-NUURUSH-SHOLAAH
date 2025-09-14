@@ -34,8 +34,14 @@ import mapelService from '../../services/mapelService'
 import kelasService from '../../services/kelasService'
 import tahunAjaranService from '../../services/tahunAjaranService'
 import excelService from '../../services/excelService'
+import * as tingkatanService from '../../services/tingkatanService'
 
 // --- TIPE DATA ---
+interface Tingkatan {
+  id: number;
+  nama_tingkatan: string;
+}
+
 interface Siswa {
   id: number;
   nis?: string;
@@ -79,6 +85,16 @@ interface FormData {
   tahun_ajaran_id: string;
 }
 
+interface Props {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+}
+
 export default function InputNilaiPage() {
   const [nilaiList, setNilaiList] = useState<Nilai[]>([]);
   const [options, setOptions] = useState<{
@@ -86,13 +102,19 @@ export default function InputNilaiPage() {
     mapel: Mapel[];
     kelas: Kelas[];
     tahunAjaran: TahunAjaran[];
+    tingkatan: Tingkatan[];
   }>({
     siswa: [],
     mapel: [],
     kelas: [],
     tahunAjaran: [],
+    tingkatan: [],
   });
-  const [filters, setFilters] = useState({ kelas_id: "", tahun_ajaran_id: "" });
+  const [filters, setFilters] = useState({ 
+    kelas_id: "", 
+    tahun_ajaran_id: "", 
+    tingkatan_id: "" 
+  });
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentNilai, setCurrentNilai] = useState<Partial<Nilai> | null>(null);
@@ -107,20 +129,24 @@ export default function InputNilaiPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [nilaiData, siswaData, mapelData, kelasData, tahunData] = await Promise.all([
+      const [nilaiData, siswaData, mapelData, kelasData, tahunData, tingkatanData] = await Promise.all([
         nilaiService.getAllNilai(),
         siswaService.getAllSiswa(),
         mapelService.getAllMapel(),
-        kelasService.getAllKelas(),
+        // Only get kelas for selected tingkatan
+        filters.tingkatan_id ? kelasService.getKelasByTingkatan(filters.tingkatan_id) : [],
         tahunAjaranService.getAllTahunAjaran(),
+        tingkatanService.getAllTingkatans(),
       ])
 
+      console.debug('DEBUG: fetched nilaiData', nilaiData);
       setNilaiList(nilaiData);
       setOptions({
         siswa: siswaData,
         mapel: mapelData,
         kelas: kelasData,
         tahunAjaran: tahunData,
+        tingkatan: tingkatanData,
       });
     } catch (error) {
       console.error("Gagal memuat data:", error);
@@ -130,9 +156,42 @@ export default function InputNilaiPage() {
     }
   }, []); // <-- PERBAIKAN: Hapus [toast] dari sini
 
+  // Initial data load
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Update kelas when tingkatan changes
+  useEffect(() => {
+    const fetchKelas = async () => {
+      console.log('Fetching kelas for tingkatan:', filters.tingkatan_id);
+      try {
+        if (filters.tingkatan_id) {
+          const kelasData = await kelasService.getKelasByTingkatan(filters.tingkatan_id);
+          console.log('Received kelas data:', kelasData);
+          setOptions(prev => ({
+            ...prev,
+            kelas: kelasData
+          }));
+        } else {
+          console.log('No tingkatan selected, clearing kelas list');
+          setOptions(prev => ({
+            ...prev,
+            kelas: []
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching kelas:', error);
+        toast({ 
+          title: "Gagal memuat kelas", 
+          description: "Gagal memuat data kelas untuk tingkatan ini",
+          variant: "destructive"
+        });
+      }
+    };
+
+    fetchKelas();
+  }, [filters.tingkatan_id]);
 
   // --- CRUD ---
   const handleAddNew = () => {
@@ -195,22 +254,46 @@ export default function InputNilaiPage() {
     
     const kelasMatch = !filters.kelas_id || (siswaData && siswaData.kelas_id == Number(filters.kelas_id));
     const tahunMatch = !filters.tahun_ajaran_id || nilai.tahun_ajaran_id == Number(filters.tahun_ajaran_id);
-    
-    return kelasMatch && tahunMatch;
+    // derive semester from selected tahun_ajaran (the dropdown shows semester too)
+    const selectedTahun = options.tahunAjaran.find(t => String(t.id) === String(filters.tahun_ajaran_id));
+    const selectedSemester = selectedTahun ? String(selectedTahun.semester) : null;
+    const semesterMatch = !selectedSemester || String(nilai.semester) === String(selectedSemester);
+
+    return kelasMatch && tahunMatch && semesterMatch;
   });
 
   // --- IMPORT / EXPORT EXCEL ---
   const handleDownloadTemplate = async () => {
-    if (!filters.kelas_id || !filters.tahun_ajaran_id) {
+    if (!filters.tahun_ajaran_id) {
       toast({
-        title: "Pilih Kelas & Tahun Ajaran",
-        description: "Silakan pilih filter dulu",
+        title: "Pilih Tahun Ajaran",
+        description: "Silakan pilih tahun ajaran terlebih dahulu",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!filters.tingkatan_id) {
+      toast({
+        title: "Pilih Tingkatan",
+        description: "Silakan pilih tingkatan terlebih dahulu",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!filters.kelas_id) {
+      toast({
+        title: "Pilih Kelas",
+        description: "Silakan pilih kelas terlebih dahulu",
         variant: "destructive",
       });
       return;
     }
     try {
-      const blobData = await excelService.downloadCompleteTemplate({ kelas_id: filters.kelas_id, tahun_ajaran_id: filters.tahun_ajaran_id })
+      const blobData = await excelService.downloadCompleteTemplate({ 
+        kelas_id: filters.kelas_id, 
+        tahun_ajaran_id: filters.tahun_ajaran_id,
+        tingkatan_id: filters.tingkatan_id
+      })
       const blob = new Blob([blobData], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -292,20 +375,29 @@ export default function InputNilaiPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FilterSelect
-              id="filter-kelas"
-              label="Filter Berdasarkan Kelas"
-              value={filters.kelas_id}
-              onChange={(v)=>setFilters(prev=>({...prev, kelas_id: v}))}
-              placeholder="Semua Kelas"
-              options={options.kelas.map(k=>({ value: String(k.id), label: k.nama_kelas }))}
-            />
-            <FilterSelect
               id="filter-tahun"
               label="Filter Berdasarkan Tahun Ajaran"
               value={filters.tahun_ajaran_id}
               onChange={(v)=>setFilters(prev=>({...prev, tahun_ajaran_id: v}))}
-              placeholder="Semua Tahun"
+              placeholder="Pilih Tahun Ajaran"
               options={options.tahunAjaran.map(t=>({ value: String(t.id), label: `${t.nama_ajaran} (Sem ${t.semester})` }))}
+            />
+            <FilterSelect
+              id="filter-tingkatan"
+              label="Filter Berdasarkan Tingkatan"
+              value={filters.tingkatan_id}
+              onChange={(v)=>setFilters(prev=>({...prev, tingkatan_id: v, kelas_id: ""}))} // Reset kelas when tingkatan changes
+              placeholder="Pilih Tingkatan"
+              options={options.tingkatan.map(t=>({ value: String(t.id), label: t.nama_tingkatan }))}
+            />
+            <FilterSelect
+              id="filter-kelas"
+              label="Filter Berdasarkan Kelas"
+              value={filters.kelas_id}
+              onChange={(v)=>setFilters(prev=>({...prev, kelas_id: v}))}
+              placeholder="Pilih Kelas"
+              options={options.kelas.map(k=>({ value: String(k.id), label: k.nama_kelas }))}
+              disabled={!filters.tingkatan_id} // Disable if no tingkatan selected
             />
           </CardContent>
         </Card>
@@ -321,6 +413,8 @@ export default function InputNilaiPage() {
                   <TableHead>Siswa</TableHead>
                   <TableHead>Mata Pelajaran</TableHead>
                   <TableHead>Nilai</TableHead>
+                  <TableHead>Tahun Ajaran ID</TableHead>
+                  <TableHead>Semester</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -337,6 +431,8 @@ export default function InputNilaiPage() {
                       <TableCell>{item.siswa?.nama || `Siswa ID: ${item.siswa_id}`}</TableCell>
                       <TableCell>{item.mapel?.nama_mapel || `Mapel ID: ${item.mapel_id}`}</TableCell>
                       <TableCell>{item.nilai}</TableCell>
+                      <TableCell>{String(item.tahun_ajaran_id || '')}</TableCell>
+                      <TableCell>{String(item.semester || '')}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button
                           variant="outline"

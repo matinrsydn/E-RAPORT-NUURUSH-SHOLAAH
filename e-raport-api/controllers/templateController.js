@@ -1,7 +1,7 @@
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const DocxMerger = require('docx-merger');
-const db = require('../models');
+let db = require('../models');
 const multer = require("multer");
 const fs = require("fs");
 const path = require('path');
@@ -52,9 +52,10 @@ const nilaiKePredikat = (angka) => {
 
 const nilaiSikapKePredikat = (angka) => {
     if (angka === null || angka === undefined || isNaN(angka)) return '-';
-    if (angka > 8.0) return 'Baik Sekali';
-    if (angka > 7.0) return 'Baik';
-    if (angka > 6.0) return 'Cukup';
+    if(angka === 100) return 'Sempurna';
+    if(angka >= 90) return 'Sangat Baik';
+    if (angka >= 80) return 'Baik Sekali';
+    if (angka >= 70) return 'Baik';
     return 'Kurang';
 };
 
@@ -109,38 +110,42 @@ exports.deleteTemplate = (req, res) => {
 
 // --- FUNGSI UTAMA YANG DIPERBARUI ---
 exports.generateRaport = async (req, res) => {
-    const { siswaId, semester, tahun_ajaran } = req.params;
+    // prefer numeric FK tahun_ajaran_id (may come from middleware or client)
+    const { siswaId, semester } = req.params;
+    let tahun_ajaran_id = req.params.tahun_ajaran_id || req.body?.tahun_ajaran_id || req.query?.tahun_ajaran_id;
+    let tahun_ajaran_text = req.params.tahun_ajaran || req.body?.tahun_ajaran || req.query?.tahun_ajaran;
     try {
+        // If textual tahun_ajaran is provided but not resolved to id, try to resolve locally
+        if (!tahun_ajaran_id && tahun_ajaran_text) {
+            const master = await db.MasterTahunAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text } });
+            if (master) tahun_ajaran_id = master.id;
+            else {
+                const periode = await db.PeriodeAjaran.findOne({ where: { nama_ajaran: tahun_ajaran_text } });
+                if (periode) tahun_ajaran_id = periode.id;
+            }
+        }
         // 1. Ambil semua data siswa dan relasinya secara lengkap
+        // Build include clauses that use tahun_ajaran_id where possible
+        const nilaiWhere = { semester };
+        const hafalWhere = { semester };
+        const sikapWhere = { semester };
+        const hadirWhere = {};
+        if (tahun_ajaran_id) {
+            nilaiWhere.tahun_ajaran_id = tahun_ajaran_id;
+            hafalWhere.tahun_ajaran_id = tahun_ajaran_id;
+            sikapWhere.tahun_ajaran_id = tahun_ajaran_id;
+            hadirWhere.tahun_ajaran_id = tahun_ajaran_id;
+        }
+
         const siswa = await db.Siswa.findOne({
             where: { id: siswaId },
             include: [
-                { model: db.Kelas, include: [{ model: db.WaliKelas }] },
-                // Asumsi ada relasi ke Kepala Pesantren, jika tidak ada, perlu ditambahkan di model Siswa
-                // { model: db.KepalaPesantren, as: 'kepala_pesantren' },
-                {
-                    model: db.NilaiUjian,
-                    where: { semester, tahun_ajaran },
-                    required: false,
-                    include: { model: db.MataPelajaran, as: 'mapel' }
-                },
-                {
-                    model: db.NilaiHafalan,
-                    where: { semester, tahun_ajaran },
-                    required: false,
-                    include: { model: db.MataPelajaran, as: 'mapel' }
-                },
-                {
-                    model: db.Sikap,
-                    where: { semester, tahun_ajaran },
-                    required: false,
-                    include: { model: db.IndikatorSikap, as: 'indikator_sikap' } // TAMBAHKAN INI
-                },
-                {
-                    model: db.Kehadiran,
-                    where: { semester, tahun_ajaran },
-                    required: false
-                },
+                // use correct alias 'kelas' and include guru as 'walikelas'
+                { model: db.Kelas, as: 'kelas', include: [{ model: db.Guru, as: 'walikelas' }] },
+                { model: db.NilaiUjian, as: 'NilaiUjians', where: nilaiWhere, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
+                { model: db.NilaiHafalan, as: 'NilaiHafalans', where: hafalWhere, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
+                { model: db.Sikap, as: 'Sikaps', where: sikapWhere, required: false, include: { model: db.IndikatorSikap, as: 'indikator_sikap' } },
+                { model: db.Kehadiran, as: 'Kehadirans', where: hadirWhere, required: false }
             ]
         });
 
@@ -164,9 +169,9 @@ exports.generateRaport = async (req, res) => {
         }
         const jumlahMapel = nilaiUjian.length > 0 ? nilaiUjian.length : 1;
 
-    // Gunakan single `nilai` untuk setiap mapel
-    const jumlahNilai = nilaiUjian.reduce((sum, m) => sum + (parseFloat(m.nilai) || 0), 0);
-    const rataRataUjian = (jumlahNilai / jumlahMapel || 0).toFixed(1);
+    // Note: numeric `nilai` removed; use predikat and deskripsi instead
+    const jumlahNilai = 0;
+    const rataRataUjian = 'N/A';
         
         // NOTE: Peringkat dan total_siswa memerlukan query tambahan yang lebih kompleks.
         // Untuk sekarang kita gunakan placeholder.
@@ -214,26 +219,25 @@ exports.generateRaport = async (req, res) => {
             alamat_wali: siswa.alamat_wali || '-',
             
             // Akademik
-            kelas: siswa.Kelas?.nama_kelas || '-',
+            kelas: siswa.kelas?.nama_kelas || '-',
             semester: semester || '-',
-            thn_ajaran: tahun_ajaran.replace('-', '/') || '-',
-            wali_kelas: siswa.Kelas?.WaliKelas?.nama || '-',
+            thn_ajaran: (tahun_ajaran_text || '').replace('-', '/') || '-',
+            wali_kelas: siswa.kelas?.walikelas?.nama || '-',
             kepsek: kepalaPesantren?.nama || '-',
             tgl_raport: formatTanggal(new Date()),
             kamar: siswa.kamar || '-',
             kota_asal: siswa.kota_asal || '-',
 
-            // Nilai Ujian (single nilai per mapel)
+            // Nilai Ujian (predikat/deskripsi per mapel)
             mapel: nilaiUjian.map((m, i) => ({
                 no: i + 1,
                 nama_mapel: m.mapel?.nama_mapel || 'N/A',
                 kitab: m.mapel?.kitab || '-',
-                nilai: m.nilai,
-                predikat: nilaiKePredikat(m.nilai)
+                predikat: m.predikat || '-'
             })),
-            jml_n: jumlahNilai,
-            rata_n: rataRataUjian,
-            pred_n: nilaiKePredikat(rataRataUjian),
+            jml_n: 'N/A',
+            rata_n: 'N/A',
+            pred_n: 'N/A',
             peringkat: peringkatData.peringkat,
             total_siswa: peringkatData.total_siswa,
 
@@ -242,8 +246,8 @@ exports.generateRaport = async (req, res) => {
                 no: i + 1,
                 nama: h.mapel?.nama_mapel || 'N/A',
                 kitab: h.mapel?.kitab || '-',
-                nilai_angka: h.nilai,
-                predikat: nilaiKePredikat(h.nilai)
+                predikat: h.predikat || '-',
+                nilai_angka: h.nilai
             })),
             kehadiran: (siswa.Kehadirans || []).map((k, i) => ({
                 no: i + 1,
@@ -266,6 +270,11 @@ exports.generateRaport = async (req, res) => {
             deskripsi_spiritual: deskripsiSpiritual, 
             deskripsi_sosial: deskripsiSosial,
         };
+
+        // If caller requested debug JSON, return the template data instead of generating DOCX
+        if (req.query && (req.query.debugJson === '1' || req.query.debugJson === 'true')) {
+            return res.status(200).json({ templateData });
+        }
 
         // 4. Generate dan gabungkan file DOCX
         const templatePaths = {
@@ -299,7 +308,8 @@ exports.generateRaport = async (req, res) => {
 
         const merger = new DocxMerger({}, generatedPages);
         merger.save('nodebuffer', (mergedBuffer) => {
-            const namaFile = `Raport_${siswa.nama.replace(/\s+/g, '_')}_${(siswa.Kela?.nama_kelas || 'kelas').replace(/\s+/g, '')}.docx`;
+            const kelasName = siswa.Kelas?.nama_kelas || 'kelas';
+            const namaFile = `Raport_${siswa.nama.replace(/\s+/g, '_')}_${kelasName.replace(/\s+/g, '')}.docx`;
             res.setHeader('Content-Disposition', `attachment; filename=${namaFile}`);
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
             res.send(mergedBuffer);
@@ -310,6 +320,9 @@ exports.generateRaport = async (req, res) => {
         res.status(500).json({ message: 'Terjadi kesalahan internal saat membuat raport.', error: error.message });
     }
 };
+
+// Test helper: allow tests to inject db
+exports.__setDb = (newDb) => { db = newDb; };
 
 // Tambahkan fungsi ini di templateController.js:
 
