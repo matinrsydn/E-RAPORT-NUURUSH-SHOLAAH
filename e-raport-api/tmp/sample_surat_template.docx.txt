@@ -1,0 +1,23 @@
+SURAT KETERANGAN PINDAH
+
+Nomor: {nomor_surat}/{tanggal_surat}
+
+Yang bertanda tangan di bawah ini menerangkan bahwa:
+
+Nama Peserta Didik: {siswa_nama}
+NIS: {siswa_nis}
+Tempat/Tanggal Lahir: {siswa_ttl}
+Jenis Kelamin: {siswa_jenis_kelamin}
+Kelas: {siswa_kelas}
+
+Orang tua / wali yang bertanggung jawab: {penanggung_nama} ({penanggung_jawab})
+
+Bahwa yang bersangkutan pindah ke pesantren:
+Nama: {tujuan_nama_pesantren}
+Alamat: {tujuan_alamat_pesantren}
+
+Alasan: {alasan}
+
+Demikian surat keterangan ini dibuat untuk dipergunakan sebagaimana mestinya.
+
+Hormat kami,
