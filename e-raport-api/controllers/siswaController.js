@@ -16,8 +16,23 @@ function parseValidDate(value) {
 // Mengambil SEMUA siswa dengan data kelas dan wali kelas yang benar
 exports.getAllSiswa = async (req, res) => {
     try {
-    // support optional filters: ?kelas_id=, ?master_ta_id= and ?tingkatan_id=
-    const { kelas_id, master_ta_id, tingkatan_id } = req.query;
+    // support optional filters: ?kelas_id=, ?master_ta_id=, ?tahun_ajaran_id= and ?tingkatan_id=
+    const { kelas_id, master_ta_id, tingkatan_id, tahun_ajaran_id } = req.query;
+    // If frontend provides a PeriodeAjaran id (tahun_ajaran_id), prefer using it to derive master_tahun_ajaran_id and semester
+    let derivedMasterTaId = null;
+    let derivedSemester = null;
+    if (tahun_ajaran_id) {
+        try {
+            const periode = await db.PeriodeAjaran.findByPk(Number(tahun_ajaran_id));
+            if (periode) {
+                derivedMasterTaId = periode.master_tahun_ajaran_id || (periode.master && periode.master.id) || null;
+                derivedSemester = periode.semester ? String(periode.semester) : null;
+            }
+        } catch (e) {
+            // ignore and continue without derived periode
+            console.warn('Invalid tahun_ajaran_id provided to getAllSiswa:', tahun_ajaran_id, e && e.message);
+        }
+    }
         const showAll = req.query.show_all === 'true' || req.query.include_all === 'true';
         const where = {};
         if (kelas_id) where.kelas_id = isNaN(Number(kelas_id)) ? kelas_id : Number(kelas_id);
@@ -54,10 +69,13 @@ exports.getAllSiswa = async (req, res) => {
         // If master_ta_id is provided, include SiswaKelasHistory.
         // Default behavior: required: true (only return siswa who have history for that master TA).
         // If client requests show_all=true, use required: false and add a hasHistory flag on each siswa.
-        if (master_ta_id) {
+        // prefer derivedMasterTaId (from tahun_ajaran_id param) over master_ta_id query param
+        const effectiveMasterTa = derivedMasterTaId || (master_ta_id ? (isNaN(Number(master_ta_id)) ? master_ta_id : Number(master_ta_id)) : null);
+        if (effectiveMasterTa) {
             const whereHistory = {};
-            whereHistory.master_tahun_ajaran_id = isNaN(Number(master_ta_id)) ? master_ta_id : Number(master_ta_id);
+            whereHistory.master_tahun_ajaran_id = effectiveMasterTa;
             if (kelas_id) whereHistory.kelas_id = isNaN(Number(kelas_id)) ? kelas_id : Number(kelas_id);
+            if (derivedSemester) whereHistory.semester = String(derivedSemester);
 
             // Build histories include: include masterTahunAjaran to provide nama_ajaran if available
             const historyInclude = {
@@ -65,7 +83,7 @@ exports.getAllSiswa = async (req, res) => {
                 as: 'histories',
                 where: whereHistory,
                 required: !showAll,
-                attributes: ['id', 'master_tahun_ajaran_id', 'kelas_id', 'note'],
+                attributes: ['id', 'master_tahun_ajaran_id', 'kelas_id', 'semester', 'note', 'catatan_akademik', 'catatan_sikap'],
                 include: [
                     {
                         model: db.MasterTahunAjaran,
@@ -85,7 +103,13 @@ exports.getAllSiswa = async (req, res) => {
         try {
             const siswaIds = siswas.map(s => s.id);
             if (siswaIds.length > 0) {
-                const histories = await db.SiswaKelasHistory.findAll({ where: { siswa_id: siswaIds }, order: [['id', 'DESC']], include: [{ model: db.MasterTahunAjaran, as: 'masterTahunAjaran', attributes: ['id','nama_ajaran'], required: false }] });
+                // If caller provided a periode/year filter, only fetch histories for that periode (master TA + semester) so we attach the correct record
+                const historiesWhere = { siswa_id: siswaIds };
+                const effectiveMasterForAttach = derivedMasterTaId || (master_ta_id ? (isNaN(Number(master_ta_id)) ? master_ta_id : Number(master_ta_id)) : null);
+                if (effectiveMasterForAttach) historiesWhere.master_tahun_ajaran_id = effectiveMasterForAttach;
+                if (derivedSemester) historiesWhere.semester = String(derivedSemester);
+
+                const histories = await db.SiswaKelasHistory.findAll({ where: historiesWhere, order: [['id', 'DESC']], include: [{ model: db.MasterTahunAjaran, as: 'masterTahunAjaran', attributes: ['id','nama_ajaran'], required: false }] });
                 const latestBySiswa = new Map();
                 for (const h of histories) {
                     if (!latestBySiswa.has(h.siswa_id)) latestBySiswa.set(h.siswa_id, h);

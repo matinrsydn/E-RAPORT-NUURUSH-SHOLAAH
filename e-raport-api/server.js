@@ -114,29 +114,38 @@ console.log("✓ All routes registered successfully");
 console.log("\u2713 All routes registered successfully");
 
 // Rute dasar
-// Serve React production build if it exists (assumes client build at ../e-raport-client/build)
-const clientBuildPath = path.join(__dirname, '..', 'e-raport-client', 'build');
-try {
-  // check if build folder exists
-  const fs = require('fs');
-  if (fs.existsSync(clientBuildPath)) {
-    console.log('Serving React build from', clientBuildPath);
-    app.use(express.static(clientBuildPath));
+// --- PRODUCTION: serve React build. In development we want API-only behavior.
+if (process.env.NODE_ENV === 'production') {
+  // Serve React production build if it exists (assumes client build at ../e-raport-client/build)
+  const clientBuildPath = path.join(__dirname, '..', 'e-raport-client', 'build');
+  try {
+    // check if build folder exists
+    const fs = require('fs');
+    if (fs.existsSync(clientBuildPath)) {
+      console.log('Running in production mode. Serving React build from', clientBuildPath);
+      app.use(express.static(clientBuildPath));
 
-    // For any non-API route, serve index.html so client-side router works
-    app.get(/^((?!\/api).)*$/, (req, res) => {
-      res.sendFile(path.join(clientBuildPath, 'index.html'));
-    });
-  } else {
-    // fallback JSON greeting
+      // For any non-API route, serve index.html so client-side router works
+      app.get(/^((?!\/api).)*$/, (req, res) => {
+        res.sendFile(path.join(clientBuildPath, 'index.html'));
+      });
+    } else {
+      console.warn('NODE_ENV=production but client build folder not found at', clientBuildPath);
+      // fallback JSON greeting
+      app.get('/', (req, res) => {
+        res.json({ message: 'Selamat datang di API e-Raport.' });
+      });
+    }
+  } catch (e) {
+    console.error('Error while configuring client static middleware:', e && e.message ? e.message : e);
     app.get('/', (req, res) => {
       res.json({ message: 'Selamat datang di API e-Raport.' });
     });
   }
-} catch (e) {
-  console.error('Error while configuring client static middleware:', e && e.message ? e.message : e);
+} else {
+  // Development: keep server API-only and avoid attempting to serve the client build
   app.get('/', (req, res) => {
-    res.json({ message: 'Selamat datang di API e-Raport.' });
+    res.json({ message: 'Selamat datang di API e-Raport. (development mode)'});
   });
 }
 

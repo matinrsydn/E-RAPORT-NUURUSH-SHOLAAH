@@ -11,4 +11,22 @@ export async function generateFromTemplate(formData) {
   return res;
 }
 
-export default { generateFromTemplate };
+export async function uploadSuratKeluar(formData) {
+  const res = await axios.post(`${base}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return res.data;
+}
+
+export async function downloadSuratKeluar(filename) {
+  const res = await axios.get(`${base}/download/${filename}`, {
+    responseType: 'blob'
+  });
+  return res;
+}
+
+export default { 
+  generateFromTemplate, 
+  uploadSuratKeluar,
+  downloadSuratKeluar
+};

@@ -6,6 +6,103 @@ const db = require('../models');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 
+// Get all surat keluar documents
+exports.getAllSuratKeluar = async (req, res) => {
+    try {
+        const documents = await db.SuratKeluar.findAll({
+            order: [['createdAt', 'DESC']]
+        });
+        res.json(documents);
+    } catch (error) {
+        console.error('Error getting documents:', error);
+        res.status(500).json({ 
+            message: 'Gagal memuat daftar surat',
+            error: error.message 
+        });
+    }
+};
+
+// Upload surat keluar document
+exports.uploadSuratKeluar = async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ message: 'File wajib diunggah' });
+        }
+
+        // Store file information in database if needed
+        const suratKeluar = await db.SuratKeluar.create({
+            nama_file: file.filename,
+            path: file.path,
+            jenis_dokumen: req.body.jenis_dokumen || 'surat_keluar',
+            keterangan: req.body.keterangan
+        });
+
+        res.status(201).json({
+            message: 'File berhasil diunggah',
+            data: {
+                id: suratKeluar.id,
+                nama_file: file.filename,
+                jenis_dokumen: suratKeluar.jenis_dokumen
+            }
+        });
+    } catch (error) {
+        console.error('Error uploading file:', error);
+        res.status(500).json({ 
+            message: 'Gagal mengunggah file',
+            error: error.message 
+        });
+    }
+};
+
+// Download surat keluar document
+exports.downloadSuratKeluar = async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const filePath = path.join(__dirname, '../uploads/surat-keluar', filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ message: 'File tidak ditemukan' });
+        }
+
+        res.download(filePath);
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        res.status(500).json({ 
+            message: 'Gagal mengunduh file',
+            error: error.message 
+        });
+    }
+};
+
+// Delete surat keluar document
+exports.deleteSuratKeluar = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const document = await db.SuratKeluar.findByPk(id);
+        
+        if (!document) {
+            return res.status(404).json({ message: 'Dokumen tidak ditemukan' });
+        }
+
+        // Delete the file
+        const filePath = path.join(__dirname, '../uploads/surat-keluar', document.nama_file);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+        // Delete from database
+        await document.destroy();
+        res.json({ message: 'Dokumen berhasil dihapus' });
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        res.status(500).json({ 
+            message: 'Gagal menghapus dokumen',
+            error: error.message 
+        });
+    }
+};
+
 function formatTanggal(tgl) {
   if (!tgl) return '';
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -14,12 +111,7 @@ function formatTanggal(tgl) {
   return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-// alias for clarity when used in header like: 'Bandung, 01 Januari 2025'
-function formatDateForNomor(tgl) { return formatTanggal(tgl) }
-
-// Generate a simple sequential nomor_surat. In production use better format.
 async function generateNomorSurat() {
-  // e.g., SUR/2025/0001
   const year = new Date().getFullYear();
   const last = await db.SuratKeluar.findOne({ order: [['createdAt','DESC']] });
   let seq = 1;
@@ -43,10 +135,10 @@ exports.generateFromTemplate = async (req, res) => {
       tujuan_alamat_pesantren, 
       alasan, 
       jenis_keluar, 
-      penanggung_jawab, 
-      penanggung_nama,
-      penanggung_pekerjaan, // <-- Input manual baru dari frontend
-      penanggung_alamat    // <-- Input manual baru dari frontend
+      penanggung_jawab, // Ini mungkin tidak lagi dipakai jika semua dari form ortu
+      ortu_nama,
+      ortu_pekerjaan,
+      ortu_alamat
     } = req.body;
 
     if (!siswa_id) {
@@ -56,6 +148,7 @@ exports.generateFromTemplate = async (req, res) => {
     // 1. Buat record di database
     const nomor_surat = await generateNomorSurat();
     const tanggal_surat = new Date();
+    // PERBAIKAN: Gunakan `ortu_nama` untuk kolom `penanggung_nama`
     const surat = await db.SuratKeluar.create({ 
       nomor_surat, 
       siswa_id, 
@@ -64,54 +157,39 @@ exports.generateFromTemplate = async (req, res) => {
       tujuan_alamat_pesantren, 
       alasan, 
       tanggal_surat, 
-      penanggung_jawab, 
-      penanggung_nama,
-      // Anda bisa juga menyimpan data wali ke DB jika modelnya mendukung
+      penanggung_jawab: "Orang Tua/Wali", // Bisa diisi default atau dari form
+      penanggung_nama: ortu_nama,
     });
 
-    // 2. Kumpulkan semua data yang diperlukan untuk placeholder
+    // 2. Ambil data siswa dari database
     const siswa = await db.Siswa.findByPk(siswa_id, { include: ['kelas'] });
     if (!siswa) {
-        return res.status(404).json({ message: 'Data siswa tidak ditemukan' });
+      return res.status(404).json({ message: 'Data siswa tidak ditemukan' });
     }
 
-    // Tentukan nama penanggung jawab (prioritaskan input manual)
-    let namaPenanggungFinal = penanggung_nama;
-    if (!namaPenanggungFinal) { // Jika input manual kosong, ambil dari data siswa
-      if (penanggung_jawab === 'ayah') namaPenanggungFinal = siswa.nama_ayah || '';
-      else if (penanggung_jawab === 'ibu') namaPenanggungFinal = siswa.nama_ibu || '';
-      else namaPenanggungFinal = siswa.nama_wali || siswa.nama_ayah || '';
-    }
-    
-    // 3. Siapkan objek data yang cocok 100% dengan placeholder di template
+    // 3. Siapkan objek data yang bersih untuk template
     const data = {
+      // Data Surat
       nomor_surat: surat.nomor_surat,
-      siswa_nama: siswa.nama,
+      tanggal_surat: formatTanggal(surat.tanggal_surat),
+      
+      // Data Siswa (dari DB)
+      siswa_nama: siswa.nama || '',
       siswa_ttl: `${siswa.tempat_lahir || ''}, ${formatTanggal(siswa.tanggal_lahir)}`,
-      siswa_jenis_kelamin: siswa.jenis_kelamin,
-      siswa_agama: siswa.agama,
+      siswa_jenis_kelamin: siswa.jenis_kelamin || '',
+      siswa_agama: siswa.agama || '',
       siswa_kelas: siswa.kelas ? siswa.kelas.nama_kelas : '',
       
-      // Data Penanggung Jawab (sesuai placeholder di template)
-      penanggung_nama: namaPenanggungFinal,
-      penanggung_pekerjaan: penanggung_pekerjaan, // Diambil langsung dari input form
-      penanggung_alamat: penanggung_alamat,       // Diambil langsung dari input form
-
-      // Data Pesantren Tujuan (sesuai placeholder di template)
-      // PERHATIAN: Placeholder Anda untuk Nama Pesantren adalah {penanggung_alamat}. Ini mungkin salah ketik di template.
-      // Kode ini mengisinya dengan `tujuan_nama_pesantren` agar sesuai.
-      // Sangat disarankan untuk memperbaiki template menjadi {tujuan_nama_pesantren}.
-      pesantren: tujuan_nama_pesantren, // Placeholder Anda: {penanggung_alamat} untuk Nama Pesantren
-      tujuan_alamat_pesantren: tujuan_alamat_pesantren, // Placeholder Anda: {tujuan_alamat_pesantren} untuk Alamat Pesantren
+      // Data Orang Tua/Wali (dari Form Manual)
+      ortu_nama: ortu_nama || '',
+      ortu_pekerjaan: ortu_pekerjaan || '',
+      ortu_alamat: ortu_alamat || '',
       
-      alasan: alasan,
-      tanggal_surat: formatTanggal(surat.tanggal_surat)
+      // Data Tujuan
+      tujuan_nama_pesantren: tujuan_nama_pesantren || '',
+      tujuan_alamat_pesantren: tujuan_alamat_pesantren || '',
+      alasan: alasan || '',
     };
-    
-    // Koreksi untuk placeholder nama pesantren yang salah di template
-    // Ini akan memastikan data yang benar masuk ke placeholder yang salah
-    data['penanggung_alamat'] = tujuan_nama_pesantren;
-
 
     // 4. Proses template dan kirim file
     const content = await readFile(file.path);
@@ -124,6 +202,9 @@ exports.generateFromTemplate = async (req, res) => {
       doc.render();
     } catch (error) {
       console.error("Docxtemplater render error: ", error);
+      if (error.properties && error.properties.errors) {
+        error.properties.errors.forEach(err => console.error("Template error:", err));
+      }
       throw error;
     }
 
@@ -141,7 +222,7 @@ exports.generateFromTemplate = async (req, res) => {
       if (req.file && req.file.path) {
         fs.unlinkSync(req.file.path);
       }
-    } catch(e){
+    } catch(e) {
       console.error("Error cleaning up uploaded file:", e);
     }
   }

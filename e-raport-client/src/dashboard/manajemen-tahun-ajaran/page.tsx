@@ -2,35 +2,24 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
 import tahunAjaranService from '../../services/tahunAjaranService'
 import DataTable from '../../components/data-table'
-import { Card, CardContent } from '../../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '../../components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog'
 import { useForm, Controller } from 'react-hook-form'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
-import { Select, SelectItem } from '../../components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
 import { useToast } from '../../components/ui/toast'
 
-// PERBAIKAN: Sesuaikan tipe dengan database
 type TahunAjaran = {
   id: number
   nama_ajaran: string
   status: 'aktif' | 'nonaktif'
 }
-
-// PERBAIKAN: Sesuaikan tipe dengan database
 type FormValues = {
   nama_ajaran: string
-  status: 'aktif' | 'nonaktif' | ''
+  status: 'aktif' | 'nonaktif'
 }
 
 export default function ManajemenTahunAjaranPage() {
@@ -38,12 +27,12 @@ export default function ManajemenTahunAjaranPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<TahunAjaran | null>(null)
   const [deleting, setDeleting] = useState<TahunAjaran | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const { toast } = useToast()
 
-  // PERBAIKAN: Gunakan 'nonaktif' sebagai nilai default
-  const form = useForm<FormValues>({ defaultValues: { nama_ajaran: '', status: 'nonaktif' } })
-  const addForm = useForm<FormValues>({ defaultValues: { nama_ajaran: '', status: 'nonaktif' } })
-  const [addOpen, setAddOpen] = useState(false)
+  const { register, handleSubmit, control, reset } = useForm<FormValues>({
+    defaultValues: { nama_ajaran: '', status: 'nonaktif' }
+  })
 
   const fetchData = async () => {
     setLoading(true)
@@ -52,21 +41,64 @@ export default function ManajemenTahunAjaranPage() {
       setData(res)
     } catch (e) {
       console.error(e)
-      toast({ title: 'Gagal', description: 'Gagal memuat data tahun ajaran', variant: 'destructive' })
+      toast({ title: 'Gagal', description: 'Gagal memuat data', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  useEffect(() => { fetchData() }, [])
+
+  const handleOpenDialog = (ta: TahunAjaran | null) => {
+    setEditing(ta);
+    if (ta) {
+      reset({ nama_ajaran: ta.nama_ajaran, status: ta.status });
+    } else {
+      reset({ nama_ajaran: '', status: 'nonaktif' });
+    }
+    setDialogOpen(true);
+  };
+
+  const onSubmit = async (vals: FormValues) => {
+    try {
+      if (editing) {
+        await tahunAjaranService.updateMasterTahunAjaran(editing.id, vals);
+        toast({ title: 'Berhasil', description: 'Perubahan disimpan' });
+      } else {
+        await tahunAjaranService.createMasterTahunAjaran(vals);
+        toast({ title: 'Berhasil', description: 'Tahun ajaran ditambahkan' });
+      }
+      fetchData();
+      setDialogOpen(false);
+    } catch (e: any) {
+      toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan', variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    try {
+      await tahunAjaranService.deleteMasterTahunAjaran(deleting.id);
+      fetchData();
+      setDeleting(null);
+      toast({ title: 'Berhasil', description: 'Tahun ajaran dihapus' });
+    } catch (e: any) {
+      toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menghapus', variant: 'destructive' });
+    }
+  };
 
   const columns: ColumnDef<TahunAjaran, any>[] = [
     { header: 'Nama Ajaran', accessorKey: 'nama_ajaran' },
     { header: 'Status', accessorKey: 'status' },
-    { id: 'actions', header: 'Aksi', accessorKey: 'id' as any },
-  ]
+    {
+      id: 'actions', header: 'Aksi', cell: ({ row }) => (
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
+          <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
+        </div>
+      )
+    },
+  ];
 
   return (
     <DashboardLayout>
@@ -77,165 +109,61 @@ export default function ManajemenTahunAjaranPage() {
         </div>
 
         <Card>
-          <CardContent>
-            {loading ? (
-              <div>Memuat...</div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <div />
-
-                  <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                    <DialogTrigger asChild>
-                      <Button>Tambah Tahun Ajaran</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Tambah Tahun Ajaran</DialogTitle>
-                        <DialogDescription>Masukkan nama ajaran baru. Semester 1 & 2 akan dibuat otomatis.</DialogDescription>
-                      </DialogHeader>
-
-                      <form
-                        onSubmit={addForm.handleSubmit(async (vals) => {
-                          try {
-                            const payload = {
-                              nama_ajaran: vals.nama_ajaran,
-                              status: vals.status || 'nonaktif',
-                            }
-                            await tahunAjaranService.createMasterTahunAjaran(payload)
-                            await fetchData()
-                            toast({ title: 'Berhasil', description: 'Tahun ajaran ditambahkan' })
-                            addForm.reset()
-                            setAddOpen(false)
-                          } catch (e: any) {
-                            console.error(e)
-                            toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menambahkan', variant: 'destructive' })
-                          }
-                        })}
-                      >
-                          <div className="grid grid-cols-1 gap-4 py-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="nama_ajaran">Nama Ajaran</Label>
-                              <Input id="nama_ajaran" autoFocus {...addForm.register('nama_ajaran', { required: 'Nama ajaran wajib diisi' })} />
-                              {addForm.formState.errors.nama_ajaran && (
-                                <p className="text-sm text-rose-600">{String(addForm.formState.errors.nama_ajaran.message)}</p>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="status">Status</Label>
-                              <Controller
-                                control={addForm.control}
-                                name="status"
-                                render={({ field }) => (
-                                  // PERBAIKAN: Gunakan 'nonaktif' sebagai nilai
-                                  <Select id="status" value={field.value ?? 'nonaktif'} onChange={(e) => field.onChange((e.target as HTMLSelectElement).value as FormValues['status'])}>
-                                    <SelectItem value="aktif">Aktif</SelectItem>
-                                    <SelectItem value="nonaktif">Nonaktif</SelectItem>
-                                  </Select>
-                                )}
-                              />
-                            </div>
-                          </div>
-                        <DialogFooter>
-                          <div className="flex w-full justify-end gap-2">
-                            <Button variant="outline" type="button" onClick={() => setAddOpen(false)}>
-                              Batal
-                            </Button>
-                            <Button type="submit">Simpan</Button>
-                          </div>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
+            <CardHeader>
+                <div className="flex justify-between items-center">
+                    <CardTitle>Daftar Tahun Ajaran</CardTitle>
+                    <Button onClick={() => handleOpenDialog(null)}>Tambah Tahun Ajaran</Button>
                 </div>
-
-                <DataTable<TahunAjaran>
-                  columns={columns}
-                  data={data}
-                  onEdit={(r) => {
-                    setEditing(r)
-                    form.reset({ nama_ajaran: r.nama_ajaran, status: r.status })
-                  }}
-                  onDelete={(r) => setDeleting(r)}
-                />
-              </div>
-            )}
+            </CardHeader>
+          <CardContent>
+            {loading ? <div>Memuat...</div> : <DataTable<TahunAjaran> columns={columns} data={data} />}
           </CardContent>
         </Card>
 
-        {/* Edit Dialog */}
-        <Dialog open={!!editing} onOpenChange={(v) => { if (!v) setEditing(null) }}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Edit Tahun Ajaran</DialogTitle>
-              <DialogDescription>Perbarui data tahun ajaran.</DialogDescription>
+              <DialogTitle>{editing ? 'Edit Tahun Ajaran' : 'Tambah Tahun Ajaran'}</DialogTitle>
+              <DialogDescription>Masukkan nama ajaran. Semester 1 & 2 akan dibuat otomatis.</DialogDescription>
             </DialogHeader>
-
-            <form
-              onSubmit={form.handleSubmit(async (vals) => {
-                if (!editing) return
-                try {
-                  const payload = { nama_ajaran: vals.nama_ajaran, status: vals.status || 'nonaktif' }
-                  await tahunAjaranService.updateMasterTahunAjaran(editing.id, payload)
-                  await fetchData()
-                  setEditing(null)
-                  toast({ title: 'Berhasil', description: 'Perubahan disimpan' })
-                } catch (e: any) {
-                  console.error(e)
-                  toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan', variant: 'destructive' })
-                }
-              })}
-              className="grid grid-cols-1 gap-4 py-4"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="edit-nama_ajaran">Nama Ajaran</Label>
-                <Input id="edit-nama_ajaran" {...form.register('nama_ajaran', { required: 'Nama ajaran wajib diisi' })} />
-                {form.formState.errors.nama_ajaran && <p className="text-sm text-rose-600">{String(form.formState.errors.nama_ajaran.message)}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Controller control={form.control} name="status" render={({ field }) => (
-                  // PERBAIKAN: Gunakan 'nonaktif' sebagai nilai
-                  <Select id="edit-status" value={field.value ?? 'nonaktif'} onChange={e => field.onChange((e.target as HTMLSelectElement).value as FormValues['status'])}>
-                    <SelectItem value="aktif">Aktif</SelectItem>
-                    <SelectItem value="nonaktif">Nonaktif</SelectItem>
-                  </Select>
-                )} />
-              </div>
-
-              <DialogFooter>
-                <div className="flex w-full justify-end gap-2">
-                  <Button variant="outline" type="button" onClick={() => setEditing(null)}>Batal</Button>
-                  <Button type="submit">Simpan</Button>
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="grid grid-cols-1 gap-4 py-4">
+                <div className="space-y-2">
+                  <Label>Nama Ajaran</Label>
+                  <Input {...register('nama_ajaran', { required: true })} />
                 </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Controller
+                    control={control}
+                    name="status"
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Pilih Status" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="aktif">Aktif</SelectItem>
+                          <SelectItem value="nonaktif">Nonaktif</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={() => setDialogOpen(false)}>Batal</Button>
+                <Button type="submit">Simpan</Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation */}
         <Dialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null) }}>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Konfirmasi Hapus</DialogTitle>
-            </DialogHeader>
-            <div className="py-2">Apakah Anda yakin ingin menghapus tahun ajaran <strong>{deleting?.nama_ajaran}</strong>? Ini akan menghapus semester terkait.</div>
+            <DialogHeader><DialogTitle>Konfirmasi Hapus</DialogTitle></DialogHeader>
+            <div className="py-2">Yakin ingin menghapus <strong>{deleting?.nama_ajaran}</strong>?</div>
             <DialogFooter className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
-              <Button variant="destructive" onClick={async () => {
-                if (!deleting) return
-                try {
-                  await tahunAjaranService.deleteMasterTahunAjaran(deleting.id)
-                  await fetchData()
-                  setDeleting(null)
-                  toast({ title: 'Berhasil', description: 'Tahun ajaran dihapus' })
-                } catch (e: any) {
-                  console.error(e)
-                  toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menghapus', variant: 'destructive' })
-                }
-              }}>Hapus</Button>
+              <Button variant="destructive" onClick={handleDelete}>Hapus</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

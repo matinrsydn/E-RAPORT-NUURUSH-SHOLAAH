@@ -22,8 +22,6 @@ import ManajemenKelasDashboardPage from './dashboard/manajemen-kelas/page'
 import ManajemenTingkatanPage from './dashboard/manajemen-tingkatan/page'
 import ManajemenKamarDashboardPage from './dashboard/manajemen-kamar/page'
 import ManajemenKurikulumPage from './dashboard/manajemen-kurikulum/page'
-import ManajemenNilaiUjianPage from './dashboard/manajemen-nilai-ujian/page'
-import ManajemenNilaiHafalanPage from './dashboard/manajemen-nilai-hafalan/page'
 import UploadValidatePage from './dashboard/upload-validate/page'
 import ManajemenKitabPage from './dashboard/manajemen-kitab/page'; 
 import PromosiKelasPage from './dashboard/promosi-kelas/page'
@@ -60,8 +58,6 @@ function App() {
         <Route path="/dashboard/indikator-kehadiran" element={<ManajemenIndikatorKehadiranPage />} />
         <Route path="/dashboard/kepala-pesantren" element={<ManajemenKepalaPesantrenPage />} />
         <Route path="/dashboard/manajemen-kurikulum" element={<ManajemenKurikulumPage />} />
-        <Route path="/dashboard/manajemen-nilai-ujian" element={<ManajemenNilaiUjianPage />} />
-        <Route path="/dashboard/manajemen-nilai-hafalan" element={<ManajemenNilaiHafalanPage />} />
   <Route path="/dashboard/manajemen-draft-nilai" element={<UploadValidatePage />} />
   <Route path="/dashboard/upload-validate" element={<UploadValidatePage />} />
     <Route path="/dashboard/manajemen-kitab" element={<ManajemenKitabPage />} />

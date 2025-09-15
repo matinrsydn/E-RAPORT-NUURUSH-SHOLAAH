@@ -5,7 +5,6 @@ import siswaService from '../../services/siswaService'
 import suratKeluarService from '../../services/suratKeluarService'
 import { Label } from '../../components/ui/label'
 import { Input } from '../../components/ui/input'
-import { Select } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
 import { useToast } from '../../components/ui/toast'
 
@@ -35,7 +34,7 @@ type SiswaData = {
 export default function SuratKeluarTemplatePage() {
   const [siswaOptions, setSiswaOptions] = useState<SiswaData[]>([])
   const [selectedSiswa, setSelectedSiswa] = useState<SiswaData | null>(null)
-  const { register, handleSubmit, setValue, watch } = useForm<FormValues>({ 
+  const { register, handleSubmit, watch } = useForm<FormValues>({ 
     defaultValues: { 
       siswa_id: '', 
       penanggung_jawab: 'ayah',
@@ -107,59 +106,54 @@ export default function SuratKeluarTemplatePage() {
           title: 'Error',
           description: 'Pilih siswa terlebih dahulu',
           variant: 'destructive'
-        });
-        return;
+        })
+        return
       }
 
-      const pjData = getPenanggungJawabData();
+      const pjData = getPenanggungJawabData()
       if (!pjData || !pjData.nama) {
         toast({
           title: 'Error',
           description: `Data ${penanggungJawab} tidak ditemukan. Mohon cek laman Manajemen Siswa untuk menambahkan data.`,
           variant: 'destructive'
-        });
-        return;
+        })
+        return
       }
 
-      const formData = new FormData();
-      formData.append('siswa_id', String(data.siswa_id));
-      formData.append('tujuan_nama_pesantren', data.tujuan_nama_pesantren);
-      formData.append('tujuan_alamat_pesantren', data.tujuan_alamat_pesantren);
-      formData.append('alasan', data.alasan);
-      formData.append('ortu_nama', pjData.nama);
-      formData.append('ortu_pekerjaan', pjData.pekerjaan || '');
-      formData.append('ortu_alamat', pjData.alamat || '');
+      const formData = new FormData()
+      formData.append('siswa_id', String(data.siswa_id))
+      formData.append('tujuan_nama_pesantren', data.tujuan_nama_pesantren)
+      formData.append('tujuan_alamat_pesantren', data.tujuan_alamat_pesantren)
+      formData.append('alasan', data.alasan)
+      formData.append('ortu_nama', pjData.nama)
+      formData.append('ortu_pekerjaan', pjData.pekerjaan || '')
+      formData.append('ortu_alamat', pjData.alamat || '')
 
-      const response = await suratKeluarService.generateFromTemplate(formData);
+      const response = await suratKeluarService.generateFromTemplate(formData)
       
       // Handle the downloaded file
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `surat_keluar_${selectedSiswa.nama}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `surat_keluar_${selectedSiswa.nama}.docx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
 
       toast({
         title: 'Berhasil',
         description: 'Surat keluar berhasil dibuat',
-      });
+      })
     } catch (error: any) {
-      console.error('Error generating surat:', error);
+      console.error('Error generating surat:', error)
       toast({
         title: 'Error',
         description: error?.response?.data?.message || 'Gagal membuat surat keluar',
         variant: 'destructive'
-      });
+      })
     }
-  };
-
-  const handleSiswaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = Number(e.target.value)
-    setValue('siswa_id', id)
   }
 
   return (

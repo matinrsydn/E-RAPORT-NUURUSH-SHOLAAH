@@ -5,7 +5,7 @@ const base = `${API_BASE}/templates`
 
 export async function getTemplates() { const res = await axios.get(base); return res.data }
 export async function uploadTemplates(formData, config = {}) {
-  // formData is expected to be FormData with fields: identitas, nilai, sikap
+  // formData is expected to be FormData with fields: identitas, nilai, sikap, surat_keluar
   const isForm = typeof FormData !== 'undefined' && formData instanceof FormData
   const headers = isForm ? { ...(config.headers || {}) } : { 'Content-Type': 'application/json', ...(config.headers || {}) }
   const res = await axios.post(`${base}/upload`, formData, { headers, ...config })

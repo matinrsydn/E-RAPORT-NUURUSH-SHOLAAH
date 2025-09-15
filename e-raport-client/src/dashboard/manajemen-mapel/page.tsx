@@ -1,169 +1,136 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../dashboard/layout'
-import API_BASE from '../../api'
 import mapelService from '../../services/mapelService'
 import DataTable from '../../components/data-table'
-import { Card, CardContent } from '../../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog'
 import { useForm, Controller } from 'react-hook-form'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
-import { Select, SelectItem } from '../../components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Button } from '../../components/ui/button'
 import { useToast } from '../../components/ui/toast'
 
-type Mapel = { id:number; nama_mapel:string; jenis?: 'Ujian' | 'Hafalan' }
-type FormValues = { nama_mapel:string; jenis: 'Ujian' | 'Hafalan' }
+type Mapel = { id: number; nama_mapel: string; jenis?: 'Ujian' | 'Hafalan' }
+type FormValues = { nama_mapel: string; jenis: 'Ujian' | 'Hafalan' }
 
-export default function ManajemenMapelPage(){
+export default function ManajemenMapelPage() {
   const [data, setData] = useState<Mapel[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Mapel | null>(null)
   const [deleting, setDeleting] = useState<Mapel | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const { toast } = useToast()
   
-  const form = useForm<FormValues>({ defaultValues: { nama_mapel: '', jenis: 'Ujian' } })
-  const addForm = useForm<FormValues>({ defaultValues: { nama_mapel: '', jenis: 'Ujian' } })
-  const [addOpen, setAddOpen] = useState(false)
+  const { register, handleSubmit, control, reset, setValue } = useForm<FormValues>({
+    defaultValues: { nama_mapel: '', jenis: 'Ujian' }
+  })
 
-  const fetchData = async ()=>{ 
-    setLoading(true); 
-    try { 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
       const rows = await mapelService.getAllMapel();
       setData(rows)
-    } catch(e) { 
-      console.error(e); 
-      toast({ title: 'Gagal', description: 'Gagal memuat mata pelajaran', variant:'destructive' }) 
-    } finally { 
-      setLoading(false) 
-    } 
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Gagal', description: 'Gagal memuat mata pelajaran', variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
   }
-  
-  useEffect(()=>{ fetchData() }, [])
 
-  const columns: ColumnDef<Mapel, any>[] = [ 
-    { header: 'Nama Mapel', accessorKey: 'nama_mapel' }, 
-    { header: 'Jenis', accessorKey: 'jenis' }, 
-    { id: 'actions', header: 'Aksi', accessorKey: 'id' as any } 
-  ]
+  useEffect(() => { fetchData() }, [])
+
+  const handleOpenDialog = (mapel: Mapel | null) => {
+    setEditing(mapel);
+    if (mapel) {
+      reset({ nama_mapel: mapel.nama_mapel, jenis: mapel.jenis || 'Ujian' });
+    } else {
+      reset({ nama_mapel: '', jenis: 'Ujian' });
+    }
+    setDialogOpen(true);
+  };
+
+  const onSubmit = async (vals: FormValues) => {
+    try {
+      if (editing) {
+        await mapelService.updateMapel(editing.id, vals);
+        toast({ title: 'Berhasil', description: 'Perubahan disimpan' });
+      } else {
+        await mapelService.createMapel(vals);
+        toast({ title: 'Berhasil', description: 'Mata pelajaran ditambahkan' });
+      }
+      fetchData();
+      setDialogOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan data', variant: 'destructive' });
+    }
+  };
+
+  const columns: ColumnDef<Mapel, any>[] = [
+    { header: 'Nama Mapel', accessorKey: 'nama_mapel' },
+    { header: 'Jenis', accessorKey: 'jenis' },
+    {
+      id: 'actions', header: 'Aksi', cell: ({ row }) => (
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
+          <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
+        </div>
+      )
+    }
+  ];
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Manajemen Mata Pelajaran</h1>
-          <p className="text-muted-foreground">Kelola daftar mata pelajaran</p>
+          <p className="text-muted-foreground">Kelola daftar mata pelajaran yang tersedia.</p>
         </div>
         <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+                <CardTitle>Daftar Mata Pelajaran</CardTitle>
+                <Button onClick={() => handleOpenDialog(null)}>Tambah Mapel</Button>
+            </div>
+          </CardHeader>
           <CardContent>
-            {loading ? <div>Memuat...</div> : (
-              <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <div/> 
-                    <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                      <DialogTrigger asChild><Button>Tambah Mapel</Button></DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Tambah Mapel</DialogTitle>
-                          <DialogDescription>Isi informasi mata pelajaran</DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={addForm.handleSubmit(async (vals)=>{ 
-                            try { 
-                            await mapelService.createMapel(vals); 
-                            await fetchData(); 
-                            toast({ title: 'Berhasil', description: 'Mata pelajaran ditambahkan' }); 
-                            addForm.reset(); 
-                            setAddOpen(false) 
-                          } catch(e:any) { 
-                            console.error(e); 
-                            toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menambahkan', variant:'destructive' }) 
-                          } 
-                        })} className="grid grid-cols-2 gap-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="nama_mapel">Nama Mapel</Label>
-                            <Input id="nama_mapel" {...addForm.register('nama_mapel',{ required: true })} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="jenis">Jenis</Label>
-                            {/* --- PERBAIKAN: Menggunakan onChange standar --- */}
-                            <Controller
-                              name="jenis"
-                              control={addForm.control}
-                              render={({ field }) => (
-                                <Select 
-                                  id="jenis"
-                                  value={field.value} 
-                                  onChange={e => field.onChange((e.target as HTMLSelectElement).value as 'Ujian' | 'Hafalan')}
-                                >
-                                  <SelectItem value="Ujian">Ujian</SelectItem>
-                                  <SelectItem value="Hafalan">Hafalan</SelectItem>
-                                </Select>
-                              )}
-                            />
-                          </div>
-                          <DialogFooter className="col-span-2">
-                            <div className="flex w-full justify-end gap-2">
-                              <Button variant="outline" type="button" onClick={()=>setAddOpen(false)}>Batal</Button>
-                              <Button type="submit">Simpan</Button>
-                            </div>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                <DataTable<Mapel> 
-                  columns={columns} 
-                  data={data} 
-                  onEdit={(r)=>{ setEditing(r); form.reset({ nama_mapel: r.nama_mapel, jenis: r.jenis ?? 'Ujian' }) }} 
-                  onDelete={(r)=>setDeleting(r)} 
-                />
-              </div>
-            )}
+            {loading ? <div>Memuat...</div> : <DataTable<Mapel> columns={columns} data={data} />}
           </CardContent>
         </Card>
 
-        {/* --- DIALOG EDIT --- */}
-        <Dialog open={!!editing} onOpenChange={(v)=>{ if(!v) setEditing(null) }}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>Edit Mapel</DialogTitle></DialogHeader>
-            <form onSubmit={form.handleSubmit(async (vals)=>{ 
-              if(!editing) return; 
-                try { 
-                await mapelService.updateMapel(editing.id, vals); 
-                await fetchData(); 
-                setEditing(null); 
-                toast({ title: 'Berhasil', description: 'Perubahan disimpan' }) 
-              } catch(e:any) { 
-                console.error(e); 
-                toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menyimpan', variant:'destructive' }) 
-              } 
-            })} className="grid grid-cols-2 gap-4 py-4">
+            <DialogHeader>
+              <DialogTitle>{editing ? 'Edit Mapel' : 'Tambah Mapel'}</DialogTitle>
+              <DialogDescription>Isi informasi mata pelajaran di bawah ini.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-nama_mapel">Nama Mapel</Label>
-                <Input id="edit-nama_mapel" {...form.register('nama_mapel',{ required: true })} />
+                <Label>Nama Mapel *</Label>
+                <Input {...register('nama_mapel', { required: true })} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-jenis">Jenis</Label>
-                {/* --- PERBAIKAN: Menggunakan onChange standar --- */}
+                <Label>Jenis *</Label>
                 <Controller
                   name="jenis"
-                  control={form.control}
+                  control={control}
                   render={({ field }) => (
-                    <Select 
-                      id="edit-jenis"
-                      value={field.value} 
-                      onChange={e => field.onChange((e.target as HTMLSelectElement).value as 'Ujian' | 'Hafalan')}
-                    >
-                      <SelectItem value="Ujian">Ujian</SelectItem>
-                      <SelectItem value="Hafalan">Hafalan</SelectItem>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Pilih Jenis" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Ujian">Ujian</SelectItem>
+                        <SelectItem value="Hafalan">Hafalan</SelectItem>
+                      </SelectContent>
                     </Select>
                   )}
                 />
               </div>
               <DialogFooter className="col-span-2">
                 <div className="flex w-full justify-end gap-2">
-                  <Button variant="outline" type="button" onClick={()=>setEditing(null)}>Batal</Button>
+                  <Button variant="outline" type="button" onClick={() => setDialogOpen(false)}>Batal</Button>
                   <Button type="submit">Simpan</Button>
                 </div>
               </DialogFooter>
@@ -171,24 +138,23 @@ export default function ManajemenMapelPage(){
           </DialogContent>
         </Dialog>
 
-        {/* --- DIALOG HAPUS --- */}
-        <Dialog open={!!deleting} onOpenChange={(v)=>{ if(!v) setDeleting(null) }}>
+        <Dialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null) }}>
           <DialogContent>
             <DialogHeader><DialogTitle>Konfirmasi Hapus</DialogTitle></DialogHeader>
-            <div className="py-2">Apakah Anda yakin ingin menghapus mata pelajaran <strong>{deleting?.nama_mapel}</strong> ?</div>
+            <div className="py-2">Apakah Anda yakin ingin menghapus <strong>{deleting?.nama_mapel}</strong>?</div>
             <DialogFooter className="flex justify-end gap-2">
-              <Button variant="outline" onClick={()=>setDeleting(null)}>Batal</Button>
-              <Button variant="destructive" onClick={async ()=>{ 
-                if(!deleting) return; 
-                try { 
-                  await mapelService.deleteMapel(deleting.id); 
-                  await fetchData(); 
-                  setDeleting(null); 
-                  toast({ title: 'Berhasil', description: 'Mata pelajaran dihapus' }) 
-                } catch(e:any) { 
-                  console.error(e); 
-                  toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menghapus', variant:'destructive' }) 
-                } 
+              <Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button>
+              <Button variant="destructive" onClick={async () => {
+                if (!deleting) return;
+                try {
+                  await mapelService.deleteMapel(deleting.id);
+                  fetchData();
+                  setDeleting(null);
+                  toast({ title: 'Berhasil', description: 'Mata pelajaran dihapus' })
+                } catch (e: any) {
+                  console.error(e);
+                  toast({ title: 'Gagal', description: e?.response?.data?.message || 'Gagal menghapus', variant: 'destructive' })
+                }
               }}>Hapus</Button>
             </DialogFooter>
           </DialogContent>

@@ -11,7 +11,12 @@ export default function ManajemenTemplatePage() {
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [files, setFiles] = useState({ identitas: null, nilai: null, sikap: null })
+  const [files, setFiles] = useState({ 
+    identitas: null, 
+    nilai: null, 
+    sikap: null,
+    surat_keluar: null 
+  })
   const { toast } = useToast()
 
   const load = async () => {
@@ -37,10 +42,19 @@ export default function ManajemenTemplatePage() {
       if (files.identitas) form.append('identitas', files.identitas)
       if (files.nilai) form.append('nilai', files.nilai)
       if (files.sikap) form.append('sikap', files.sikap)
+      if (files.surat_keluar) {
+        form.append('surat_keluar', files.surat_keluar)
+        form.append('jenis', 'surat_keluar') // Add type information
+      }
       await templateService.uploadTemplates(form)
       toast({ title: 'Sukses', description: 'Template berhasil diunggah.' })
       setUploadOpen(false)
-      setFiles({ identitas: null, nilai: null, sikap: null })
+      setFiles({ 
+        identitas: null, 
+        nilai: null, 
+        sikap: null,
+        surat_keluar: null 
+      })
       load()
     } catch (err) {
       toast({ title: 'Gagal', description: err?.response?.data?.message || 'Gagal mengunggah template', variant: 'destructive' })
@@ -110,21 +124,45 @@ export default function ManajemenTemplatePage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Unggah Template (.docx)</DialogTitle>
-              <DialogDescription>Unggah file identitas.docx, nilai.docx, dan/atau sikap.docx. Nama file akan distandarisasi di server.</DialogDescription>
+              <DialogDescription>
+                Unggah file template untuk berbagai keperluan dokumen. 
+                Nama file akan distandarisasi di server.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUpload} className="grid gap-4 py-4">
-              <div>
-                <label className="block mb-1">Identitas (identitas.docx)</label>
-                <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'identitas')} />
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-1 font-medium">Raport</label>
+                  <div className="space-y-2 pl-4">
+                    <div>
+                      <label className="block mb-1">Identitas (identitas.docx)</label>
+                      <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'identitas')} />
+                    </div>
+                    <div>
+                      <label className="block mb-1">Nilai (nilai.docx)</label>
+                      <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'nilai')} />
+                    </div>
+                    <div>
+                      <label className="block mb-1">Sikap (sikap.docx)</label>
+                      <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'sikap')} />
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Surat</label>
+                  <div className="space-y-2 pl-4">
+                    <div>
+                      <label className="block mb-1">Template Surat Keluar (.docx)</label>
+                      <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'surat_keluar')} />
+                      <p className="text-sm text-gray-500 mt-1">
+                        Template untuk berbagai jenis surat keluar (surat keterangan, dll)
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block mb-1">Nilai (nilai.docx)</label>
-                <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'nilai')} />
-              </div>
-              <div>
-                <label className="block mb-1">Sikap (sikap.docx)</label>
-                <input type="file" accept=".docx" onChange={(e) => handleFileChange(e, 'sikap')} />
-              </div>
+              
               <DialogFooter>
                 <Button variant="outline" type="button" onClick={() => setUploadOpen(false)}>Batal</Button>
                 <Button type="submit">Unggah</Button>

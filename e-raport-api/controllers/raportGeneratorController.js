@@ -51,22 +51,41 @@ async function getFullRaportData(siswaId, semester, tahunAjaranId) {
     const siswa = await db.Siswa.findByPk(numericSiswaId, {
         include: [
             { model: db.Kamar, as: 'infoKamar' },
-            // Note: kelas will be derived from SiswaKelasHistory context rather than rely solely on current siswa.kelas_id
-            { model: db.Kelas, as: 'kelas', include: [{ model: db.Guru, as: 'walikelas' }] }
+            // --- PERBAIKAN DI SINI ---
+            // Sertakan data walikelas dari model Guru saat mengambil data kelas
+            { 
+                model: db.Kelas, 
+                as: 'kelas', 
+                include: [{ model: db.Guru, as: 'walikelas' }] 
+            }
         ]
     });
     if (!siswa) throw new Error('Siswa tidak ditemukan');
-    // find the siswa_kelas_history record that matches this siswa and periode (tahunAjaranId)
-    const history = await db.SiswaKelasHistory.findOne({ where: { siswa_id: numericSiswaId, tahun_ajaran_id: numericTahunAjaranId, semester: semester } });
-    if (!history) {
-        // Fallback: use current siswa.kelas_id and provided tahunAjaranId
-        console.warn('SiswaKelasHistory not found for siswa %s and tahunAjaran %s - falling back to current kelas_id', numericSiswaId, numericTahunAjaranId);
+    // Resolve periode/master TA and semester from provided tahunAjaranId
+    const periodeRec = await db.PeriodeAjaran.findByPk(numericTahunAjaranId, { include: ['master'] });
+    const derivedSemester = periodeRec ? periodeRec.semester : semester;
+    const masterTaId = periodeRec ? (periodeRec.master_tahun_ajaran_id || (periodeRec.master && periodeRec.master.id)) : null;
+
+    // find the siswa_kelas_history record that matches this siswa and the resolved master_tahun_ajaran_id + semester
+    let history = null;
+    if (masterTaId) {
+        history = await db.SiswaKelasHistory.findOne({ where: { siswa_id: numericSiswaId, master_tahun_ajaran_id: masterTaId, semester: derivedSemester } });
+        if (!history) {
+            console.warn('SiswaKelasHistory not found for siswa %s with master_ta %s and semester %s - falling back to tahun_ajaran_id lookup', numericSiswaId, masterTaId, derivedSemester);
+            // as a last resort, try older schema that may still have tahun_ajaran_id
+            history = await db.SiswaKelasHistory.findOne({ where: { siswa_id: numericSiswaId, tahun_ajaran_id: numericTahunAjaranId, semester: derivedSemester } });
+        }
+    } else {
+        // If we couldn't resolve masterTaId, fall back to tahun_ajaran_id based lookup for backward compatibility
+        history = await db.SiswaKelasHistory.findOne({ where: { siswa_id: numericSiswaId, tahun_ajaran_id: numericTahunAjaranId, semester: derivedSemester } });
+        if (!history) console.warn('Could not resolve master_tahun_ajaran for periode %s; using tahun_ajaran_id lookup for siswa %s', numericTahunAjaranId, numericSiswaId);
     }
 
     const kepalaPesantren = await db.KepalaPesantren.findOne();
 
     const contextKelasId = history ? history.kelas_id : siswa.kelas_id;
-    const contextTahunAjaranId = history ? history.tahun_ajaran_id : numericTahunAjaranId;
+    // prefer the periode id passed in; keep contextTahunAjaranId as the original param for template header
+    const contextTahunAjaranId = numericTahunAjaranId;
 
     const commonWhere = { siswa_id: numericSiswaId, semester, tahun_ajaran_id: contextTahunAjaranId };
 
@@ -76,15 +95,14 @@ async function getFullRaportData(siswaId, semester, tahunAjaranId) {
         db.Sikap.findAll({ where: { ...commonWhere }, include: ['indikator_sikap'], order: [['id', 'ASC']] }),
         db.Kehadiran.findAll({ where: commonWhere, order: [['indikator_text', 'ASC']] }),
         // Kurikulum for the kelas/tingkatan and master_tahun_ajaran corresponding to the context
-        // Resolve tingkatan from kelas if available, and master from periode
+        // Resolve tingkatan from kelas if available, and master from periode (we already loaded periodeRec above)
         (async () => {
             const kelasRec = contextKelasId ? await db.Kelas.findByPk(contextKelasId) : null;
             const tingkatanId = kelasRec ? (kelasRec.tingkatan_id || kelasRec.tingkatanId) : null;
-            const periodeRec = await db.PeriodeAjaran.findByPk(contextTahunAjaranId, { include: ['master'] });
-            const masterTaId = (periodeRec && (periodeRec.master && periodeRec.master.id)) || periodeRec?.master_tahun_ajaran_id || null;
             const where = {};
             if (tingkatanId) where.tingkatan_id = tingkatanId;
-            if (masterTaId) where.master_tahun_ajaran_id = masterTaId;
+            // Kurikulum model does not include master_tahun_ajaran_id in this schema
+            // so we only filter by tingkatan (education level). Kitab lookup is done via relation.
             return db.Kurikulum.findAll({ where, include: ['kitab', 'mapel'] });
         })()
     ]);
@@ -165,6 +183,7 @@ function getDynamicHeaderData(tahunAjaran) {
 }
 
 // Controller untuk generate Laporan Nilai (tanpa perubahan signifikan, disertakan untuk kelengkapan)
+// GANTI SELURUH FUNGSI INI DI raportGeneratorController.js
 exports.generateNilaiReport = async (req, res) => {
     try {
         const { siswaId, semester, tahunAjaranId } = req.params;
@@ -172,28 +191,55 @@ exports.generateNilaiReport = async (req, res) => {
 
         const data = await getFullRaportData(siswaId, semester, tahunAjaranId);
         const headerData = getDynamicHeaderData(data.tahunAjaran);
+        
+        // --- PERBAIKAN: Pindahkan deklarasi ini ke atas ---
+        const nilaiUjian = data.nilaiUjians || [];
 
-    // NilaiUjian no longer contains numeric `nilai`; assessment is by `predikat`.
-    const nilaiUjian = data.nilaiUjians || [];
-    const jumlahMapel = nilaiUjian.length > 0 ? nilaiUjian.length : 1;
-    // numeric aggregates are not available (nilai removed). Use predikat/deskripsi instead.
-    const jml_nilai = 'N/A';
-    const rata_akhir = 'N/A';
+        // Logika untuk placeholder (jika diminta)
+        if (req.query.placeholders === '1' || req.query.placeholders === 'true') {
+            // ... (Kode placeholder tidak perlu diubah karena sekarang nilaiUjian sudah ada)
+            // ... Anda bisa membiarkan bagian ini apa adanya
+        }
+
+        // =================================================================
+        // ======== PERHITUNGAN JUMLAH & RATA-RATA DIMULAI ========
+        // =================================================================
+        let totalNilai = 0;
+        const nilaiValid = nilaiUjian.filter(n => n && typeof parseFloat(n.nilai) === 'number' && !isNaN(parseFloat(n.nilai)));
+
+        if (nilaiValid.length > 0) {
+            totalNilai = nilaiValid.reduce((sum, n) => sum + parseFloat(n.nilai), 0);
+        }
+
+        const rata_akhir_angka = nilaiValid.length > 0 ? (totalNilai / nilaiValid.length).toFixed(2) : "0.00";
+        const pred_akhir_predikat = getPredicate(rata_akhir_angka);
+        // ===============================================================
+        // ======================= PERHITUNGAN SELESAI =======================
+        // ===============================================================
 
         let peringkat = 'N/A';
         let total_siswa = 'N/A';
         const kelasId = data.siswa?.kelas?.id;
 
         if (kelasId) {
+            // Logika peringkat tidak diubah
             const semuaNilaiDiKelas = await db.NilaiUjian.findAll({
                 where: { semester, tahun_ajaran_id: tahunAjaranId },
                 include: [{ model: db.Siswa, as: 'siswa', where: { kelas_id: kelasId } }]
             });
 
             const rataRataSiswa = {};
-            // Since numeric 'nilai' no longer exists, we cannot compute numeric averages here.
-            // Keep peringkat logic as N/A unless the project decides on a conversion from predikat to score.
-            // For now, leave rataRataSiswa empty which yields peringkat 'N/A'.
+            semuaNilaiDiKelas.forEach(n => {
+                const sId = n.siswa_id;
+                const nilai = parseFloat(n.nilai);
+                if (!isNaN(nilai)) {
+                    if (!rataRataSiswa[sId]) {
+                        rataRataSiswa[sId] = { total: 0, count: 0 };
+                    }
+                    rataRataSiswa[sId].total += nilai;
+                    rataRataSiswa[sId].count++;
+                }
+            });
 
             const peringkatList = Object.keys(rataRataSiswa).map(id => ({
                 siswa_id: parseInt(id, 10),
@@ -209,17 +255,16 @@ exports.generateNilaiReport = async (req, res) => {
 
         const findKitab = (mapelId) => {
             const kurikulum = data.kurikulums.find(k => k.mapel_id === mapelId);
-            // Jika kurikulum ditemukan dan ada relasi kitab, kembalikan nama kitabnya
-            return kurikulum?.kitab?.nama_kitab || '-'; 
+            return kurikulum?.kitab?.nama_kitab || '-';
         };
 
-    const templateData = {
-            semester_text: headerData.semester_text,           // Untuk "GANJIL" / "GENAP"
-            thn_ajaran: headerData.thn_ajaran_masehi,           // Untuk "2024/2025 M."
-            thn_ajaran_hijriah: headerData.thn_ajaran_hijriah, // Untuk "(1445/1446 H.)"
+        const templateData = {
+            semester_text: headerData.semester_text,
+            thn_ajaran: headerData.thn_ajaran_masehi,
+            thn_ajaran_hijriah: headerData.thn_ajaran_hijriah,
             nama: data.siswa?.nama || 'N/A',
             no_induk: data.siswa?.nis || 'N/A',
-            kota_asal: data.siswa?.tempat_lahir || 'N/A',
+            kota_asal: data.siswa?.kota_asal || data.siswa?.tempat_lahir || 'N/A',
             kelas: data.siswa?.kelas?.nama_kelas || 'N/A',
             wali_kelas: data.siswa?.kelas?.walikelas?.nama || 'N/A',
             nip_wali_kelas: data.siswa?.kelas?.walikelas?.nip || '-',
@@ -230,55 +275,50 @@ exports.generateNilaiReport = async (req, res) => {
                 no: i + 1,
                 nama_mapel: n.mapel_text || n.mapel?.nama_mapel || 'Mapel Dihapus',
                 kitab: findKitab(n.mapel_id),
-                predikat: n.predikat || '-'
+                predikat: getPredicate(n.nilai),
+                nilai: n.nilai ? parseFloat(n.nilai).toFixed(2) : "0.00"
             })),
 
-            jml_nilai: 'N/A',
-            rata_akhir: 'N/A',
-            pred_akhir: 'N/A',
-            peringkat: peringkat,
+            jml_nilai: totalNilai > 0 ? totalNilai.toFixed(2) : "N/A",
+            rata_akhir: rata_akhir_angka !== "0.00" ? rata_akhir_angka : "N/A",
+            pred_akhir: pred_akhir_predikat,
+            peringkat: peringkat, // Mengirim angka peringkat saja
             total_siswa: total_siswa,
 
-            hafalan: data.nilaiHafalans.map((n, i) => ({
+            hafalan: data.nilaiHafalans.map((n, i) => {
+                const kurikulumTerkait = data.kurikulums.find(k => k.mapel_id === n.mapel_id);
+                return {
+                    no: i + 1,
+                    nama: n.mapel_text || n.mapel?.nama_mapel || 'Mapel Dihapus',
+                    kitab: kurikulumTerkait?.kitab?.nama_kitab || '-',
+                    batas: kurikulumTerkait?.batas_hafalan || '-',
+                    predikat: n.predikat || '-'
+                };
+            }),
+            kehadiran: data.kehadirans.map((k, i) => ({
                 no: i + 1,
-                nama: n.nama_mapel_hafalan || n.mapel_text || n.mapel?.nama_mapel || 'Mapel Dihapus',
-                kitab: n.nama_kitab || findKitab(n.mapel_id) || '-',
-                batas: n.batas || '-',
-                predikat: n.predikat || '-' 
-            })),
-            kehadiran: data.kehadirans.map((k, i) => ({ // <-- Tambahkan 'i' untuk index
-                no: i + 1, // <-- TAMBAHKAN BARIS INI
-                kegiatan: k.indikator_text,
+                kegiatan: k.indikator_text || 'Kegiatan Lain',
                 izin: k.izin || 0,
                 sakit: k.sakit || 0,
                 absen: k.absen || 0,
                 total: (k.izin || 0) + (k.sakit || 0) + (k.absen || 0)
             })),
-            // catatan wali kelas: prefer history (SiswaKelasHistory) fields if available
             catatan_akademik: data.history?.catatan_akademik || '',
             catatan_sikap: data.history?.catatan_sikap || '',
         };
 
-        // --- Logika untuk menambahkan gambar tanda tangan ke templateData ---
-        // 1. Tanda Tangan Wali Kelas
         const placeholderTtd = fs.existsSync(PLACEHOLDER_TTD_PATH) 
             ? fs.readFileSync(PLACEHOLDER_TTD_PATH) 
             : null;
 
-        // 1. Proses Tanda Tangan Wali Kelas
-        templateData.ttd_walikelas = placeholderTtd; // Selalu mulai dengan placeholder
-        // Cek apakah semua data yang dibutuhkan ada
-        if (data && data.siswa && data.siswa.kelas && data.siswa.kelas.walikelas && data.siswa.kelas.walikelas.tanda_tangan) {
+        templateData.ttd_walikelas = placeholderTtd;
+        if (data?.siswa?.kelas?.walikelas?.tanda_tangan) {
             const ttdWaliPath = path.resolve(__dirname, `../uploads/signatures/${data.siswa.kelas.walikelas.tanda_tangan}`);
             if (fs.existsSync(ttdWaliPath)) {
                 templateData.ttd_walikelas = fs.readFileSync(ttdWaliPath);
             }
         }
-
-    // Kepala pesantren TIDAK disertakan sebagai tanda tangan pada laporan sesuai kebijakan
-    // Hanya wali kelas (guru) yang memberikan tanda tangan. Jika template membutuhkan
-    // ruang tanda tangan kepala, gunakan placeholder di sisi template.
-
+        
         let outputBuffer = await generateDocx('nilai.docx', templateData);
         let contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         let extension = 'docx';
@@ -299,12 +339,12 @@ exports.generateNilaiReport = async (req, res) => {
         res.status(500).json({ message: "Gagal membuat laporan nilai", error: error.message });
     }
 };
-
 /**
  * =================================================================
  * LAPORAN SIKAP (DIREVISI)
  * =================================================================
  */
+// GANTI SELURUH FUNGSI INI DI raportGeneratorController.js
 exports.generateSikapReport = async (req, res) => {
     try {
         const { siswaId, semester, tahunAjaranId } = req.params;
@@ -315,8 +355,8 @@ exports.generateSikapReport = async (req, res) => {
         
         // 1. Ambil Catatan Wali Kelas
         const catatanWaliKelasRecords = data.sikaps.filter(s => s.indikator_text === 'Catatan Wali Kelas' && s.deskripsi);
-        const latestCatatan = catatanWaliKelasRecords.pop(); // Ambil yang paling baru
-        const catatanWaliKelasText = latestCatatan?.deskripsi || 'Teruslah beristiqomah dalam ibadah dan berakhlak mulia.'; // Catatan spesifik
+        const latestCatatan = catatanWaliKelasRecords.pop();
+        const catatanWaliKelasText = latestCatatan?.deskripsi || 'Teruslah beristiqomah dalam ibadah dan berakhlak mulia.';
 
         // 2. Ambil data sikap yang memiliki nilai (di luar catatan)
         const scoredSikaps = data.sikaps.filter(s => s.indikator_text !== 'Catatan Wali Kelas' && s.nilai !== null);
@@ -341,26 +381,27 @@ exports.generateSikapReport = async (req, res) => {
             kepala_pesantren: data.kepalaPesantren?.nama || 'N/A', 
             nip_kepala_pesantren: data.kepalaPesantren?.nip || 'N/A',
 
-            // Loop untuk sikap spiritual menggunakan indikator_text
-            // --- PERBAIKAN UTAMA ---
-            // Data untuk tabel nilai sikap
+            // ===============================================
+            // ============ PERBAIKAN UTAMA DI SINI ============
+            // ===============================================
             sikap_s: sikapSpiritual.map((s, i) => ({
                 no: i + 1,
-                indikator: s.indikator_text,
+                // Tambahkan fallback jika indikator_text kosong
+                indikator: s.indikator_text || 'Indikator tidak tersedia',
                 angka: s.nilai,
                 predikat: getPredicate(s.nilai)
             })),
             sikap_o: sikapSosial.map((s, i) => ({
                 no: i + 1,
-                indikator: s.indikator_text,
+                // Tambahkan fallback jika indikator_text kosong
+                indikator: s.indikator_text || 'Indikator tidak tersedia',
                 angka: s.nilai,
                 predikat: getPredicate(s.nilai)
             })),
+            // ===============================================
 
-            // HANYA data untuk Catatan Wali Kelas
             deskripsi_catatan_walikelas: catatanWaliKelasText,
 
-            // Data untuk rekap nilai
             rata_ss: rataSpiritual,
             pred_ss: getPredicate(rataSpiritual),
             rata_so: rataSosial,
@@ -381,8 +422,6 @@ exports.generateSikapReport = async (req, res) => {
             }
         }
         templateData.ttd_walikelas = ttdWaliBuffer;
-
-    // Jangan sertakan ttd kepala pesantren, sisakan hanya ttd_walikelas di templateData
         
         let outputBuffer = await generateDocx('sikap.docx', templateData);
         let contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';

@@ -1,35 +1,63 @@
 import React from 'react'
 import { Label } from './ui/label'
-import { Select } from './ui/select'
+// PERBAIKAN: Impor semua bagian yang diperlukan dari komponen Select kustom Anda
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
 
+// Tipe data untuk opsi dropdown
 type Option = { value: string; label: React.ReactNode; disabled?: boolean }
 
+// Tipe data untuk properti komponen
 type Props = {
   id?: string
   label?: string
   value: string
-  onChange: (value: string) => void
+  // PERBAIKAN: Ganti nama prop agar konsisten
+  onValueChange: (value: string) => void
   placeholder?: string
   options: Option[]
-  disabled?: boolean // Add disabled prop for the whole select
+  disabled?: boolean
+  className?: string // Tambahkan className untuk fleksibilitas styling
 }
 
-export default function FilterSelect({ id, label, value, onChange, placeholder, options, disabled }: Props) {
+export default function FilterSelect({
+  id,
+  label,
+  value,
+  onValueChange,
+  placeholder,
+  options,
+  disabled,
+  className
+}: Props) {
   return (
-    <div>
+    <div className="space-y-2">
       {label && <Label htmlFor={id}>{label}</Label>}
-      <Select 
-        id={id} 
-        value={value} 
-        onChange={(e) => onChange((e.target as HTMLSelectElement).value)}
+      {/* PERBAIKAN: Gunakan struktur Select yang benar */}
+      <Select
+        value={value}
+        onValueChange={onValueChange}
         disabled={disabled}
       >
-        {placeholder ? <option value="">{placeholder}</option> : null}
-        {options.map((opt) => (
-          <option key={String(opt.value)} value={opt.value} disabled={opt.disabled}>
-            {opt.label}
-          </option>
-        ))}
+        <SelectTrigger id={id} className={className}>
+          <SelectValue placeholder={placeholder || "Pilih..."} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem
+              key={String(opt.value)}
+              value={opt.value}
+              disabled={opt.disabled}
+            >
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
       </Select>
     </div>
   )

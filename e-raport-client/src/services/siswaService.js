@@ -1,30 +1,29 @@
-import axios from 'axios'
-import API_BASE from '../api'
+import apiClient from './apiClient'
 
-const base = `${API_BASE}/siswa`
+const base = `/api/siswa`
 
 export async function getAllSiswa(params) {
-  const res = await axios.get(base, { params })
+  const res = await apiClient.get(base, { params })
   return res.data
 }
 
 export async function getSiswaById(id) {
-  const res = await axios.get(`${base}/${id}`)
+  const res = await apiClient.get(`${base}/${id}`)
   return res.data
 }
 
 export async function createSiswa(payload) {
-  const res = await axios.post(base, payload)
+  const res = await apiClient.post(base, payload)
   return res.data
 }
 
 export async function updateSiswa(id, payload) {
-  const res = await axios.put(`${base}/${id}`, payload)
+  const res = await apiClient.put(`${base}/${id}`, payload)
   return res.data
 }
 
 export async function deleteSiswa(id) {
-  const res = await axios.delete(`${base}/${id}`)
+  const res = await apiClient.delete(`${base}/${id}`)
   return res.data
 }
 

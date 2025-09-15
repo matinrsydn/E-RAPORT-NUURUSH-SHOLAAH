@@ -7,7 +7,7 @@ const uploadSignature = require('../middleware/uploadSignature');
 
 router.get('/', controller.getAllGuru);
 router.get('/:id', controller.getGuruById);
-router.post('/', controller.createGuru);
+router.post('/', uploadSignature.single('tanda_tangan'), controller.createGuru);
 
 // --- PERBAIKAN DI SINI ---
 // Hapus route PUT yang lama dan gunakan satu ini saja.

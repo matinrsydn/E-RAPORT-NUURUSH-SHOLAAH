@@ -27,7 +27,8 @@ const templateStorage = multer.diskStorage({
 const uploadMiddleware = multer({ storage: templateStorage }).fields([
     { name: 'identitas', maxCount: 1 },
     { name: 'nilai', maxCount: 1 },
-    { name: 'sikap', maxCount: 1 }
+    { name: 'sikap', maxCount: 1 },
+    { name: 'surat_keluar', maxCount: 1 }
 ]);
 
 
@@ -63,6 +64,58 @@ const nilaiSikapKePredikat = (angka) => {
 // --- Controller Functions (Diperbarui dan Disempurnakan) ---
 
 exports.uploadTemplate = (req, res) => {
+    try {
+        uploadMiddleware(req, res, async (err) => {
+            if (err) {
+                console.error('Upload error:', err);
+                return res.status(400).json({ 
+                    message: 'Gagal mengunggah file', 
+                    error: err.message 
+                });
+            }
+
+            const files = req.files;
+            const uploadDir = path.join(__dirname, '../uploads/templates/');
+            
+            // Process each template type
+            const processTemplate = (fieldName) => {
+                if (files[fieldName] && files[fieldName][0]) {
+                    const file = files[fieldName][0];
+                    const targetPath = path.join(uploadDir, `${fieldName}.docx`);
+                    fs.renameSync(file.path, targetPath);
+                    return { 
+                        fieldName, 
+                        path: targetPath, 
+                        originalName: file.originalname 
+                    };
+                }
+                return null;
+            };
+
+            const results = [];
+            ['identitas', 'nilai', 'sikap', 'surat_keluar'].forEach(type => {
+                const result = processTemplate(type);
+                if (result) results.push(result);
+            });
+
+            // Special handling for surat_keluar if jenis is provided
+            if (files.surat_keluar && req.body.jenis === 'surat_keluar') {
+                const targetPath = path.join(uploadDir, 'surat_keluar.docx');
+                // Add metadata or handle specific surat keluar logic here
+            }
+
+            res.json({ 
+                message: 'Template berhasil diunggah',
+                uploaded: results
+            });
+        });
+    } catch (error) {
+        console.error('Template upload error:', error);
+        res.status(500).json({ 
+            message: 'Gagal mengunggah template', 
+            error: error.message 
+        });
+    }
     uploadMiddleware(req, res, (err) => {
         if (err) {
             return res.status(500).json({ message: 'Gagal mengunggah file.', error: err.message });
@@ -138,16 +191,26 @@ exports.generateRaport = async (req, res) => {
         }
 
         const siswa = await db.Siswa.findOne({
-            where: { id: siswaId },
-            include: [
-                // use correct alias 'kelas' and include guru as 'walikelas'
-                { model: db.Kelas, as: 'kelas', include: [{ model: db.Guru, as: 'walikelas' }] },
-                { model: db.NilaiUjian, as: 'NilaiUjians', where: nilaiWhere, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
-                { model: db.NilaiHafalan, as: 'NilaiHafalans', where: hafalWhere, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
-                { model: db.Sikap, as: 'Sikaps', where: sikapWhere, required: false, include: { model: db.IndikatorSikap, as: 'indikator_sikap' } },
-                { model: db.Kehadiran, as: 'Kehadirans', where: hadirWhere, required: false }
-            ]
-        });
+                where: { id: siswaId },
+                include: [
+                    { 
+                    model: db.Kelas, 
+                    as: 'kelas', 
+                    include: [{ model: db.Guru, as: 'walikelas' }] 
+                    },
+                    { 
+                    model: db.SiswaKelasHistory, 
+                    as: 'histories',
+                    where: { semester: semester },
+                    required: false,
+                    order: [['id', 'DESC']]
+                    },
+                    { model: db.NilaiUjian, as: 'NilaiUjians', where: nilaiWhere, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
+                    { model: db.NilaiHafalan, as: 'NilaiHafalans', where: hafalWhere, required: false, include: { model: db.MataPelajaran, as: 'mapel' } },
+                    { model: db.Sikap, as: 'Sikaps', where: sikapWhere, required: false, include: { model: db.IndikatorSikap, as: 'indikator_sikap' } },
+                    { model: db.Kehadiran, as: 'Kehadirans', where: hadirWhere, required: false }
+                ]
+                });
 
         if (!siswa) {
             return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });

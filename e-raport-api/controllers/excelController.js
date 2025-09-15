@@ -15,27 +15,17 @@ exports.uploadCompleteData = async (req, res) => {
     // Helper function to get cell value safely
     function getCellValue(worksheet, row, col) {
         const cell = worksheet.getRow(row).getCell(col);
-        if (!cell || cell.value === null || cell.value === undefined) {
-            return '';
-        }
-        if (typeof cell.value === 'object' && cell.value.richText) {
-            return cell.value.richText.map(rt => rt.text).join('').trim();
-        }
-        if (typeof cell.value === 'object' && cell.value.result) {
-            return String(cell.value.result).trim();
-        }
+        if (!cell || cell.value === null || cell.value === undefined) return '';
+        if (typeof cell.value === 'object' && cell.value.richText) return cell.value.richText.map(rt => rt.text).join('').trim();
+        if (typeof cell.value === 'object' && cell.value.result) return String(cell.value.result).trim();
         return String(cell.value).trim();
     }
 
     const filePath = req.file.path;
     const transaction = await db.sequelize.transaction();
 
-  // Allow caller to provide tahun_ajaran_id or master_tahun_ajaran_id (form field or query)
-  // Normalize to Numbers or null
-  const providedTahunAjaranIdRaw = (req.body && (req.body.tahun_ajaran_id || req.body.tahunAjaranId)) || (req.query && req.query.tahun_ajaran_id) || null;
-  const providedTahunAjaranId = providedTahunAjaranIdRaw ? (isNaN(Number(providedTahunAjaranIdRaw)) ? null : Number(providedTahunAjaranIdRaw)) : null;
-  const providedMasterRaw = (req.body && (req.body.master_tahun_ajaran_id || req.body.master_ta_id)) || (req.query && req.query.master_tahun_ajaran_id) || null;
-  const providedMasterId = providedMasterRaw ? (isNaN(Number(providedMasterRaw)) ? null : Number(providedMasterRaw)) : null;
+    // PERBAIKAN: Definisikan masterTaId di scope atas agar bisa diakses semua sheet
+    let masterTaId = null;
 
     try {
         const workbook = new ExcelJS.Workbook();
@@ -45,124 +35,60 @@ exports.uploadCompleteData = async (req, res) => {
             nilai_ujian: { success: 0, errors: 0, skipped: 0 },
             hafalan: { success: 0, errors: 0, skipped: 0 },
             kehadiran: { success: 0, errors: 0, skipped: 0 },
-            sikap: { success: 0, errors: 0, skipped: 0 }
+            sikap: { success: 0, errors: 0, skipped: 0 },
+            catatan_akademik: { success: 0, errors: 0, skipped: 0 },
+            catatan_sikap: { success: 0, errors: 0, skipped: 0 }
         };
 
-    const cache = {
+        const cache = {
             siswa: {},
+            mapel: {},
             tahunAjaran: {},
+            masterTahunAjaran: {},
             indikatorKehadiran: {},
             indikatorSikap: {}
         };
-
-    // Helper: get latest SiswaKelasHistory for a siswa
-    const getLatestHistoryForSiswa = async (siswaId) => {
-      return await db.SiswaKelasHistory.findOne({ where: { siswa_id: siswaId }, order: [['id', 'DESC']] });
-    };
-
-    // Resolve a history row and tahun_ajaran_id (+semester) to use for a given siswa.
-    // Priority:
-    // 1) If caller provided a tahun_ajaran_id, try to find a history for that TA and semester (if semester provided).
-    // 2) Otherwise, fallback to the latest history for the siswa with the matching semester if possible.
-    // 3) As a last resort, accept latest history and/or tahun_ajaran from sheet.
-    const resolveHistoryForSiswa = async (siswaId, tahunAjaranInfo, semesterFromSheet) => {
-      let history = null;
-      const masterTaId = tahunAjaranInfo ? (
-        tahunAjaranInfo.master?.id || tahunAjaranInfo.master_tahun_ajaran_id
-      ) : null;
-      
-      // 1) Try to find history with matching master TA and semester
-      if (masterTaId && semesterFromSheet) {
-        history = await db.SiswaKelasHistory.findOne({ 
-          where: { 
-            siswa_id: siswaId, 
-            master_tahun_ajaran_id: masterTaId, 
-            semester: semesterFromSheet 
-          }, 
-          order: [['id', 'DESC']] 
-        });
-      }
-      
-      // 2) Try with just master TA if no semester match
-      if (!history && masterTaId) {
-        history = await db.SiswaKelasHistory.findOne({ 
-          where: { 
-            siswa_id: siswaId, 
-            master_tahun_ajaran_id: masterTaId 
-          }, 
-          order: [['id', 'DESC']] 
-        });
-      }
-      
-      // 3) Fallback to latest history if nothing else matches
-      if (!history) {
-        history = await getLatestHistoryForSiswa(siswaId);
-      }
-
-      const semesterToUse = history?.semester || semesterFromSheet || null;
-      const masterTaToUse = history?.master_tahun_ajaran_id || masterTaId || null;
-      
-      return { 
-        history, 
-        semesterToUse, 
-        masterTaToUse 
-      };
-    };
 
         // Cache helpers
         const findSiswa = async (nis) => {
             if (!cache.siswa[nis]) cache.siswa[nis] = await db.Siswa.findOne({ where: { nis } });
             return cache.siswa[nis];
         };
-    const findTahunAjaran = async (nama_ajaran, semester) => {
-      const key = `${nama_ajaran}-${semester}`;
-      if (!cache.tahunAjaran[key]) {
-        try {
-          // Always go through MasterTahunAjaran first
-          console.log(`Mencari Master Tahun Ajaran: ${nama_ajaran}`);
-          const master = await db.MasterTahunAjaran.findOne({ 
-            where: { nama_ajaran } 
-          });
-          
-          if (!master) {
-            console.log(`Master Tahun Ajaran "${nama_ajaran}" tidak ditemukan`);
-            return null;
-          }
-          
-          console.log(`Master Tahun Ajaran ditemukan dengan ID: ${master.id}`);
-          
-          // Find PeriodeAjaran using master_tahun_ajaran_id
-          const periode = await db.PeriodeAjaran.findOne({ 
-            where: { 
-              master_tahun_ajaran_id: master.id, 
-              semester: String(semester), // Ensure semester is string
-              status: 'aktif' 
+        const findMapel = async (nama_mapel) => {
+            if (!cache.mapel[nama_mapel]) cache.mapel[nama_mapel] = await db.MataPelajaran.findOne({ where: { nama_mapel } });
+            return cache.mapel[nama_mapel];
+        };
+        const findMasterTahunAjaran = async (nama_ajaran) => {
+            if (!cache.masterTahunAjaran[nama_ajaran]) {
+                cache.masterTahunAjaran[nama_ajaran] = await db.MasterTahunAjaran.findOne({ where: { nama_ajaran } });
             }
-          });
-          
-          if (!periode) {
-            console.log(`Periode Ajaran tidak ditemukan untuk Master TA: ${master.id}, Semester: ${semester}`);
-            return null;
-          }
-          
-          console.log(`Periode Ajaran ditemukan dengan ID: ${periode.id}`);
-          cache.tahunAjaran[key] = periode;
-        } catch (error) {
-          console.error(`Error saat mencari tahun ajaran:`, error);
-          return null;
-        }
-      }
-      return cache.tahunAjaran[key];
-    };
+            return cache.masterTahunAjaran[nama_ajaran];
+        };
+        const findTahunAjaran = async (nama_ajaran, semester) => {
+            const key = `${nama_ajaran}-${semester}`;
+            if (!cache.tahunAjaran[key]) {
+                const master = await findMasterTahunAjaran(nama_ajaran);
+                if (!master) return null;
+                
+                if (!masterTaId) {
+                    masterTaId = master.id;
+                    console.log(`Master Tahun Ajaran ID (${masterTaId}) ditetapkan dari data Excel.`);
+                }
+                
+                // PERBAIKAN: Gunakan nama model yang benar -> `PeriodeAjaran`
+                const periode = await db.PeriodeAjaran.findOne({ where: { master_tahun_ajaran_id: master.id, semester: String(semester) } });
+                if (periode) cache.tahunAjaran[key] = periode;
+            }
+            return cache.tahunAjaran[key];
+        };
+        
         const findIndikatorKehadiran = async (nama_kegiatan) => {
             if (!cache.indikatorKehadiran[nama_kegiatan]) cache.indikatorKehadiran[nama_kegiatan] = await db.IndikatorKehadiran.findOne({ where: { nama_kegiatan } });
             return cache.indikatorKehadiran[nama_kegiatan];
         };
         const findIndikatorSikap = async (jenis_sikap, indikator) => {
             const key = `${jenis_sikap}-${indikator}`;
-            if (!cache.indikatorSikap[key]) {
-                cache.indikatorSikap[key] = await db.IndikatorSikap.findOne({ where: { jenis_sikap, indikator, is_active: 1 } });
-            }
+            if (!cache.indikatorSikap[key]) cache.indikatorSikap[key] = await db.IndikatorSikap.findOne({ where: { jenis_sikap, indikator } });
             return cache.indikatorSikap[key];
         };
         
@@ -209,59 +135,28 @@ exports.uploadCompleteData = async (req, res) => {
               }
               console.log(`- Siswa ditemukan: ${siswa.nama}`);
 
-              // --- Perubahan: Cari mapel berdasarkan Tingkatan siswa, bukan TahunAjaran ---
-              // Ambil informasi kelas/tingkatan siswa (prefer include cache)
-              let siswaKelasInfo = null;
-              try {
-                // include Kelas to get tingkatan_id if available
-                siswaKelasInfo = await db.Siswa.findOne({ where: { id: siswa.id }, include: [{ model: db.Kelas, as: 'kelas', attributes: ['id', 'tingkatan_id'] }] });
-              } catch (err) {
-                console.error(`Error membaca kelas siswa (NIS ${nis}) :`, err && err.message ? err.message : err);
-              }
-
-              const tingkatanId = siswaKelasInfo && siswaKelasInfo.kelas ? (siswaKelasInfo.kelas.tingkatan_id || siswaKelasInfo.kelas.tingkatanId) : null;
+              // Normalize nama_mapel for comparison and perform case-insensitive DB lookup
               const normalizedNamaMapel = (nama_mapel || '').toString().trim();
-              console.log(`Mencari mata pelajaran untuk siswa NIS=${nis}, tingkatan=${tingkatanId}, nama_mapel="${normalizedNamaMapel}" (baris ${i})`);
+              console.log(`Mencari mata pelajaran: "${normalizedNamaMapel}" (baris ${i})`);
 
-              // Cari MataPelajaran melalui Kurikulum yang terkait ke tingkatan
+              // Prefer a DB-level normalized comparison: TRIM + LOWER(column) = lower(normalizedNamaMapel)
               let mapel = null;
               try {
-                if (tingkatanId) {
-                  // Join MataPelajaran <-> Kurikulum dan filter by tingkatan_id
-                  mapel = await db.MataPelajaran.findOne({
-                    include: [{
-                      model: db.Kurikulum,
-                      as: 'kurikulum',
-                      where: { tingkatan_id: tingkatanId },
-                      required: true
-                    }],
-                    where: db.Sequelize.where(
-                      db.Sequelize.fn('LOWER', db.Sequelize.fn('TRIM', db.Sequelize.col('nama_mapel'))),
-                      normalizedNamaMapel.toLowerCase()
-                    )
-                  });
-                } else {
-                  // Jika tingkatan tidak tersedia, fallback ke pencarian global (case-insensitive)
-                  mapel = await db.MataPelajaran.findOne({
-                    where: db.Sequelize.where(
-                      db.Sequelize.fn('LOWER', db.Sequelize.fn('TRIM', db.Sequelize.col('nama_mapel'))),
-                      normalizedNamaMapel.toLowerCase()
-                    )
-                  });
-                }
+                mapel = await db.MataPelajaran.findOne({
+                  where: db.Sequelize.where(
+                    db.Sequelize.fn('LOWER', db.Sequelize.fn('TRIM', db.Sequelize.col('nama_mapel'))),
+                    normalizedNamaMapel.toLowerCase()
+                  )
+                });
               } catch (err) {
                 console.error(`Error saat mencari MataPelajaran di DB:`, err && err.message ? err.message : err);
               }
 
               if (!mapel) {
-                // Fallback logging to help debugging: list kurikulum untuk tingkatan jika tersedia
-                if (tingkatanId) {
-                  const kurikulums = await db.Kurikulum.findAll({ where: { tingkatan_id: tingkatanId }, include: [{ model: db.MataPelajaran, as: 'mapel', attributes: ['id', 'nama_mapel'] }], limit: 50 });
-                  console.log(`Baris ${i}: Mata pelajaran "${normalizedNamaMapel}" tidak ditemukan untuk tingkatan ${tingkatanId}. Contoh mapel pada tingkatan ini:`, kurikulums.map(k => k.mapel ? k.mapel.nama_mapel : null).filter(Boolean));
-                } else {
-                  const allMapel = await db.MataPelajaran.findAll({ attributes: ['id', 'nama_mapel'], limit: 50 });
-                  console.log(`Baris ${i}: Mata pelajaran "${normalizedNamaMapel}" tidak ditemukan (tingkatan tidak diketahui). Contoh mapel:`, allMapel.map(m => m.nama_mapel));
-                }
+                // Fallback: list available mapel names to help debugging
+                const allMapel = await db.MataPelajaran.findAll({ attributes: ['id', 'nama_mapel'] });
+                console.log(`Baris ${i}: Mata pelajaran "${normalizedNamaMapel}" tidak ditemukan di DB.`);
+                console.log('Mata pelajaran yang tersedia:', allMapel.map(m => m.nama_mapel));
                 results.nilai_ujian.errors++;
                 continue;
               }
@@ -275,23 +170,18 @@ exports.uploadCompleteData = async (req, res) => {
               }
               console.log(`- Semester valid: ${semester}`);
 
-              // Get and validate tahun ajaran
+              // Get tahun ajaran (periode) but do NOT treat missing periode as fatal.
+              // Prefer periode from sheet, but if it's missing/disabled we'll fallback to student's latest history or save with null.
               console.log(`Mencari tahun ajaran: ${tahun_ajaran_str} semester ${semester}`);
-              const tahunAjaranFromSheet = await findTahunAjaran(tahun_ajaran_str, semester);
-              
-              if (!tahunAjaranFromSheet) {
-                console.log(`Baris ${i}: Tahun ajaran "${tahun_ajaran_str}" semester ${semester} tidak ditemukan di MasterTahunAjaran`);
-                results.nilai_ujian.errors++;
-                continue;
-              }
+              const tahunAjaranRecord = await findTahunAjaran(tahun_ajaran_str, semester);
 
-              if (!tahunAjaranFromSheet.id) {
-                console.log(`Baris ${i}: Periode tidak aktif untuk tahun ajaran "${tahun_ajaran_str}" semester ${semester}`);
-                results.nilai_ujian.errors++;
-                continue;
+              if (!tahunAjaranRecord) {
+                  console.log(`Baris ${i}: Tahun ajaran "${tahun_ajaran_str}" semester ${semester} tidak valid atau tidak ditemukan. Baris dilewati.`);
+                  results.nilai_ujian.errors++;
+                  continue; // <-- LEWATI BARIS INI JIKA TIDAK DITEMUKAN
               }
-              
-              console.log(`- Tahun Ajaran ditemukan: ID=${tahunAjaranFromSheet.id}, Status=${tahunAjaranFromSheet.status}, Master ID=${tahunAjaranFromSheet.master_tahun_ajaran_id}`);
+              const tahunAjaranIdToUse = tahunAjaranRecord.id;
+              console.log(`- Tahun Ajaran yang dipakai: ID=${tahunAjaranIdToUse}`);
 
               // Get and validate nilai
               const rawNilai = getCellValue(nilaiWorksheet, i, 5);
@@ -307,77 +197,68 @@ exports.uploadCompleteData = async (req, res) => {
               const payload = {
                 siswa_id: siswa.id,
                 mapel_id: mapel.id,
-                tahun_ajaran_id: tahunAjaranFromSheet.id,
+                tahun_ajaran_id: tahunAjaranIdToUse, // may be null if not found
                 semester: String(semester), // Ensure semester is string
                 nilai: finalNilai,
                 mapel_text: mapel.nama_mapel
               };
 
-              // Validate payload
-              if (!payload.siswa_id || !payload.mapel_id || !payload.tahun_ajaran_id || !payload.semester) {
-                console.error(`Data tidak lengkap:`, payload);
+              // Validate payload: tahun_ajaran_id is optional here by design (to match other sheets' behavior)
+              if (!payload.siswa_id || !payload.mapel_id || !payload.semester) {
+                console.error(`Data tidak lengkap (wajib):`, payload);
                 results.nilai_ujian.errors++;
                 continue;
               }
 
-              console.log('Menyimpan nilai ke database dengan data:', payload);
+              console.log('Menyimpan nilai (upsert) ke database dengan data:', payload);
 
               try {
-                // First check if record exists
-                const existingRecord = await db.NilaiUjian.findOne({
+                // Cari data yang sudah ada
+                const existingNilai = await db.NilaiUjian.findOne({
                   where: {
-                    siswa_id: payload.siswa_id,
-                    mapel_id: payload.mapel_id,
-                    semester: payload.semester,
-                    tahun_ajaran_id: payload.tahun_ajaran_id
+                    siswa_id: siswa.id,
+                    mapel_id: mapel.id,
+                    tahun_ajaran_id: tahunAjaranIdToUse,
+                    semester: String(semester)
                   },
                   transaction
                 });
 
-                let result;
-                if (existingRecord) {
-                  // Update existing record
-                  console.log('Updating existing nilai record:', existingRecord.id);
-                  result = await existingRecord.update({
-                    nilai: payload.nilai,
-                    mapel_text: payload.mapel_text
+                if (existingNilai) {
+                  // Update data yang sudah ada
+                  await existingNilai.update({
+                    nilai: finalNilai,
+                    mapel_text: mapel.nama_mapel
                   }, { transaction });
+                  console.log('Berhasil memperbarui nilai untuk siswa_id:', siswa.id, 'dan mapel_id:', mapel.id);
                 } else {
-                  // Create new record
-                  console.log('Creating new nilai record');
-                  result = await db.NilaiUjian.create(payload, { 
-                    transaction,
-                    returning: true
-                  });
+                  // Buat data baru
+                  await db.NilaiUjian.create({
+                    siswa_id: siswa.id,
+                    mapel_id: mapel.id,
+                    tahun_ajaran_id: tahunAjaranIdToUse,
+                    semester: String(semester),
+                    nilai: finalNilai,
+                    mapel_text: mapel.nama_mapel
+                  }, { transaction });
+                  console.log('Berhasil membuat nilai baru untuk siswa_id:', siswa.id, 'dan mapel_id:', mapel.id);
                 }
                 
-                console.log('Berhasil menyimpan nilai:', {
-                  id: result.id,
-                  siswa_id: payload.siswa_id,
-                  mapel_id: payload.mapel_id,
-                  tahun_ajaran_id: payload.tahun_ajaran_id,
-                  semester: payload.semester,
-                  nilai: payload.nilai
-                });
-                
                 results.nilai_ujian.success++;
+
               } catch (error) {
                 console.error('Error saat menyimpan nilai:', {
                   error: error.message,
-                  stack: error.stack,
-                  code: error.code,
-                  name: error.name,
                   payload,
-                  constraint: error.constraint
                 });
                 results.nilai_ujian.errors++;
               }
-            } catch (error) {
-              console.error(`Error pada baris ${i}:`, error);
+            } catch (err) {
+              console.error(`Error tak terduga pada baris ${i}:`, err && err.message ? err.message : err);
               results.nilai_ujian.errors++;
             }
+            }
           }
-    }
 
         // ========== 2. PROSES SHEET HAFALAN ==========
         const hafalanWorksheet = workbook.getWorksheet('Template Hafalan');
@@ -393,20 +274,35 @@ exports.uploadCompleteData = async (req, res) => {
 
             const siswa = await findSiswa(nis);
             const mapel = await db.MataPelajaran.findOne({ where: { nama_mapel: nama_mapel, jenis: 'Hafalan' } });
-            const tahunAjaranFromSheet = await findTahunAjaran(tahun_ajaran_str, semester);
+            const tahunAjaranRecord = await findTahunAjaran(tahun_ajaran_str, semester);
 
-            if (siswa && mapel) {
-              const history = await getLatestHistoryForSiswa(siswa.id);
-              const tahunAjaranIdToUse = history ? history.tahun_ajaran_id : (tahunAjaranFromSheet ? tahunAjaranFromSheet.id : null);
+            if (siswa && mapel && tahunAjaranRecord) {
+              const tahunAjaranIdToUse = tahunAjaranRecord.id;
+              const existingHafalan = await db.NilaiHafalan.findOne({
+                where: {
+                  siswa_id: siswa.id,
+                  mapel_id: mapel.id,
+                  tahun_ajaran_id: tahunAjaranIdToUse,
+                  semester
+                },
+                transaction
+              });
 
-              await db.NilaiHafalan.upsert({
-                siswa_id: siswa.id,
-                mapel_id: mapel.id,
-                tahun_ajaran_id: tahunAjaranIdToUse,
-                semester,
-                predikat: predikatVal || null,
-                mapel_text: mapel.nama_mapel
-              }, { transaction });
+              if (existingHafalan) {
+                await existingHafalan.update({
+                  predikat: predikatVal || null,
+                  mapel_text: mapel.nama_mapel
+                }, { transaction });
+              } else {
+                await db.NilaiHafalan.create({
+                  siswa_id: siswa.id,
+                  mapel_id: mapel.id,
+                  tahun_ajaran_id: tahunAjaranIdToUse,
+                  semester,
+                  predikat: predikatVal || null,
+                  mapel_text: mapel.nama_mapel
+                }, { transaction });
+              }
               results.hafalan.success++;
             } else {
               results.hafalan.errors++;
@@ -428,27 +324,50 @@ exports.uploadCompleteData = async (req, res) => {
 
                 const siswa = await findSiswa(nis);
                 const indikator = await findIndikatorKehadiran(kegiatan_text);
-                const tahunAjaran = await findTahunAjaran(tahun_ajaran_str, semester);
-                
-        if (siswa) {
-          const history = await getLatestHistoryForSiswa(siswa.id);
-          const tahunAjaranIdToUse = history ? history.tahun_ajaran_id : (tahunAjaran ? tahunAjaran.id : null);
-          await db.Kehadiran.upsert({
-            siswa_id: siswa.id,
-            tahun_ajaran_id: tahunAjaranIdToUse,
-            semester,
-            indikatorkehadirans_id: indikator ? indikator.id : null,
-            indikator_text: kegiatan_text,
-            izin: parseInt(getCellValue(kehadiranWorksheet, i, 4), 10) || 0,
-            sakit: parseInt(getCellValue(kehadiranWorksheet, i, 5), 10) || 0,
-            absen: parseInt(getCellValue(kehadiranWorksheet, i, 6), 10) || 0,
-          }, { transaction });
-                    results.kehadiran.success++;
+                // Langsung cari record Tahun Ajaran dari Excel
+                const tahunAjaranRecord = await findTahunAjaran(tahun_ajaran_str, semester);
+
+                // Pengecekan ketat: Siswa dan Tahun Ajaran WAJIB ada
+                // KODE BARU (Gantikan dengan ini)
+                if (siswa && tahunAjaranRecord) {
+                  const existingKehadiran = await db.Kehadiran.findOne({
+                    where: {
+                      siswa_id: siswa.id,
+                      tahun_ajaran_id: tahunAjaranRecord.id,
+                      semester,
+                      indikator_text: kegiatan_text
+                    },
+                    transaction
+                  });
+
+                  if (existingKehadiran) {
+                    await existingKehadiran.update({
+                      indikatorkehadirans_id: indikator ? indikator.id : null,
+                      izin: parseInt(getCellValue(kehadiranWorksheet, i, 4), 10) || 0,
+                      sakit: parseInt(getCellValue(kehadiranWorksheet, i, 5), 10) || 0,
+                      absen: parseInt(getCellValue(kehadiranWorksheet, i, 6), 10) || 0,
+                    }, { transaction });
+                  } else {
+                    await db.Kehadiran.create({
+                      siswa_id: siswa.id,
+                      tahun_ajaran_id: tahunAjaranRecord.id,
+                      semester,
+                      indikatorkehadirans_id: indikator ? indikator.id : null,
+                      indikator_text: kegiatan_text,
+                      izin: parseInt(getCellValue(kehadiranWorksheet, i, 4), 10) || 0,
+                      sakit: parseInt(getCellValue(kehadiranWorksheet, i, 5), 10) || 0,
+                      absen: parseInt(getCellValue(kehadiranWorksheet, i, 6), 10) || 0,
+                    }, { transaction });
+                  }
+                  results.kehadiran.success++;
                 } else {
-                    results.kehadiran.errors++;
+                  if (!tahunAjaranRecord) {
+                    console.log(`Baris ${i} (Kehadiran): Tahun Ajaran "${tahun_ajaran_str}" tidak ditemukan. Baris dilewati.`);
+                  }
+                  results.kehadiran.errors++;
                 }
-            }
-        }
+                }
+              }
 
         // ========== 4. PROSES SHEET SIKAP ==========
         const sikapWorksheet = workbook.getWorksheet('Template Sikap');
@@ -464,74 +383,134 @@ exports.uploadCompleteData = async (req, res) => {
         if (!nis || !indikator_text) { results.sikap.skipped++; continue; }
 
         const siswa = await findSiswa(nis);
-        const indikator = await findIndikatorSikap(jenis_sikap, indikator_text);
-        const tahunAjaranFromSheet = await findTahunAjaran(tahun_ajaran_str, semester);
-
-        if (siswa && indikator) {
-          const history = await getLatestHistoryForSiswa(siswa.id);
-          const tahunAjaranIdToUse = history ? history.tahun_ajaran_id : (tahunAjaranFromSheet ? tahunAjaranFromSheet.id : null);
+          const indikator = await findIndikatorSikap(jenis_sikap, indikator_text);
+          // Langsung cari record Tahun Ajaran dari Excel
+          const tahunAjaranRecord = await findTahunAjaran(tahun_ajaran_str, semester);
           const finalNilai = (nilai_from_excel !== '' && !isNaN(parseFloat(nilai_from_excel))) ? parseFloat(nilai_from_excel) : null;
 
-          await db.Sikap.upsert({
-            siswa_id: siswa.id,
-            tahun_ajaran_id: tahunAjaranIdToUse,
-            semester,
-            indikator_sikap_id: indikator ? indikator.id : null,
-            indikator_text: indikator_text,
-            nilai: finalNilai,
-            deskripsi: '',
-          }, { transaction });
-          results.sikap.success++;
-        } else {
-          results.sikap.errors++;
+          // Pengecekan ketat: Siswa, Indikator, dan Tahun Ajaran WAJIB ada
+          if (siswa && indikator && tahunAjaranRecord) {
+            const existingSikap = await db.Sikap.findOne({
+              where: {
+                siswa_id: siswa.id,
+                tahun_ajaran_id: tahunAjaranRecord.id,
+                semester,
+                indikator_sikap_id: indikator.id
+              },
+              transaction
+            });
+
+            if (existingSikap) {
+              await existingSikap.update({
+                indikator_text: indikator_text,
+                nilai: finalNilai,
+                deskripsi: '',
+              }, { transaction });
+            } else {
+              await db.Sikap.create({
+                siswa_id: siswa.id,
+                tahun_ajaran_id: tahunAjaranRecord.id,
+                semester,
+                indikator_sikap_id: indikator.id,
+                indikator_text: indikator_text,
+                nilai: finalNilai,
+                deskripsi: '',
+              }, { transaction });
+            }
+            results.sikap.success++;
+          } else {
+            if (!tahunAjaranRecord) {
+              console.log(`Baris ${i} (Sikap): Tahun Ajaran "${tahun_ajaran_str}" tidak ditemukan. Baris dilewati.`);
+            }
+            results.sikap.errors++;
+          }
+          }
         }
+
+        if (!masterTaId) {
+            throw new Error("Gagal menentukan Master Tahun Ajaran dari data Excel. Pastikan sheet 'Template Nilai Ujian' memiliki data tahun ajaran yang valid.");
+        }
+
+    const catatanAkademikSheet = workbook.getWorksheet('Catatan Akademik');
+        if (catatanAkademikSheet) {
+            for (let i = 2; i <= catatanAkademikSheet.rowCount; i++) {
+                try {
+                    const idSiswa = getCellValue(catatanAkademikSheet, i, 1);
+                    const semesterVal = getCellValue(catatanAkademikSheet, i, 3);
+                    const catatan = getCellValue(catatanAkademikSheet, i, 4);
+                    
+                    if (!idSiswa) { results.catatan_akademik.skipped++; continue; }
+                    
+                    const siswa = await db.Siswa.findByPk(idSiswa);
+                    if (!siswa) { results.catatan_akademik.errors++; continue; }
+
+                    let history = await db.SiswaKelasHistory.findOne({
+                        where: {
+                            siswa_id: siswa.id,
+                            master_tahun_ajaran_id: masterTaId, // Menggunakan masterTaId yang sudah didapat
+                            semester: semesterVal
+                        },
+                        transaction
+                    });
+
+                    if (history) {
+                        await history.update({ catatan_akademik: catatan }, { transaction });
+                    } else {
+                        const existingHistory = await db.SiswaKelasHistory.findOne({ where: { siswa_id: siswa.id }, order: [['id', 'DESC']], transaction });
+                        await db.SiswaKelasHistory.create({
+                            siswa_id: siswa.id,
+                            kelas_id: existingHistory?.kelas_id || siswa.kelas_id || null,
+                            master_tahun_ajaran_id: masterTaId,
+                            semester: semesterVal,
+                            catatan_akademik: catatan,
+                            catatan_sikap: null
+                        }, { transaction });
+                    }
+                    results.catatan_akademik.success++;
+                } catch(e) { results.catatan_akademik.errors++; }
             }
         }
 
-    // ========== 5. PROSES SHEET CATATAN AKADEMIK ==========
-    const catatanAkademikSheet = workbook.getWorksheet('Catatan Akademik');
-    if (catatanAkademikSheet) {
-      for (let i = 2; i <= catatanAkademikSheet.rowCount; i++) {
-        const idSiswa = getCellValue(catatanAkademikSheet, i, 1);
-        const semesterVal = getCellValue(catatanAkademikSheet, i, 3);
-        const catatan = getCellValue(catatanAkademikSheet, i, 4);
-        if (!idSiswa) continue;
-        const siswa = await db.Siswa.findByPk(idSiswa);
-        if (!siswa) continue;
-        // Resolve history/tahun_ajaran and semester for this siswa
-        const tahunAjaranFromSheet = null; // sheet doesn't carry tahun_ajaran id, only semester/name in download flow
-        const { history, tahunAjaranIdToUse, semesterToUse, masterTaToUse } = await resolveHistoryForSiswa(siswa.id, tahunAjaranFromSheet, semesterVal);
-        if (history) {
-          await history.update({ catatan_akademik: catatan, semester: semesterToUse }, { transaction });
-        } else {
-          // create with resolved master TA and semester (do not include tahun_ajaran_id here)
-          const masterTaForHist = masterTaToUse || providedMasterId || null;
-          await db.SiswaKelasHistory.create({ siswa_id: siswa.id, kelas_id: siswa.kelas_id || null, master_tahun_ajaran_id: masterTaForHist, semester: semesterToUse, catatan_akademik: catatan }, { transaction });
-        }
-      }
-    }
+        // ========== 6. PROSES SHEET CATATAN SIKAP ==========
+        const catatanSikapSheet = workbook.getWorksheet('Catatan Sikap');
+        if (catatanSikapSheet) {
+            for (let i = 2; i <= catatanSikapSheet.rowCount; i++) {
+                try {
+                    const idSiswa = getCellValue(catatanSikapSheet, i, 1);
+                    const semesterVal = getCellValue(catatanSikapSheet, i, 3);
+                    const catatan = getCellValue(catatanSikapSheet, i, 4);
+                    
+                    if (!idSiswa) { results.catatan_sikap.skipped++; continue; }
+                    
+                    const siswa = await db.Siswa.findByPk(idSiswa);
+                    if (!siswa) { results.catatan_sikap.errors++; continue; }
 
-    // ========== 6. PROSES SHEET CATATAN SIKAP ==========
-    const catatanSikapSheet = workbook.getWorksheet('Catatan Sikap');
-    if (catatanSikapSheet) {
-      for (let i = 2; i <= catatanSikapSheet.rowCount; i++) {
-        const idSiswa = getCellValue(catatanSikapSheet, i, 1);
-        const semesterVal = getCellValue(catatanSikapSheet, i, 3);
-        const catatan = getCellValue(catatanSikapSheet, i, 4);
-        if (!idSiswa) continue;
-        const siswa = await db.Siswa.findByPk(idSiswa);
-        if (!siswa) continue;
-        const tahunAjaranFromSheet = null;
-        const { history, tahunAjaranIdToUse, semesterToUse, masterTaToUse } = await resolveHistoryForSiswa(siswa.id, tahunAjaranFromSheet, semesterVal);
-        if (history) {
-          await history.update({ catatan_sikap: catatan, semester: semesterToUse }, { transaction });
-        } else {
-          const masterTaForHist2 = masterTaToUse || providedMasterId || null;
-          await db.SiswaKelasHistory.create({ siswa_id: siswa.id, kelas_id: siswa.kelas_id || null, master_tahun_ajaran_id: masterTaForHist2, semester: semesterToUse, catatan_sikap: catatan }, { transaction });
-        }
-      }
-    }
+                    let history = await db.SiswaKelasHistory.findOne({
+                        where: {
+                            siswa_id: siswa.id,
+                            master_tahun_ajaran_id: masterTaId, // Menggunakan masterTaId yang sudah didapat
+                            semester: semesterVal
+                        },
+                        transaction
+                    });
 
+                    if (history) {
+                        await history.update({ catatan_sikap: catatan }, { transaction });
+                    } else {
+                        const existingHistory = await db.SiswaKelasHistory.findOne({ where: { siswa_id: siswa.id }, order: [['id', 'DESC']], transaction });
+                        await db.SiswaKelasHistory.create({
+                            siswa_id: siswa.id,
+                            kelas_id: existingHistory?.kelas_id || siswa.kelas_id || null,
+                            master_tahun_ajaran_id: masterTaId,
+                            semester: semesterVal,
+                            catatan_akademik: null,
+                            catatan_sikap: catatan
+                        }, { transaction });
+                    }
+                    results.catatan_sikap.success++;
+                } catch(e) { results.catatan_sikap.errors++; }
+            }
+        }
 
         await transaction.commit();
         res.status(200).json({ message: 'Data berhasil diimpor.', results });
