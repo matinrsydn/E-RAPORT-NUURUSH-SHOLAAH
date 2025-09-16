@@ -8,13 +8,34 @@ import DataTable from '../../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
+    { header: 'Jenis', accessorFn: row => row.mapel?.jenis || 'N/A' },
+    { header: 'Kitab', accessorFn: row => row.kitab?.nama_kitab || '-' },
+    { header: 'Batas Hafalan', accessorKey: 'batas_hafalan' },
+    { id: 'actions', header: () => <div className="text-right">Aksi</div> }
+  ], []); useMemo<ColumnDef<Kurikulum, any>[]>(() => [
+    { header: 'Mata Pelajaran', accessorFn: row => row.mapel?.nama_mapel || 'N/A' },
+    { header: 'Jenis', accessorFn: row => row.mapel?.jenis || 'N/A' },
+    { header: 'Kitab', accessorFn: row => row.kitab?.nama_kitab || '-' },
+    { header: 'Batas Hafalan', accessorKey: 'batas_hafalan' },
+    { id: 'actions', header: 'Aksi' }= useMemo<ColumnDef<Kurikulum, any>[]>(() => [
+    { header: 'Mata Pelajaran', accessorFn: row => row.mapel?.nama_mapel || 'N/A' },
+    { header: 'Jenis', accessorFn: row => row.mapel?.jenis || 'N/A' },
+    { header: 'Kitab', accessorFn: row => row.kitab?.nama_kitab || '-' },
+    { header: 'Batas Hafalan', accessorKey: 'batas_hafalan' },
+    { id: 'actions', header: 'Aksi' }../../services/kurikulumService';
+import { getAllTingkatans } from '../../services/tingkatanService';
+import mapelService from '../../services/mapelService';
+import kitabService from '../../services/kitabService.js';
+import DataTable from '../../components/data-table';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../components/ui/dialog';
 import { useForm, Controller } from 'react-hook-form';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useToast } from '../../components/ui/toast';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../../components/ui/dropdown';
 
 // --- TIPE DATA ---
 type Kurikulum = {
@@ -25,13 +46,11 @@ type Kurikulum = {
   mapel_id: number;
   kitab_id: number | null;
 };
-
 type FormValues = {
   mapel_id: string;
   kitab_id: string;
   batas_hafalan?: string;
 };
-
 type MasterData = {
   tingkatans: Array<{ id: number; nama_tingkatan: string }>;
   mapel: Array<{ id: number; nama_mapel: string; jenis: 'Ujian' | 'Hafalan' }>;
@@ -86,7 +105,7 @@ export default function ManajemenKurikulumPage() {
       }
     };
     loadMasterData();
-  }, []);
+  }, []); // Remove toast from dependencies
 
   useEffect(() => {
     fetchData();
@@ -105,6 +124,7 @@ export default function ManajemenKurikulumPage() {
         kitab_id: String(kurikulum.kitab_id ?? ''),
         batas_hafalan: kurikulum.batas_hafalan ?? ''
       });
+      // Set initial state for isHafalan when editing
       const selectedMapel = masterData.mapel.find(m => m.id === kurikulum.mapel_id);
       setIsHafalan(selectedMapel?.jenis === 'Hafalan');
     } else {
@@ -150,11 +170,16 @@ export default function ManajemenKurikulumPage() {
   };
 
   const columns = useMemo<ColumnDef<Kurikulum, any>[]>(() => [
-    { header: 'Mata Pelajaran', accessorFn: (row: Kurikulum) => row.mapel?.nama_mapel || 'N/A' },
-    { header: 'Jenis', accessorFn: (row: Kurikulum) => row.mapel?.jenis || 'N/A' },
-    { header: 'Kitab', accessorFn: (row: Kurikulum) => row.kitab?.nama_kitab || '-' },
+    { header: 'Mata Pelajaran', accessorFn: row => row.mapel?.nama_mapel || 'N/A' },
+    { header: 'Jenis', accessorFn: row => row.mapel?.jenis || 'N/A' },
+    { header: 'Kitab', accessorFn: row => row.kitab?.nama_kitab || '-' },
     { header: 'Batas Hafalan', accessorKey: 'batas_hafalan' },
-    { id: 'actions', header: 'Aksi' }
+    { id: 'actions', header: 'Aksi', cell: ({ row }) => (
+      <div className="flex justify-end gap-2 relative z-10">
+         <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
+         <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
+      </div>
+    )}
   ], []);
 
   return (
@@ -168,6 +193,7 @@ export default function ManajemenKurikulumPage() {
         <Card>
           <CardHeader><CardTitle>Pilih Tingkatan</CardTitle></CardHeader>
           <CardContent>
+            {/* PERBAIKAN: Gunakan Select modern */}
             <Select value={filters.tingkatan_id} onValueChange={(v) => setFilters({ tingkatan_id: v })}>
               <SelectTrigger className="w-[280px]">
                 <SelectValue placeholder={loading ? "Memuat..." : "-- Pilih Tingkatan --"} />
@@ -181,20 +207,21 @@ export default function ManajemenKurikulumPage() {
 
         {filters.tingkatan_id && (
           <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Daftar Kurikulum</CardTitle>
-                <Button onClick={() => handleOpenDialog(null)}>Tambah Mapel</Button>
-              </div>
+             <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle>Daftar Kurikulum</CardTitle>
+                  <Button onClick={() => handleOpenDialog(null)}>Tambah Mapel</Button>
+                </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               {loadingKurikulum ? <div className="text-center">Memuat...</div> : 
-              <DataTable<Kurikulum>
+              <DataTable 
                 columns={columns} 
                 data={data}
                 onEdit={handleOpenDialog}
                 onDelete={setDeleting}
-              />}
+              />
+            }
             </CardContent>
           </Card>
         )}
@@ -206,6 +233,7 @@ export default function ManajemenKurikulumPage() {
               <DialogDescription>Pilih mata pelajaran dan opsi kitab serta target hafalan.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 py-4">
+              {/* PERBAIKAN: Gunakan Select modern dengan Controller */}
               <div className="space-y-2">
                 <Label>Mata Pelajaran</Label>
                 <Controller name="mapel_id" control={control} rules={{ required: true }} render={({ field }) => (
@@ -217,7 +245,7 @@ export default function ManajemenKurikulumPage() {
                   </Select>
                 )} />
               </div>
-              <div className="space-y-2">
+               <div className="space-y-2">
                 <Label>Kitab yang Digunakan</Label>
                 <Controller name="kitab_id" control={control} rules={{ required: true }} render={({ field }) => (
                   <Select onValueChange={field.onChange} value={String(field.value)}>

@@ -12,6 +12,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useForm, Controller } from 'react-hook-form'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
+import { 
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownActionEdit,
+  DropdownActionDelete
+} from '../../components/ui/dropdown'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Textarea } from '../../components/ui/textarea'
 import { Button } from '../../components/ui/button'
@@ -226,13 +234,7 @@ export default function ManajemenSiswaPage() {
     { header: 'Kamar', accessorFn: row => row.infoKamar?.nama_kamar ?? '-' },
     { 
       id: 'actions', 
-      header: () => <div className="text-right">Aksi</div>,
-      cell: ({ row }) => (
-        <div className="flex gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
-            <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
-        </div>
-      )
+      header: () => <div className="text-right">Aksi</div>
     }
   ];
 
@@ -272,7 +274,14 @@ export default function ManajemenSiswaPage() {
                   </SelectContent>
               </Select>
             </div>
-            {loading ? <div>Memuat...</div> : <DataTable<Siswa> columns={columns} data={data} />}
+            {loading ? <div>Memuat...</div> : (
+              <DataTable<Siswa>
+                columns={columns}
+                data={data}
+                onEdit={handleOpenDialog}
+                onDelete={setDeleting}
+              />
+            )}
           </CardContent>
         </Card>
 
