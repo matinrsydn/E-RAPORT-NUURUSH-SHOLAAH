@@ -133,14 +133,7 @@ export default function ManajemenKelasPage() {
     { header: 'Nama Kelas', accessorKey: 'nama_kelas' },
     { header: 'Kapasitas', accessorKey: 'kapasitas' },
     { header: 'Wali Kelas', accessorFn: row => row.walikelas?.nama ?? '-' },
-    {
-      id: 'actions', header: 'Aksi', cell: ({ row }) => (
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
-        </div>
-      )
-    }
+    { id: 'actions', header: 'Aksi' }
   ];
 
   return (
@@ -169,7 +162,14 @@ export default function ManajemenKelasPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? <div>Memuat...</div> : <DataTable<Kelas> columns={columns} data={data} />}
+            {loading ? <div>Memuat...</div> : (
+              <DataTable<Kelas>
+                columns={columns}
+                data={data}
+                onEdit={handleOpenDialog}
+                onDelete={setDeleting}
+              />
+            )}
           </CardContent>
         </Card>
 

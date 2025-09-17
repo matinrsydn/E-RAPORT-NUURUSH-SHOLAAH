@@ -72,14 +72,7 @@ export default function ManajemenMapelPage() {
   const columns: ColumnDef<Mapel, any>[] = [
     { header: 'Nama Mapel', accessorKey: 'nama_mapel' },
     { header: 'Jenis', accessorKey: 'jenis' },
-    {
-      id: 'actions', header: 'Aksi', cell: ({ row }) => (
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
-        </div>
-      )
-    }
+    { id: 'actions', header: 'Aksi' }
   ];
 
   return (
@@ -97,7 +90,14 @@ export default function ManajemenMapelPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? <div>Memuat...</div> : <DataTable<Mapel> columns={columns} data={data} />}
+            {loading ? <div>Memuat...</div> : (
+              <DataTable<Mapel>
+                columns={columns}
+                data={data}
+                onEdit={handleOpenDialog}
+                onDelete={setDeleting}
+              />
+            )}
           </CardContent>
         </Card>
 

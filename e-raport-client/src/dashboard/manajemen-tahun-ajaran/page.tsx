@@ -90,14 +90,7 @@ export default function ManajemenTahunAjaranPage() {
   const columns: ColumnDef<TahunAjaran, any>[] = [
     { header: 'Nama Ajaran', accessorKey: 'nama_ajaran' },
     { header: 'Status', accessorKey: 'status' },
-    {
-      id: 'actions', header: 'Aksi', cell: ({ row }) => (
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => handleOpenDialog(row.original)}>Edit</Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleting(row.original)}>Hapus</Button>
-        </div>
-      )
-    },
+    { id: 'actions', header: 'Aksi' },
   ];
 
   return (
@@ -116,7 +109,14 @@ export default function ManajemenTahunAjaranPage() {
                 </div>
             </CardHeader>
           <CardContent>
-            {loading ? <div>Memuat...</div> : <DataTable<TahunAjaran> columns={columns} data={data} />}
+            {loading ? <div>Memuat...</div> : (
+              <DataTable<TahunAjaran>
+                columns={columns}
+                data={data}
+                onEdit={handleOpenDialog}
+                onDelete={setDeleting}
+              />
+            )}
           </CardContent>
         </Card>
 

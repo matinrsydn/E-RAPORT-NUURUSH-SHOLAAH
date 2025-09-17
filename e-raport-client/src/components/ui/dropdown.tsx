@@ -53,7 +53,7 @@ export function DropdownMenuContent({ children }: { children: React.ReactNode })
   if (!ctx) return null
   if (!ctx.open) return null
   return (
-    <div className="absolute right-0 mt-2 w-40 rounded-md bg-white border shadow-md z-10">
+    <div className="absolute right-0 mt-1 min-w-[160px] rounded-md bg-white border shadow-lg z-[100] overflow-hidden">
       <div className="py-1">{children}</div>
     </div>
   )
