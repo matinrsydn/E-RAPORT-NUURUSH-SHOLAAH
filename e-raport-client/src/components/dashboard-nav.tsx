@@ -34,6 +34,7 @@ const sections: { title: string; items: NavItem[] }[] = [
       { to: "/dashboard/manajemen-kurikulum", label: "Manajemen Kurikulum", Icon: Layers },
       { to: "/dashboard/manajemen-kamar", label: "Kamar", Icon: DoorOpen },
       { to: "/dashboard/manajemen-indikator-sikap", label: "Indikator Sikap", Icon: ClipboardList },
+      {to: "dashboard/indikator-kehadiran", label: "Indikator Kehadiran", Icon: ClipboardList},
     ],
   },
   {

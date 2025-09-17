@@ -12,6 +12,7 @@ import { useToast } from '../../components/ui/toast'
 type FormValues = {
   siswa_id: number | ''
   penanggung_jawab: 'ayah' | 'ibu' | 'wali'
+  jenis_keluar: 'Pindah' | 'DO'
   tujuan_nama_pesantren: string
   tujuan_alamat_pesantren: string
   alasan: string
@@ -39,6 +40,7 @@ export default function SuratKeluarTemplatePage() {
     defaultValues: { 
       siswa_id: '', 
       penanggung_jawab: 'ayah',
+      jenis_keluar: 'Pindah',
       tujuan_nama_pesantren: '', 
       tujuan_alamat_pesantren: '', 
       alasan: ''
@@ -47,7 +49,7 @@ export default function SuratKeluarTemplatePage() {
   const { toast } = useToast()
   const penanggungJawab = watch('penanggung_jawab')
 
-  // Load siswa data
+  // Load siswa data once on mount
   useEffect(() => {
     const loadSiswa = async () => {
       try {
@@ -63,14 +65,14 @@ export default function SuratKeluarTemplatePage() {
       }
     }
     loadSiswa()
-  }, [toast])
+  }, []) // Empty dependency array since we only want to load once
 
-  // Update selected siswa when siswa_id changes
+  // Track siswa_id changes using useEffect properly
+  const siswaId = watch('siswa_id')
   useEffect(() => {
-    const siswaId = watch('siswa_id')
     const siswa = siswaOptions.find(s => s.id === Number(siswaId))
     setSelectedSiswa(siswa || null)
-  }, [watch('siswa_id'), siswaOptions])
+  }, [siswaId, siswaOptions]) // Only depend on siswaId and siswaOptions
 
   // Get penanggung jawab data based on selection
   const getPenanggungJawabData = () => {
@@ -123,24 +125,28 @@ export default function SuratKeluarTemplatePage() {
 
       const formData = new FormData();
       formData.append('siswa_id', String(data.siswa_id));
+      formData.append('jenis_keluar', data.jenis_keluar);
       formData.append('tujuan_nama_pesantren', data.tujuan_nama_pesantren);
       formData.append('tujuan_alamat_pesantren', data.tujuan_alamat_pesantren);
       formData.append('alasan', data.alasan);
+      formData.append('penanggung_jawab', data.penanggung_jawab);
       formData.append('ortu_nama', pjData.nama);
       formData.append('ortu_pekerjaan', pjData.pekerjaan || '');
       formData.append('ortu_alamat', pjData.alamat || '');
 
       const response = await suratKeluarService.generateFromTemplate(formData);
       
-      // Handle the downloaded file
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      // Create and download the generated document
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `surat_keluar_${selectedSiswa.nama}.docx`;
       document.body.appendChild(link);
       link.click();
-      link.remove();
+      document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
       toast({
@@ -198,6 +204,18 @@ export default function SuratKeluarTemplatePage() {
                 <option value="ayah">Ayah</option>
                 <option value="ibu">Ibu</option>
                 <option value="wali">Wali</option>
+              </select>
+            </div>
+
+            {/* Jenis Keluar Selection */}
+            <div>
+              <Label>Jenis Keluar</Label>
+              <select 
+                className="w-full p-2 border rounded-md"
+                {...register('jenis_keluar')}
+              >
+                <option value="Pindah">Pindah Pesantren</option>
+                <option value="DO">Drop Out (DO)</option>
               </select>
             </div>
 

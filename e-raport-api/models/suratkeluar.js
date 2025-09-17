@@ -4,7 +4,11 @@ module.exports = (sequelize, DataTypes) => {
   const SuratKeluar = sequelize.define('SuratKeluar', {
     nomor_surat: { type: DataTypes.STRING, unique: true },
     siswa_id: { type: DataTypes.INTEGER, allowNull: false },
-    jenis_keluar: { type: DataTypes.ENUM('Pindah', 'Lulus', 'DO'), allowNull: false },
+    jenis_keluar: { 
+      type: DataTypes.ENUM('Pindah', 'DO'), 
+      allowNull: false,
+      defaultValue: 'Pindah'
+    },
     tujuan_nama_pesantren: { type: DataTypes.STRING },
     tujuan_alamat_pesantren: { type: DataTypes.TEXT },
     alasan: { type: DataTypes.TEXT },
