@@ -13,9 +13,9 @@ module.exports = (sequelize, DataTypes) => {
         as: 'infoKamar'
       });
       // association needed for queries that include SiswaKelasHistory as 'histories'
-      Siswa.hasMany(models.SiswaKelasHistory, { foreignKey: 'siswa_id', as: 'histories' });
-      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'NilaiUjians' });
-      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswa_id', as: 'NilaiHafalans' });
+      Siswa.hasMany(models.SiswaKelasHistory, { foreignKey: 'siswa_id', as: 'histories', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'NilaiUjians', onDelete: 'CASCADE' });
+      Siswa.hasMany(models.NilaiHafalan, { foreignKey: 'siswa_id', as: 'NilaiHafalans', onDelete: 'CASCADE' });
       Siswa.hasMany(models.Sikap, { foreignKey: 'siswa_id', as: 'Sikaps', onDelete: 'CASCADE' });
       Siswa.hasMany(models.Kehadiran, { foreignKey: 'siswa_id', as: 'Kehadirans', onDelete: 'CASCADE' });
     }

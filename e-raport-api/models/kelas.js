@@ -10,9 +10,18 @@ module.exports = (sequelize, DataTypes) => {
         as: 'walikelas' // Alias ini sudah benar sesuai controller
       });
 
+      // When a kelas is deleted, cascade delete all related data
       Kelas.hasMany(models.Siswa, {
         foreignKey: 'kelas_id',
-        as: 'siswa'
+        as: 'siswa',
+        onDelete: 'CASCADE'
+      });
+      
+      // Add cascade delete for siswa_kelas_histories
+      Kelas.hasMany(models.SiswaKelasHistory, {
+        foreignKey: 'kelas_id',
+        as: 'kelasHistories',
+        onDelete: 'CASCADE'
       });
       // Association to Tingkatan
       if (models.Tingkatan) {

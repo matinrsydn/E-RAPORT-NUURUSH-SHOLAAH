@@ -211,7 +211,7 @@ export default function ManajemenKurikulumPage() {
                 <Controller name="mapel_id" control={control} rules={{ required: true }} render={({ field }) => (
                   <Select onValueChange={field.onChange} value={String(field.value)} disabled={!!editing}>
                     <SelectTrigger><SelectValue placeholder="-- Pilih Mapel --" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {masterData.mapel.map(m => <SelectItem key={m.id} value={String(m.id)}>{`${m.nama_mapel} (${m.jenis})`}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -222,7 +222,7 @@ export default function ManajemenKurikulumPage() {
                 <Controller name="kitab_id" control={control} rules={{ required: true }} render={({ field }) => (
                   <Select onValueChange={field.onChange} value={String(field.value)}>
                     <SelectTrigger><SelectValue placeholder="-- Pilih Kitab --" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px] overflow-y-auto">
                       {masterData.kitab.map(k => <SelectItem key={k.id} value={String(k.id)}>{k.nama_kitab}</SelectItem>)}
                     </SelectContent>
                   </Select>
