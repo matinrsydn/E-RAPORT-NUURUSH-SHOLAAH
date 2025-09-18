@@ -63,6 +63,12 @@ exports.getAllSiswa = async (req, res) => {
                 as: 'infoKamar',
                 attributes: ['nama_kamar'],
                 required: false
+            },
+            {
+                model: db.MasterTahunAjaran,
+                as: 'tahunAjaranMasuk',
+                attributes: ['id', 'nama_ajaran'],
+                required: false
             }
         ];
 
@@ -176,6 +182,12 @@ exports.getSiswaById = async (req, res) => {
                     model: db.Kamar,
                     as: 'infoKamar',
                     attributes: ['nama_kamar'],
+                    required: false,
+                },
+                {
+                    model: db.MasterTahunAjaran,
+                    as: 'tahunAjaranMasuk',
+                    attributes: ['id', 'nama_ajaran'],
                     required: false,
                 },
             ],

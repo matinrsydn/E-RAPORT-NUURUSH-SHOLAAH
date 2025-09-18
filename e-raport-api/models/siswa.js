@@ -12,6 +12,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'kamar_id',
         as: 'infoKamar'
       });
+      // Tahun ajaran masuk siswa
+      Siswa.belongsTo(models.MasterTahunAjaran, {
+        foreignKey: 'master_tahun_ajaran_id',
+        as: 'tahunAjaranMasuk'
+      });
       // association needed for queries that include SiswaKelasHistory as 'histories'
       Siswa.hasMany(models.SiswaKelasHistory, { foreignKey: 'siswa_id', as: 'histories', onDelete: 'CASCADE' });
       Siswa.hasMany(models.NilaiUjian, { foreignKey: 'siswa_id', as: 'NilaiUjians', onDelete: 'CASCADE' });
@@ -32,12 +37,16 @@ module.exports = (sequelize, DataTypes) => {
     jenis_kelamin: DataTypes.ENUM('Laki-laki', 'Perempuan'),
     agama: DataTypes.STRING,
     alamat: DataTypes.TEXT,
-  kelas_id: DataTypes.INTEGER,
-  kamar_id: DataTypes.INTEGER,
-    
-    // === TAMBAHKAN BARIS INI ===
-    kota_asal: DataTypes.STRING, 
-    // ===========================
+    kelas_id: DataTypes.INTEGER,
+    kamar_id: DataTypes.INTEGER,
+    master_tahun_ajaran_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'MasterTahunAjarans',
+        key: 'id'
+      }
+    },
+    kota_asal: DataTypes.STRING,
 
     nama_ayah: DataTypes.STRING,
     pekerjaan_ayah: DataTypes.STRING,

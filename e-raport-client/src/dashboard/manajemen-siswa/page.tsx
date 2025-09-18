@@ -73,6 +73,8 @@ interface Siswa {
   alamat_wali?: string
   kelas?: { id: number; nama_kelas?: string, tingkatan_id?: number } | null
   infoKamar?: { id: number; nama_kamar?: string }
+  master_tahun_ajaran_id?: number
+  tahunAjaranMasuk?: { id: number; nama_ajaran: string }
 }
 
 export default function ManajemenSiswaPage() {
@@ -183,7 +185,8 @@ export default function ManajemenSiswaPage() {
         kamar_id: String(siswa.kamar_id || ''),
         tanggal_lahir: siswa.tanggal_lahir ? new Date(siswa.tanggal_lahir).toISOString().split('T')[0] : '',
         jenis_kelamin: siswa.jenis_kelamin as any,
-        tingkatan_id: String(siswa.kelas?.tingkatan_id || '')
+        tingkatan_id: String(siswa.kelas?.tingkatan_id || ''),
+        master_tahun_ajaran_id: String(siswa.master_tahun_ajaran_id || '')
       });
     } else {
       reset({ nis: '', nama: '', jenis_kelamin: undefined }); // Reset ke nilai default untuk form tambah
